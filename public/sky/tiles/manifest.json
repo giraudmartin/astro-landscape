@@ -1,0 +1,18 @@
+﻿{
+  "version": 1,
+  "projection": "icrf-j2000-equirect",
+  "source": "https://svs.gsfc.nasa.gov/4851/",
+  "tileSize": 1024,
+  "pathTemplate": "/sky/tiles/{layer}/z{z}/{x}_{y}.exr",
+  "layers": {
+    "milkyway": {
+      "layer": "milkyway",
+      "source": "milkyway_2020_32k.exr",
+      "width": 32768,
+      "height": 16384,
+      "tileSize": 1024,
+      "maxZ": 1,
+      "minZ": 0
+    }
+  }
+}

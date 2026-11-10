@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "threejs-qa-release": {
+      "source": "majidmanzarpour/threejs-game-skills",
+      "sourceType": "github",
+      "skillPath": "skills/threejs-qa-release/SKILL.md",
+      "computedHash": "6c212371514c442322cad8611dfbee11603b0f6dbb1dc81f0c8977fb5c3bf4dd"
+    }
+  }
+}

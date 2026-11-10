@@ -1,0 +1,922 @@
+﻿/* Ported from Photo Sightline — timeline + calendar */
+.moon-cal {
+  margin-top: 4px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.moon-cal__nav {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  align-items: center;
+  gap: 4px;
+}
+
+.moon-cal__title {
+  margin: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: #e2e8f0;
+}
+
+.moon-cal__nav-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #3a4150;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8eaed;
+  font: inherit;
+  cursor: pointer;
+}
+
+.moon-cal__nav-btn:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.moon-cal__weekdays,
+.moon-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.moon-cal__weekdays {
+  margin-top: 8px;
+}
+
+.moon-cal__weekdays span {
+  text-align: center;
+  font-size: 0.62rem;
+  color: #7c8698;
+}
+
+.moon-cal__grid {
+  margin-top: 4px;
+  /* Always 6 weeks — fixed chrome height across months. */
+  grid-template-rows: repeat(6, 48px);
+  min-height: calc(6 * 48px + 5 * 3px);
+}
+
+.moon-cal__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  padding: 4px 2px 3px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #e8eaed;
+  font: inherit;
+  cursor: pointer;
+}
+
+.moon-cal__cell--empty {
+  background: transparent;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  pointer-events: none;
+}
+
+.moon-cal__cell--selected {
+  border-color: var(--ui-primary-border);
+  background: var(--ui-accent-soft);
+}
+
+.moon-cal__cell:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.moon-cal__daynum {
+  font-size: 0.74rem;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.moon-cal__illum {
+  font-size: 0.58rem;
+  line-height: 1.1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgba(210, 220, 230, 0.72);
+}
+
+.moon-cal__nightmoon {
+  font-size: 0.55rem;
+  line-height: 1.1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgba(148, 163, 184, 0.78);
+}
+
+.moon-cal__nightmoon.is-long {
+  color: rgba(186, 230, 253, 0.92);
+}
+
+.moon-cal__nightmoon.is-short {
+  color: rgba(148, 163, 184, 0.45);
+}
+
+.moon-cal__readout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 10px 0 0;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.68rem;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.moon-cal__readout-illum {
+  color: rgba(226, 232, 240, 0.95);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.moon-cal__readout-sep {
+  margin: 0 0.4em;
+  color: rgba(148, 163, 184, 0.55);
+}
+
+.moon-timeline-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 30;
+  transform: translateX(-50%);
+  width: min(var(--timeline-dock-max, 720px), calc(100vw - 24px));
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 18px;
+  background: rgba(16, 16, 20, 0.72);
+  color: #f5f5f7;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(22px) saturate(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  font-family: var(--font-ui);
+  pointer-events: auto;
+  container-type: inline-size;
+  container-name: timeline-dock;
+}
+
+.moon-timeline-dock__controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.moon-timeline-dock__controls-left,
+.moon-timeline-dock__controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moon-timeline-dock__controls-right {
+  justify-content: flex-end;
+}
+
+.moon-timeline-dock__datetime {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.moon-timeline-dock__date {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.moon-timeline-dock__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.moon-timeline-dock__time-main {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 222, 168, 0.28);
+  background: rgba(125, 222, 168, 0.12);
+  color: #d8fce8;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.moon-timeline-dock__time-input {
+  box-sizing: border-box;
+  width: 7.5rem;
+  min-height: 1.9rem;
+  padding: 2px 7px;
+  border: 1px solid rgba(125, 222, 168, 0.7);
+  border-radius: 999px;
+  outline: none;
+  background: rgba(16, 29, 23, 0.94);
+  color: #d8fce8;
+  font: inherit;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color-scheme: dark;
+}
+
+.moon-timeline-dock__time-shot {
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ov-accent);
+}
+
+.moon-timeline-dock__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.moon-timeline-dock__icon-btn:hover:not(:disabled) {
+  border-color: rgba(125, 222, 168, 0.35);
+  color: #d8fce8;
+  background: rgba(125, 222, 168, 0.1);
+}
+
+.moon-timeline-dock__icon-btn:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-ring-offset);
+}
+
+.moon-timeline-dock__icon-btn--accent {
+  border-radius: 10px;
+}
+
+.moon-timeline-dock__icon-btn.is-active {
+  border-color: rgba(125, 222, 168, 0.4);
+  background: rgba(125, 222, 168, 0.16);
+  color: #e8fff2;
+}
+
+.moon-timeline-dock__icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.moon-timeline-dock__ephemeris {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.moon-timeline-dock__ephemeris span {
+  white-space: nowrap;
+}
+
+.moon-timeline-dock__ephemeris span:first-child {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 550;
+}
+
+.ov-anchor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+
+.moon-calendar-popover {
+  position: fixed;
+  z-index: 90;
+  width: min(340px, calc(100% - 24px));
+  /* Fixed footprint: 6-week grid + chrome, no month-to-month jump. */
+  height: 470px;
+  max-height: calc(100vh - 24px);
+  overflow: hidden;
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 20px;
+  background: rgba(16, 16, 20, 0.62);
+  color: #f5f5f7;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(22px) saturate(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  font-family: var(--font-ui);
+  scrollbar-width: thin;
+}
+
+.moon-calendar-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.moon-calendar-popover__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f5f5f7;
+}
+
+.moon-calendar-popover__header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.moon-calendar-popover__now,
+.moon-calendar-popover__today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  margin: 0;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.moon-calendar-popover__now:hover:not(:disabled),
+.moon-calendar-popover__today:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.moon-calendar-popover__now:disabled,
+.moon-calendar-popover__today:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.moon-calendar-popover__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.moon-calendar-popover__close:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.moon-calendar-popover .moon-cal__title {
+  color: #f5f5f7;
+}
+
+.moon-calendar-popover .moon-cal__nav-btn {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.moon-calendar-popover .moon-cal__nav-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.moon-calendar-popover .moon-cal__weekdays span {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.moon-calendar-popover .moon-cal__cell {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.moon-calendar-popover .moon-cal__cell:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.moon-calendar-popover .moon-cal__cell--selected {
+  border-color: rgba(125, 222, 168, 0.4);
+  background: rgba(125, 222, 168, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.moon-calendar-popover .moon-cal__readout {
+  margin-top: auto;
+}
+
+.moon-calendar-popover .moon-help {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.moon-timeline-dock__timeline {
+  min-width: 0;
+}
+
+.moon-preview-timeline--compact {
+  gap: 4px;
+}
+
+.moon-preview-timeline--compact .moon-preview-timeline__viewport {
+  height: 48px;
+}
+
+.moon-preview-timeline--compact .moon-preview-timeline__mark-label {
+  top: 20px;
+}
+
+.moon-preview-timeline--compact .moon-preview-timeline__chevron,
+.moon-preview-timeline--compact .moon-preview-timeline__zoom-btn {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+  border-radius: 999px;
+}
+
+.moon-preview-timeline--compact .moon-preview-timeline__chevron:hover,
+.moon-preview-timeline--compact .moon-preview-timeline__zoom-btn:hover:not(:disabled) {
+  border-color: rgba(125, 222, 168, 0.35);
+  background: rgba(125, 222, 168, 0.1);
+  color: #d8fce8;
+}
+
+.moon-timeline-dock--embedded .moon-preview-timeline__zoom {
+  margin-top: 4px;
+}
+
+.moon-timeline-dock--embedded .moon-preview-timeline__zoom-btn {
+  width: 30px;
+  height: 24px;
+  font-size: 1rem;
+}
+
+.moon-preview-timeline--compact .moon-preview-timeline__caret--top {
+  border-top-color: var(--dock-teal, #7ddea8);
+}
+
+.moon-preview-timeline--compact .moon-preview-timeline__caret--bottom {
+  border-bottom-color: var(--dock-teal, #7ddea8);
+}
+
+.moon-timeline-dock .moon-preview-timeline__mark-label {
+  color: rgba(125, 222, 168, 0.85);
+}
+
+.moon-timeline-dock .moon-preview-timeline__viewport:focus-visible {
+  outline-color: rgba(125, 222, 168, 0.45);
+}
+
+.moon-timeline-dock .moon-preview-timeline__mark--shot {
+  background: var(--ov-accent);
+}
+
+.moon-timeline-dock .moon-preview-timeline__mark--shot .moon-preview-timeline__mark-dot {
+  background: #d8fce8;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 8px rgba(125, 222, 168, 0.5);
+}
+
+.moon-timeline-dock .moon-preview-timeline__caret--top {
+  border-top-color: var(--ov-accent);
+}
+
+.moon-timeline-dock .moon-preview-timeline__caret--bottom {
+  border-bottom-color: var(--ov-accent);
+}
+
+.moon-preview-timeline {
+  display: grid;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.moon-preview-timeline__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.moon-preview-timeline__clock {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.moon-preview-timeline__clock:hover {
+  color: #f8fafc;
+}
+
+.moon-preview-timeline__row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 6px;
+  /* Align chevrons to the gradient bar (top 18px, height 11px). */
+  align-items: start;
+}
+
+.moon-preview-timeline__row--no-zoom {
+  grid-template-columns: auto 1fr auto;
+}
+
+.moon-preview-timeline__zoom {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Sit on the strip midline like the day chevrons. */
+  margin-top: 2px;
+}
+
+.moon-preview-timeline__zoom-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #3a4150;
+  border-radius: 6px;
+  background: #151b27;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.moon-preview-timeline__zoom-btn:hover:not(:disabled) {
+  border-color: #5b6b88;
+  color: #f8fafc;
+}
+
+.moon-preview-timeline__zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.moon-preview-timeline__chevron {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  /* Bar center ≈ 23.5px − half button → sit on the strip midline. */
+  margin-top: 11px;
+  padding: 0;
+  border: 1px solid #3a4150;
+  border-radius: 6px;
+  background: #151b27;
+  color: #cbd5e1;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.moon-preview-timeline__chevron svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.moon-preview-timeline__chevron:hover {
+  border-color: #5b6b88;
+  color: #f8fafc;
+}
+
+.moon-preview-timeline__viewport {
+  position: relative;
+  min-width: 0;
+  height: 44px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+  user-select: none;
+}
+
+.moon-preview-timeline__viewport:active {
+  cursor: grabbing;
+}
+
+.moon-preview-timeline__viewport:focus-visible {
+  box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.45);
+  border-radius: 8px;
+}
+
+.moon-preview-timeline__strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  will-change: transform;
+  pointer-events: none;
+  transition: transform var(--motion-panel) var(--motion-ease-out);
+}
+
+.moon-preview-timeline.is-scrubbing .moon-preview-timeline__strip {
+  transition: none;
+}
+
+.moon-preview-timeline.is-jumping .moon-preview-timeline__caret {
+  animation: ui-caret-snap 420ms var(--motion-ease-out) both;
+}
+
+.moon-preview-timeline.is-jumping .moon-preview-timeline__mark--shot .moon-preview-timeline__mark-dot {
+  animation: ui-mint-confirm 420ms var(--motion-ease-out) both;
+}
+
+.moon-preview-timeline__hours {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 15px;
+}
+
+.moon-preview-timeline__hour {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  color: #94a3b8;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.moon-preview-timeline__hour--major {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.moon-preview-timeline__gradient {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 18px;
+  height: 11px;
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.moon-preview-timeline__useful {
+  position: absolute;
+  top: 31px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--event-useful);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.45);
+}
+
+.moon-preview-timeline__mark {
+  position: absolute;
+  top: 17px;
+  width: 2px;
+  height: 15px;
+  transform: translateX(-50%);
+  z-index: 1;
+  padding: 0;
+  border: none;
+  appearance: none;
+}
+
+button.moon-preview-timeline__mark--button {
+  cursor: pointer;
+  pointer-events: auto;
+  /* Larger hit target without shifting the visible tick. */
+  width: 14px;
+  margin-left: -6px;
+  background-clip: content-box;
+  padding: 0 6px;
+}
+
+button.moon-preview-timeline__mark--button:hover .moon-preview-timeline__mark-dot {
+  transform: translateX(-50%) scale(1.25);
+}
+
+.moon-preview-timeline__mark-dot {
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.moon-preview-timeline__mark-label {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-primary-muted);
+  white-space: nowrap;
+}
+
+.moon-preview-timeline__mark--sunrise {
+  background: var(--event-sunrise);
+}
+
+.moon-preview-timeline__mark--sunrise .moon-preview-timeline__mark-dot {
+  background: var(--event-sunrise);
+}
+
+.moon-preview-timeline__mark--sunset {
+  background: var(--event-sunset);
+}
+
+.moon-preview-timeline__mark--sunset .moon-preview-timeline__mark-dot {
+  background: var(--event-sunset);
+}
+
+.moon-preview-timeline__mark--moonrise {
+  background: var(--event-moonrise);
+}
+
+.moon-preview-timeline__mark--moonrise .moon-preview-timeline__mark-dot {
+  background: var(--event-moonrise-bright);
+}
+
+.moon-preview-timeline__mark--moonset {
+  background: var(--event-moonset);
+}
+
+.moon-preview-timeline__mark--moonset .moon-preview-timeline__mark-dot {
+  background: var(--event-moonset-bright);
+}
+
+.moon-preview-timeline__mark--shot {
+  background: var(--ui-primary);
+  z-index: 2;
+}
+
+.moon-preview-timeline__mark--shot .moon-preview-timeline__mark-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--ui-primary-muted);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 8px rgba(125, 222, 168, 0.55);
+}
+
+.moon-preview-timeline__caret {
+  position: absolute;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Pinch the day-light bar (gradient top 18px / height 11px → 18–29). */
+.moon-preview-timeline__caret--top {
+  top: 13px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--ui-primary-muted);
+}
+
+.moon-preview-timeline__caret--bottom {
+  top: 29px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid var(--ui-primary-muted);
+}
+
+.moon-preview-timeline__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.moon-preview-timeline__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.moon-preview-timeline__legend-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.moon-preview-timeline__legend-mark--sunrise {
+  background: var(--event-sunrise);
+}
+
+.moon-preview-timeline__legend-mark--sunset {
+  background: var(--event-sunset);
+}
+
+.moon-preview-timeline__legend-mark--moonrise {
+  background: var(--event-moonrise-bright);
+}
+
+.moon-preview-timeline__legend-mark--moonset {
+  background: var(--event-moonset-bright);
+}
+
+

@@ -1,0 +1,40 @@
+{
+  "name": "astro-landscape",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:halpha": "python scripts/build_halpha_texture.py",
+    "build:milkyway-globe": "python scripts/build_milkyway_globe.py",
+    "build:catalogs": "node scripts/build-celestial-catalogs.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "qa:stereo": "node scripts/qa-stereo-evidence.mjs"
+  },
+  "dependencies": {
+    "@versatiles/style": "^7.1.0",
+    "astronomy-engine": "^2.1.19",
+    "maplibre-gl": "^6.16.0",
+    "pmtiles": "^4.5.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.90.0",
+    "pngjs": "^7.0.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^3.2.7"
+  }
+}

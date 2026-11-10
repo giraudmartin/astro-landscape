@@ -1,0 +1,14 @@
+{
+  "projection": "icrf-j2000-equirect",
+  "orientation": "RA 0h at center, RA increasing left, NCP at top",
+  "width": 4096,
+  "height": 2048,
+  "source": {
+    "id": "AllSky-17_Optical656nm-Halpha-WHAM-SHASSA-VTSS",
+    "url": "https://noirlab.edu/public/images/AllSky-17_Optical656nm-Halpha-WHAM-SHASSA-VTSS/",
+    "credit": "WHAM/VTSS/SHASSA/Douglas Finkbeiner",
+    "license": "CC BY 4.0",
+    "original_frame": "galactic equirectangular 360\u00d7180"
+  },
+  "processing": "red-excess extract, dark-red floor subtract, soft highlight compress; reprojected galactic\u2192ICRS"
+}

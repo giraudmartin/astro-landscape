@@ -10,6 +10,7 @@
     "build:milkyway-globe": "python scripts/build_milkyway_globe.py",
     "build:catalogs": "node scripts/build-celestial-catalogs.mjs",
     "test": "vitest run",
+    "test:nonregression": "vitest run src/stelProjector.nonregression.test.ts src/stelProjector.fov.test.ts src/stelStereoChord.test.ts",
     "test:watch": "vitest",
     "lint": "oxlint",
     "preview": "vite preview",

@@ -255,6 +255,7 @@ export function createNasaSkyTileLayer(input: {
   const coverZ = Math.min(NASA_SKY_COVER_Z, meta.maxZ)
   const root = new THREE.Group()
   root.name = `nasaSkyTiles:${input.layer}`
+  root.frustumCulled = false
   const loader = new EXRLoader()
   const residents = new Map<TileKey, ResidentTile>()
   const inflight = new Map<TileKey, true>()

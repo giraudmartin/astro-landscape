@@ -1848,6 +1848,170 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   right: 12px;
 }
 
+.render-diag {
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 24px));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(14, 16, 22, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  color: rgba(232, 245, 238, 0.88);
+  font-size: 0.72rem;
+}
+
+.render-diag__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.render-diag__toggle.is-open {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px 12px 0 0;
+}
+
+.render-diag__chevron {
+  opacity: 0.65;
+}
+
+.render-diag__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 8px 10px 10px;
+}
+
+.render-diag__hint,
+.render-diag__note,
+.render-diag__locked {
+  margin: 0;
+  line-height: 1.35;
+  color: rgba(232, 245, 238, 0.62);
+}
+
+.render-diag__section {
+  margin: 6px 0 0;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  color: rgba(142, 230, 180, 0.85);
+}
+
+.render-diag__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.render-diag__path {
+  width: 100%;
+  opacity: 0.75;
+}
+
+.render-diag__row,
+.render-diag__block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.render-diag__label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+}
+
+.render-diag__value {
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.render-diag__switch {
+  min-width: 44px;
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.render-diag__switch.is-on {
+  background: rgba(142, 230, 180, 0.22);
+  border-color: rgba(142, 230, 180, 0.45);
+  color: #d8fce8;
+}
+
+.render-diag__range {
+  width: 100%;
+  accent-color: #8ee6b4;
+}
+
+.render-diag__num {
+  width: 5.5rem;
+  margin: 0;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.render-diag__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.render-diag__btn {
+  flex: 1;
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.render-diag__btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html[data-qa-hide-chrome='1'] .render-diag {
+  display: none !important;
+}
+
 .immersive__focals {
   display: inline-flex;
   flex-wrap: wrap;

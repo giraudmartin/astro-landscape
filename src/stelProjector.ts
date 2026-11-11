@@ -266,7 +266,8 @@ vec4 stelProject(vec4 mv) {
 
 /**
  * Terrain: stereographic warp (Stellarium). Rectilinear = pass-through.
- * No shared-circle clamp. Never discard (holes).
+ * Antipode verts set vStelBad — fragment discard kills sky-crossing needles
+ * (wireframe: those lines ARE terrain edges). Never discard n.z>0 (hublot).
  */
 export const STEL_PROJECT_TERRAIN_GLSL = /* glsl */ `
 uniform float uStelMode;
@@ -289,24 +290,34 @@ vec4 stelProject(vec4 mv) {
   vStelRay = n;
   vec2 st;
   if (uStelMode < 0.5) {
+    // Same Stellarium stereo as sky. Flag antipode so fragments can discard
+    // straddling tris (dir*12 ↔ normal st = black pillars / sky needles).
     float h = 0.5 * (1.0 - n.z);
     if (h < 1e-3) {
       vec2 dir = length(n.xy) > 1e-8 ? normalize(n.xy) : vec2(1.0, 0.0);
       st = dir * 12.0;
+      vStelBad = 1.0;
     } else {
       st = n.xy / h;
+      vStelBad = 0.0;
     }
   } else if (uStelMode < 1.5) {
     float az = atan(n.x, -n.z);
-    st = vec2(clamp(az, -2.8, 2.8), asin(clamp(n.y, -1.0, 1.0)));
+    st = vec2(az, asin(clamp(n.y, -1.0, 1.0)));
+    vStelBad = abs(az) > 2.85 ? 1.0 : 0.0;
   } else if (uStelMode < 2.5) {
     vStelSt = n.xy / max(-n.z, 1e-4);
     vStelBad = 0.0;
     return projectionMatrix * mv;
   } else {
-    st = n.z > 0.0 ? stelOffscreenSt(n) : n.xy;
+    if (n.z > 0.0) {
+      st = stelOffscreenSt(n);
+      vStelBad = 1.0;
+    } else {
+      st = n.xy;
+      vStelBad = 0.0;
+    }
   }
-  vStelBad = 0.0;
   vStelSt = st;
   vec3 warped = vec3(st, -1.0) * d;
   return projectionMatrix * vec4(warped, 1.0);
@@ -319,10 +330,8 @@ varying vec3 vStelRay;
 varying vec2 vStelSt;
 varying float vStelBad;
 void stelDiscardBow() {
-  // Sky/celestial only. Terrain never calls this.
+  // Antipode / seam only (vStelBad). Sky + terrain. Never n.z>0 (hublot).
   if (uStelMode < 0.5) {
-    // Only the antipode singularity (vStelBad). Do NOT discard n.z>0 —
-    // that carved a 90° equator hublot while stage FOV goes to 270°.
     if (vStelBad > 0.02) discard;
     return;
   }
@@ -338,9 +347,9 @@ export function attachStelProjector(
 ): void {
   if (material.userData.stelProjector) return
   material.userData.stelProjector = true
-  // Terrain: no rim-clamp, no fragment discard (both punched sky holes in DEM).
+  // Terrain: no |st| clamp. Antipode bow discard ON (kills sky needles).
   const terrainSafe = opts?.terrainSafe === true || opts?.discardBow === false
-  const discardBow = !terrainSafe && opts?.discardBow !== false
+  const discardBow = opts?.discardBow !== false
   const projectGlsl = terrainSafe ? STEL_PROJECT_TERRAIN_GLSL : STEL_PROJECT_GLSL
   const previous = material.onBeforeCompile
   material.onBeforeCompile = (shader, renderer) => {
@@ -369,5 +378,5 @@ export function attachStelProjector(
   }
   const previousKey = material.customProgramCacheKey.bind(material)
   material.customProgramCacheKey = () =>
-    `stel-proj-v37-restore|t${terrainSafe ? 1 : 0}|d${discardBow ? 1 : 0}|${previousKey()}`
+    `stel-proj-v38-terrain-bow|t${terrainSafe ? 1 : 0}|d${discardBow ? 1 : 0}|${previousKey()}`
 }

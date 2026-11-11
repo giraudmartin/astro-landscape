@@ -143,6 +143,9 @@ export type StereoCubemapPass = {
     eyeCamera: THREE.PerspectiveCamera,
     stageVfovDeg: number,
   ) => void
+  /** Show 6 face RTs as a 3×2 atlas (source before stereographic composite). */
+  setAtlasPreview: (on: boolean) => void
+  getAtlasPreview: () => boolean
   dispose: () => void
 }
 
@@ -189,6 +192,8 @@ export function createStereoCubemapPass(): StereoCubemapPass {
   const camForward = new THREE.Vector3()
   const drawSize = new THREE.Vector2()
 
+  let atlasPreview = wantsAtlasDebug()
+
   const uniforms = {
     uFace0: { value: targets[0]!.texture },
     uFace1: { value: targets[1]!.texture },
@@ -198,7 +203,7 @@ export function createStereoCubemapPass(): StereoCubemapPass {
     uFace5: { value: targets[5]!.texture },
     uHalfFovRad: { value: 1 },
     uAspect: { value: 1 },
-    uDebugAtlas: { value: wantsAtlasDebug() ? 1 : 0 },
+    uDebugAtlas: { value: atlasPreview ? 1 : 0 },
     uTanHalf: { value: Math.tan((FACE_FOV_DEG * Math.PI) / 360) },
     uCamRight: { value: new THREE.Vector3(1, 0, 0) },
     uCamUp: { value: new THREE.Vector3(0, 1, 0) },
@@ -337,7 +342,7 @@ export function createStereoCubemapPass(): StereoCubemapPass {
     renderer.getDrawingBufferSize(drawSize)
     uniforms.uAspect.value = drawSize.x / Math.max(1, drawSize.y)
     renderer.getClearColor(uniforms.uClearColor.value)
-    uniforms.uDebugAtlas.value = wantsAtlasDebug() ? 1 : 0
+    uniforms.uDebugAtlas.value = atlasPreview ? 1 : 0
     uniforms.uTanHalf.value = Math.tan((FACE_FOV_DEG * Math.PI) / 360)
 
     const prevAutoClear = renderer.autoClear
@@ -347,11 +352,20 @@ export function createStereoCubemapPass(): StereoCubemapPass {
     renderer.autoClear = prevAutoClear
   }
 
+  function setAtlasPreview(on: boolean): void {
+    atlasPreview = on
+    uniforms.uDebugAtlas.value = on ? 1 : 0
+  }
+
+  function getAtlasPreview(): boolean {
+    return atlasPreview
+  }
+
   function dispose(): void {
     for (const rt of targets) rt.dispose()
     material.dispose()
     quad.geometry.dispose()
   }
 
-  return { render, dispose }
+  return { render, setAtlasPreview, getAtlasPreview, dispose }
 }

@@ -950,9 +950,10 @@ function refineTerrainEdges(
   }
 }
 
-const ADAPT_EXTRA_VERTS = 180_000
-const ADAPT_REACH_M = 280
-const ADAPT_COS = Math.cos((2.4 * Math.PI) / 180)
+const ADAPT_EXTRA_VERTS = 220_000
+// Pitch-down puts mid-cliff cells on-screen — reach past the old 280 m bubble.
+const ADAPT_REACH_M = 520
+const ADAPT_COS = Math.cos((1.25 * Math.PI) / 180)
 const ADAPT_CELL_M = 64
 
 /**
@@ -1896,6 +1897,7 @@ async function buildFarTerrainMesh(input: {
 }> {
   const group = new THREE.Group()
   group.name = 'far-terrain-lod'
+  group.frustumCulled = false
 
   // Sea underlay — carved under land so blue never z-fights ridges.
   const sea = buildSeaMesh({

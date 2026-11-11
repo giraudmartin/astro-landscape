@@ -222,7 +222,12 @@ export function createGlobeMilkyWayLayer(
         toneMapped: false,
       })
 
-      scene.add(new THREE.Mesh(new THREE.SphereGeometry(1, 96, 48), milkyMaterial))
+      const milkyMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 96, 48),
+        milkyMaterial,
+      )
+      milkyMesh.frustumCulled = false
+      scene.add(milkyMesh)
 
       starMaterial = new THREE.ShaderMaterial({
         uniforms: {

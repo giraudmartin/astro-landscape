@@ -1,0 +1,35 @@
+---
+description: Forbidden stereographic regressions — never reintroduce hublot/streak projector hacks
+globs: src/stelProjector.ts,src/localTerrainMesh.ts,src/ImmersiveView.tsx,src/**/*stereo*
+alwaysApply: true
+---
+
+# Stereographic — zero regressions
+
+Before ANY change to `stelProjector.ts`, terrain warp, or immersive stereo path:
+
+1. Run `npm run test:nonregression`
+2. If tests fail, **fix the change** — do not weaken or delete the tests to land a hack.
+
+## Forbidden (each already burned the user)
+
+| Hack | Symptom |
+|------|---------|
+| `stelOffscreenSt * 50` (or large park) | Destroyed 3D / full-screen mess |
+| Shared `\|st\|` clamp / `stCap` / `st *= cap/stLen` | Gray hublot disk **or** edge streaks |
+| `max(h, floor)` softening singularity | Edge streaks / melted frame |
+| `mix(st, perspective)` "pitch-down soften" | Massive screen-edge filaments |
+| Fragment `discard` on `n.z > 0` | 90° equator disk |
+| Look-space stereo `\|Δst\|` remesh | DEM shred / smear on pan |
+
+## Locked baseline
+
+- Cache key family: `stel-proj-v38-terrain-bow`
+- Stereo: `st = n.xy / (0.5*(1-n.z))`
+- Antipode only: `dir * 12`, **sky + terrain** set `vStelBad`; fragment discards `vStelBad > 0.02` (kills sky needles — wireframe-confirmed). Still never `discard n.z>0`
+- Rectilinear = perspective pass-through
+- Prefer mesh densify over projector hacks for pan holes (not for antipode needles)
+
+## Rule of landing
+
+A stereo "fix" that makes pitch&lt;0, pan, or dezoom **worse** than HEAD is a failed change — revert immediately, then add a test that would have caught it.

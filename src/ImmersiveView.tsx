@@ -16,10 +16,19 @@ import {
   type ViewfinderOrientation,
 } from './lensFov'
 import {
+  installFrustumCullingControl,
+  setFrustumCullingEnabled,
+} from './frustumCullingControl'
+import {
   createLocalTerrainMesh,
   NEAR_TERRAIN_RADIUS_M,
   type TerrainLoadPhase,
 } from './localTerrainMesh'
+import {
+  createRenderDiagLive,
+  type RenderDiagLive,
+} from './renderDiagnostic'
+import { RenderDiagnosticCard } from './RenderDiagnosticCard'
 
 const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
   dem: 'Relief DEM\u2026',
@@ -235,6 +244,21 @@ export function ImmersiveView({
     showAzimuthGrid,
   ])
   const nightSkyApiRef = useRef<ReturnType<typeof createNightSky> | null>(null)
+  const renderDiagLiveRef = useRef<RenderDiagLive>(createRenderDiagLive())
+  const diagContextRef = useRef({
+    projection,
+    stageVfovDeg,
+    yawDeg,
+    pitchDeg,
+    eyeHeightM,
+    cameraPos: { x: 0, y: 0, z: 0 },
+    logDepthBuffer: true as const,
+  })
+  diagContextRef.current.projection = projection
+  diagContextRef.current.stageVfovDeg = stageVfovDeg
+  diagContextRef.current.yawDeg = yawDeg
+  diagContextRef.current.pitchDeg = pitchDeg
+  diagContextRef.current.eyeHeightM = eyeHeightM
 
   const apiRef = useRef<{
     setLook: (yaw: number, pitch: number) => void
@@ -269,12 +293,20 @@ export function ImmersiveView({
     host.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
+    // Warp projections break world-space AABBs — frustum culling OFF by default.
+    installFrustumCullingControl(scene)
     let stageFov = stageVfovInitRef.current
     // Past celestial shell (~330 km) + sky dome (~360 km).
     // Near plane 0.5 m — eye sits at ~7 m; tighter near improves depth even with log buffer.
     const camera = new THREE.PerspectiveCamera(stageFov, 1, 0.5, 450_000)
     camera.position.set(0, eyeHeightRef.current, 0)
     const stereoPass = createStereoCubemapPass()
+    let terrainNearObj: THREE.Object3D | null = null
+    let terrainFarObj: THREE.Object3D | null = null
+    let fpsFrames = 0
+    let fpsLastMs = performance.now()
+    let lastWire = false
+    let lastCull: boolean | null = null
 
     const sky = createAstroSkyDome()
     scene.add(sky.mesh)
@@ -525,7 +557,13 @@ export function ImmersiveView({
       }
       if (!terrain.mesh.parent) scene.add(terrain.mesh)
       if (terrain.farMesh && !terrain.farMesh.parent) scene.add(terrain.farMesh)
-      terrainDispose = terrain.dispose
+      terrainNearObj = terrain.mesh
+      terrainFarObj = terrain.farMesh
+      terrainDispose = () => {
+        terrainNearObj = null
+        terrainFarObj = null
+        terrain.dispose()
+      }
       adaptTerrain = (x, y, z) => terrain.adaptToEye(x, y, z)
       landscapeMats = terrain.materials
       landscapeMat = terrain.mesh.material as
@@ -758,8 +796,51 @@ export function ImmersiveView({
     host.addEventListener('pointercancel', onPointerUp)
     host.addEventListener('wheel', onWheel, { passive: false })
 
+    const applyTerrainWireframe = (root: THREE.Object3D | null, on: boolean) => {
+      if (!root) return
+      root.traverse((obj) => {
+        const mesh = obj as THREE.Mesh
+        if (!mesh.isMesh) return
+        const mats = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material]
+        for (const mat of mats) {
+          if (mat && 'wireframe' in mat) {
+            ;(mat as THREE.MeshBasicMaterial).wireframe = on
+          }
+        }
+      })
+    }
+
     const tick = () => {
       if (disposed) return
+      const diag = renderDiagLiveRef.current.settings
+      if (lastCull !== diag.frustumCulling) {
+        lastCull = diag.frustumCulling
+        setFrustumCullingEnabled(diag.frustumCulling)
+      }
+      if (
+        camera.near !== diag.cameraNearM ||
+        camera.far !== diag.cameraFarM
+      ) {
+        camera.near = diag.cameraNearM
+        camera.far = diag.cameraFarM
+        camera.updateProjectionMatrix()
+      }
+      sky.mesh.visible = diag.showSky
+      nightSky.root.visible = diag.showNightSky
+      if (terrainNearObj) terrainNearObj.visible = diag.showTerrainNear
+      if (terrainFarObj) terrainFarObj.visible = diag.showTerrainFar
+      if (diag.terrainWireframe) {
+        applyTerrainWireframe(terrainNearObj, true)
+        applyTerrainWireframe(terrainFarObj, true)
+        lastWire = true
+      } else if (lastWire) {
+        applyTerrainWireframe(terrainNearObj, false)
+        applyTerrainWireframe(terrainFarObj, false)
+        lastWire = false
+      }
+
       sky.mesh.position.copy(camera.position)
       adaptTerrain?.(camera.position.x, camera.position.y, camera.position.z)
       const skyToggles = skyTogglesRef.current
@@ -777,19 +858,55 @@ export function ImmersiveView({
         showCelestialGrid: skyToggles.showCelestialGrid,
         showAzimuthGrid: skyToggles.showAzimuthGrid,
       })
-      // Full-res direct path. Stereo materials are linear pass-through;
-      // camera.fov comes from applyStageProjection (safe framing).
-      // Cubemap / vertex-warp stereo both destroyed the DEM — do not revive.
-      if (
-        getStageProjection() === 'stereographic' &&
+
+      diagContextRef.current.cameraPos = {
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z,
+      }
+
+      const urlAtlas =
         typeof window !== 'undefined' &&
         /(?:\?|&)stereoDebug=atlas(?:&|$)/.test(window.location.search)
-      ) {
+      const useCubemap =
+        diag.useCubemapPass ||
+        diag.cubemapAtlasPreview ||
+        (getStageProjection() === 'stereographic' && urlAtlas)
+      const atlasOn = diag.cubemapAtlasPreview || urlAtlas
+
+      // Sum whole frame (cubemap = 6 faces + composite).
+      renderer.info.autoReset = false
+      renderer.info.reset()
+      if (useCubemap) {
+        stereoPass.setAtlasPreview(atlasOn)
         const stage = Number(camera.userData.stageVfovDeg) || stageFov
         stereoPass.render(renderer, scene, camera, stage)
+        renderDiagLiveRef.current.stats.passes = 7
+        renderDiagLiveRef.current.stats.path = atlasOn
+          ? 'cubemap-atlas'
+          : 'cubemap'
       } else {
+        stereoPass.setAtlasPreview(false)
         renderer.render(scene, camera)
+        renderDiagLiveRef.current.stats.passes = 1
+        renderDiagLiveRef.current.stats.path = 'direct'
       }
+      const info = renderer.info.render
+      renderDiagLiveRef.current.stats.drawCalls = info.calls
+      renderDiagLiveRef.current.stats.triangles = info.triangles
+      renderDiagLiveRef.current.stats.points = info.points
+      renderDiagLiveRef.current.stats.lines = info.lines
+      renderer.info.autoReset = true
+
+      fpsFrames += 1
+      const now = performance.now()
+      if (now - fpsLastMs >= 500) {
+        renderDiagLiveRef.current.stats.fps =
+          (fpsFrames * 1000) / (now - fpsLastMs)
+        fpsFrames = 0
+        fpsLastMs = now
+      }
+
       raf = window.requestAnimationFrame(tick)
     }
     raf = window.requestAnimationFrame(tick)
@@ -1131,6 +1248,10 @@ export function ImmersiveView({
           opticalHFovDeg={optical.h}
           opticalVFovDeg={optical.v}
           onChange={setPanorama}
+        />
+        <RenderDiagnosticCard
+          liveRef={renderDiagLiveRef}
+          getContext={() => ({ ...diagContextRef.current })}
         />
         <label className="eye-height">
           <span className="eye-height__label">

@@ -163,9 +163,233 @@ async function fetchDemBytes(
 }
 
 const rawDemCache = new Map<string, Promise<ArrayBuffer | null>>()
+const esriCache = new Map<string, Promise<ArrayBuffer | null>>()
+/** Decoded terrarium tiles — same working-set lifetime as rawDemCache. */
+const decodedDemCache = new Map<string, Promise<DemTile | null>>()
+
+/**
+ * Keys touched by the in-flight terrain build. Committing prunes module caches
+ * down to this footprint so only the current spot stays in memory.
+ */
+type TerrainTileSession = {
+  gen: number
+  demKeys: Set<string>
+  esriKeys: Set<string>
+  demHits: number
+  demMisses: number
+}
+
+let tileSessionGen = 0
+let tileSession: TerrainTileSession | null = null
+
+function beginTerrainTileSession(): number {
+  const gen = ++tileSessionGen
+  tileSession = {
+    gen,
+    demKeys: new Set(),
+    esriKeys: new Set(),
+    demHits: 0,
+    demMisses: 0,
+  }
+  return gen
+}
+
+function noteDemKey(key: string, fromCache: boolean) {
+  const session = tileSession
+  if (!session) return
+  session.demKeys.add(key)
+  if (fromCache) session.demHits += 1
+  else session.demMisses += 1
+}
+
+function noteEsriKey(key: string) {
+  tileSession?.esriKeys.add(key)
+}
+
+/**
+ * Drop every DEM/Esri/decoded entry outside the given key sets.
+ * Call after a spot build so the previous spot is forgotten.
+ */
+export function pruneTileCachesToWorkingSet(
+  demKeys: Iterable<string>,
+  esriKeys: Iterable<string>,
+): void {
+  const dem = demKeys instanceof Set ? demKeys : new Set(demKeys)
+  const esri = esriKeys instanceof Set ? esriKeys : new Set(esriKeys)
+  for (const key of [...rawDemCache.keys()]) {
+    if (!dem.has(key)) rawDemCache.delete(key)
+  }
+  for (const key of [...esriCache.keys()]) {
+    if (!esri.has(key)) esriCache.delete(key)
+  }
+  for (const key of [...decodedDemCache.keys()]) {
+    if (!dem.has(key)) decodedDemCache.delete(key)
+  }
+}
+
+function commitTerrainTileSession(gen: number): void {
+  const session = tileSession
+  if (!session || session.gen !== gen) return
+  pruneTileCachesToWorkingSet(session.demKeys, session.esriKeys)
+  if (tileSession?.gen === gen) tileSession = null
+}
+
+/** Test-only: wipe module tile caches between cases. */
+export function resetTerrainTileCachesForTests(): void {
+  rawDemCache.clear()
+  esriCache.clear()
+  decodedDemCache.clear()
+  tileSession = null
+  tileSessionGen = 0
+}
+
+/** Test-only: seed raw byte caches without fetching. */
+export function seedTerrainTileCachesForTests(input: {
+  dem?: string[]
+  esri?: string[]
+}): void {
+  for (const key of input.dem ?? []) {
+    rawDemCache.set(key, Promise.resolve(null))
+  }
+  for (const key of input.esri ?? []) {
+    esriCache.set(key, Promise.resolve(null))
+  }
+}
+
+/** Test-only: inspect which keys remain after prune. */
+export function terrainTileCacheKeysForTests(): {
+  dem: string[]
+  esri: string[]
+  decoded: string[]
+} {
+  return {
+    dem: [...rawDemCache.keys()].sort(),
+    esri: [...esriCache.keys()].sort(),
+    decoded: [...decodedDemCache.keys()].sort(),
+  }
+}
+
+/**
+ * Single-slot GPU terrain park — quit/re-enter the same spot remounts without
+ * rebuild. A different spot disposes the parked handle first.
+ */
+type ParkedTerrain = {
+  lat: number
+  lon: number
+  centerElevationM: number
+  handle: LocalTerrainHandle
+}
+
+/** ~0.1 m — same click / same personal spot. */
+const PARKED_SPOT_EPS_DEG = 1e-6
+
+let parkedTerrain: ParkedTerrain | null = null
+
+function sameParkedSpot(lat: number, lon: number, slot: ParkedTerrain): boolean {
+  // Match lat/lon only — DEM height often jumps >1 m when the map remounts,
+  // and that must NOT miss the parked GPU mesh.
+  return (
+    Math.abs(slot.lat - lat) <= PARKED_SPOT_EPS_DEG &&
+    Math.abs(slot.lon - lon) <= PARKED_SPOT_EPS_DEG
+  )
+}
+
+function detachTerrainFromScene(handle: LocalTerrainHandle): void {
+  handle.mesh.removeFromParent()
+  handle.farMesh?.removeFromParent()
+}
+
+/** Park a ready terrain after leaving immersive (keeps GPU meshes in RAM/VRAM). */
+export function parkLocalTerrain(
+  lat: number,
+  lon: number,
+  centerElevationM: number,
+  handle: LocalTerrainHandle,
+): void {
+  if (!handle.ready) {
+    handle.dispose()
+    return
+  }
+  detachTerrainFromScene(handle)
+  if (parkedTerrain && parkedTerrain.handle !== handle) {
+    parkedTerrain.handle.dispose()
+  }
+  parkedTerrain = { lat, lon, centerElevationM, handle }
+}
+
+/** Re-upload CanvasTextures after the previous WebGLRenderer was disposed. */
+export function reviveLocalTerrainTextures(handle: LocalTerrainHandle): void {
+  const mark = (tex: THREE.Texture | null | undefined) => {
+    if (tex) tex.needsUpdate = true
+  }
+  const visitMat = (mat: THREE.Material) => {
+    const m = mat as THREE.MeshBasicMaterial & {
+      userData?: Record<string, unknown>
+    }
+    mark(m.map)
+    const ud = m.userData
+    if (!ud) return
+    for (const key of Object.keys(ud)) {
+      const v = ud[key] as { value?: unknown } | THREE.Texture | undefined
+      if (v && typeof v === 'object' && 'isTexture' in v) {
+        mark(v as THREE.Texture)
+      } else if (v && typeof v === 'object' && 'value' in v) {
+        const val = v.value
+        if (val && typeof val === 'object' && 'isTexture' in (val as object)) {
+          mark(val as THREE.Texture)
+        }
+      }
+    }
+  }
+  handle.mesh.traverse((obj) => {
+    const mesh = obj as THREE.Mesh
+    if (!mesh.isMesh) return
+    const mat = mesh.material
+    if (Array.isArray(mat)) mat.forEach(visitMat)
+    else if (mat) visitMat(mat)
+  })
+  handle.farMesh?.traverse((obj) => {
+    const mesh = obj as THREE.Mesh
+    if (!mesh.isMesh) return
+    const mat = mesh.material
+    if (Array.isArray(mat)) mat.forEach(visitMat)
+    else if (mat) visitMat(mat)
+  })
+  for (const mat of handle.materials) visitMat(mat)
+}
+
+/** Take the parked terrain if it matches this spot; otherwise null. */
+export function takeParkedLocalTerrain(
+  lat: number,
+  lon: number,
+  _centerElevationM?: number,
+): LocalTerrainHandle | null {
+  const slot = parkedTerrain
+  if (!slot || !sameParkedSpot(lat, lon, slot)) return null
+  parkedTerrain = null
+  reviveLocalTerrainTextures(slot.handle)
+  return slot.handle
+}
+
+/** Dispose any parked terrain (new spot, or test reset). */
+export function clearParkedLocalTerrain(): void {
+  if (!parkedTerrain) return
+  parkedTerrain.handle.dispose()
+  parkedTerrain = null
+}
+
+export function resetParkedLocalTerrainForTests(): void {
+  parkedTerrain = null
+}
+
+export function hasParkedLocalTerrainForTests(): boolean {
+  return parkedTerrain != null
+}
 
 function fetchDemBytesCached(z: number, x: number, y: number) {
   const key = `${z}/${x}/${y}`
+  const fromCache = rawDemCache.has(key)
+  noteDemKey(key, fromCache)
   let p = rawDemCache.get(key)
   if (!p) {
     p = fetchDemBytes(z, x, y)
@@ -191,7 +415,7 @@ async function decodeTerrarium(bytes: ArrayBuffer): Promise<Uint8ClampedArray> {
 }
 
 /** Max zoom DEM with parent overzoom (same strategy as MapLibre protocol). */
-async function resolveDemTile(
+async function resolveDemTileUncached(
   z: number,
   x: number,
   y: number,
@@ -244,6 +468,27 @@ async function resolveDemTile(
     }
   }
   return null
+}
+
+async function resolveDemTile(
+  z: number,
+  x: number,
+  y: number,
+): Promise<DemTile | null> {
+  const key = `${z}/${x}/${y}`
+  // Decoded hit: no byte fetch — count here. Otherwise membership + hit/miss
+  // come from fetchDemBytesCached (incl. parent overzoom keys).
+  if (decodedDemCache.has(key)) {
+    noteDemKey(key, true)
+  } else {
+    tileSession?.demKeys.add(key)
+  }
+  let pending = decodedDemCache.get(key)
+  if (!pending) {
+    pending = resolveDemTileUncached(z, x, y)
+    decodedDemCache.set(key, pending)
+  }
+  return pending
 }
 
 function sampleTerrarium(tile: DemTile, fx: number, fy: number): number {
@@ -317,14 +562,13 @@ const ESRI_TILE_PX = 256
 const ESRI_STUB_PROBE = 16_000
 const ESRI_MIN_FALLBACK_Z = 7
 
-const esriCache = new Map<string, Promise<ArrayBuffer | null>>()
-
 async function fetchEsriBytes(
   z: number,
   x: number,
   y: number,
 ): Promise<ArrayBuffer | null> {
   const key = `${z}/${x}/${y}`
+  noteEsriKey(key)
   const hit = esriCache.get(key)
   if (hit) return hit
   const pending = (async () => {
@@ -2140,11 +2384,14 @@ export async function createLocalTerrainMesh(input: {
   onProgress?: (info: {
     phase: TerrainLoadPhase
     progress: number
+    /** 0–1 DEM byte/decoded reuse from the previous spot working set. */
+    cacheHitRatio?: number
   }) => void
 }): Promise<LocalTerrainHandle> {
   const radiusM = input.radiusM ?? NEAR_TERRAIN_RADIUS_M
   const resolution = input.resolution ?? 416
   const cache = new Map<string, DemTile | null>()
+  const sessionGen = beginTerrainTileSession()
 
   const tileKeys = new Set<string>()
   for (let j = 0; j <= resolution; j++) {
@@ -2177,13 +2424,23 @@ export async function createLocalTerrainMesh(input: {
   }
 
   let progressHandle: LocalTerrainHandle | null = null
-  const notifyProgress = (phase: TerrainLoadPhase, progress: number) => {
+  let lastCacheHitRatio: number | undefined
+  const notifyProgress = (
+    phase: TerrainLoadPhase,
+    progress: number,
+    cacheHitRatio?: number,
+  ) => {
+    if (cacheHitRatio != null) lastCacheHitRatio = cacheHitRatio
     if (progressHandle) {
       progressHandle.stats.phase = phase
       progressHandle.stats.progress = progress
       if (phase === 'ready') progressHandle.ready = true
     }
-    input.onProgress?.({ phase, progress })
+    input.onProgress?.({
+      phase,
+      progress,
+      cacheHitRatio: cacheHitRatio ?? lastCacheHitRatio,
+    })
   }
   notifyProgress('dem', 0.08)
 
@@ -2196,7 +2453,14 @@ export async function createLocalTerrainMesh(input: {
     )
     cache.set(key, tile)
   })
-  notifyProgress('dem', 0.22)
+  const demTouch =
+    (tileSession?.gen === sessionGen
+      ? tileSession.demHits + tileSession.demMisses
+      : 0) || 0
+  const demHits = tileSession?.gen === sessionGen ? tileSession.demHits : 0
+  const cacheHitRatio = demTouch > 0 ? demHits / demTouch : 0
+  // Warm working set: DEM phase is mostly reuse — nudge the loader forward.
+  notifyProgress('dem', cacheHitRatio >= 0.7 ? 0.28 : 0.22, cacheHitRatio)
 
   const demAtSpot = elevationFromCache(
     input.lat,
@@ -2324,6 +2588,7 @@ export async function createLocalTerrainMesh(input: {
   material.userData.eyeHeight = eyeHeight
   material.userData.eyeXZ = eyeXZ
   material.userData.atlasWeights = atlasWeights
+  material.userData.atlasUniforms = atlasUniforms
   material.userData.isOrthoTerrain = true
   const atlasEpoch = { value: 0 }
   const previousCompile = material.onBeforeCompile
@@ -2534,6 +2799,7 @@ export async function createLocalTerrainMesh(input: {
     fullMap?.dispose()
     nearMap?.dispose()
     ultraMap?.dispose()
+    commitTerrainTileSession(sessionGen)
     return handle
   }
 
@@ -2627,6 +2893,7 @@ export async function createLocalTerrainMesh(input: {
 
   if (disposed) {
     for (const d of detailDisposers) d()
+    commitTerrainTileSession(sessionGen)
     return handle
   }
 
@@ -2669,5 +2936,7 @@ export async function createLocalTerrainMesh(input: {
   handle.ready = true
   handle.stats.phase = 'ready'
   handle.stats.progress = 1
+  // Forget previous spot: keep only tiles touched by this build.
+  commitTerrainTileSession(sessionGen)
   return handle
 }

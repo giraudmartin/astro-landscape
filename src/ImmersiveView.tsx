@@ -20,8 +20,13 @@ import {
   setFrustumCullingEnabled,
 } from './frustumCullingControl'
 import {
+  clearParkedLocalTerrain,
   createLocalTerrainMesh,
   NEAR_TERRAIN_RADIUS_M,
+  parkLocalTerrain,
+  takeParkedLocalTerrain,
+  reviveLocalTerrainTextures,
+  type LocalTerrainHandle,
   type TerrainLoadPhase,
 } from './localTerrainMesh'
 import {
@@ -102,6 +107,13 @@ type ImmersiveViewProps = {
   selectedCelestial: CelestialObject | null
   onSelectCelestial: (object: CelestialObject | null) => void
   onExit: () => void
+  /** True once full terrain LOD is ready (timeline can show). */
+  onTerrainReadyChange?: (ready: boolean) => void
+  /**
+   * When false, the WebGL scene stays mounted (same-spot cache) but skips
+   * rendering — used while the user is back on the orbit map.
+   */
+  active?: boolean
 }
 
 const LOOK_PITCH_MIN = -85
@@ -127,7 +139,16 @@ export function ImmersiveView({
   selectedCelestial,
   onSelectCelestial,
   onExit,
+  onTerrainReadyChange,
+  active = true,
 }: ImmersiveViewProps) {
+  const onTerrainReadyChangeRef = useRef(onTerrainReadyChange)
+  onTerrainReadyChangeRef.current = onTerrainReadyChange
+  const activeRef = useRef(active)
+  activeRef.current = active
+  /** DEM height updates from the map must NOT rebuild the WebGL scene. */
+  const groundElevationRef = useRef(groundElevationM)
+  groundElevationRef.current = groundElevationM
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const savedImmersive = useMemo(() => loadAppSettings().immersive, [])
@@ -159,6 +180,7 @@ export function ImmersiveView({
   const lookAnimRef = useRef<number | null>(null)
   const [terrainLabel, setTerrainLabel] = useState('Relief…')
   const [terrainPhase, setTerrainPhase] = useState<TerrainLoadPhase>('dem')
+  const [terrainDemFromCache, setTerrainDemFromCache] = useState(false)
   const [terrainProgress, setTerrainProgress] = useState(0)
   const [terrainReady, setTerrainReady] = useState(false)
   /** First DEM+preview mesh mounted — user may look / walk; upgrades continue. */
@@ -284,6 +306,9 @@ export function ImmersiveView({
     const host = hostRef.current
     if (!host) return
 
+    // Freeze elev for this scene — later map DEM corrections must not remount.
+    const sceneGroundElevM = groundElevationRef.current
+
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false,
@@ -343,6 +368,8 @@ export function ImmersiveView({
     let lastY = 0
     let raf = 0
     let disposed = false
+    /** False on WebGL context loss — parked GPU objects would be invalid. */
+    let parkOnRelease = true
     let terrainDispose: (() => void) | null = null
     let adaptTerrain: ((x: number, y: number, z: number) => void) | null = null
     /** DEM mesh Y at ENU — keeps walking glued to the ground. */
@@ -350,7 +377,7 @@ export function ImmersiveView({
     let groundElevMslAt: ((east: number, north: number) => number) | null =
       null
     /** Spot MSL under the camera (updates on walk). */
-    let eyeGroundElevMsl = groundElevationM
+    let eyeGroundElevMsl = sceneGroundElevM
     let landscapeMats: Array<
       THREE.MeshBasicMaterial | THREE.MeshStandardMaterial
     > = []
@@ -367,6 +394,8 @@ export function ImmersiveView({
       (event) => {
         event.preventDefault()
         disposed = true
+        parkOnRelease = false
+        clearParkedLocalTerrain()
         terrainDispose?.()
         terrainDispose = null
         adaptTerrain = null
@@ -384,7 +413,7 @@ export function ImmersiveView({
       const groundY = groundYAt?.(east, north) ?? 0
       camera.position.y = groundY + eyeH
       eyeGroundElevMsl =
-        groundElevMslAt?.(east, north) ?? groundElevationM
+        groundElevMslAt?.(east, north) ?? sceneGroundElevM
       sky.material.uniforms.uEyeElevM.value = Math.max(
         0,
         eyeGroundElevMsl + eyeH,
@@ -409,7 +438,7 @@ export function ImmersiveView({
 
     const applySky = (utcMs: number) => {
       latestSkyUtc = utcMs
-      const sun = sunPositionAt(lat, lon, groundElevationM, utcMs)
+      const sun = sunPositionAt(lat, lon, sceneGroundElevM, utcMs)
       const alt = sun.altitudeDeg
       latestSunAltDeg = alt
       const dir = sunDirectionFromAltAz(alt, sun.azimuthDeg)
@@ -570,20 +599,21 @@ export function ImmersiveView({
       }
     }
 
-    setTerrainLabel('Relief…')
-    setTerrainPhase('dem')
-    setTerrainProgress(0)
-    setTerrainReady(false)
-    terrainUnlockedRef.current = false
-    setTerrainUnlocked(false)
-    setLoaderVisible(true)
-    const mountTerrain = (
-      terrain: Awaited<ReturnType<typeof createLocalTerrainMesh>>,
-    ) => {
-      if (disposed) {
+    let activeTerrain: LocalTerrainHandle | null = null
+    const releaseTerrain = (terrain: LocalTerrainHandle) => {
+      // Same spot quit→relaunch: keep GPU mesh. Incomplete builds still die.
+      if (parkOnRelease && terrain.ready) {
+        parkLocalTerrain(lat, lon, sceneGroundElevM, terrain)
+      } else {
         terrain.dispose()
+      }
+    }
+    const mountTerrain = (terrain: LocalTerrainHandle) => {
+      if (disposed) {
+        releaseTerrain(terrain)
         return
       }
+      activeTerrain = terrain
       if (!terrain.mesh.parent) scene.add(terrain.mesh)
       if (terrain.farMesh && !terrain.farMesh.parent) scene.add(terrain.farMesh)
       terrainNearObj = terrain.mesh
@@ -591,7 +621,9 @@ export function ImmersiveView({
       terrainDispose = () => {
         terrainNearObj = null
         terrainFarObj = null
-        terrain.dispose()
+        const t = activeTerrain
+        activeTerrain = null
+        if (t) releaseTerrain(t)
       }
       adaptTerrain = (x, y, z) => terrain.adaptToEye(x, y, z)
       groundYAt = (east, north) => terrain.groundYAt(east, north)
@@ -623,6 +655,7 @@ export function ImmersiveView({
       setTerrainProgress(terrain.stats.progress)
       if (terrain.ready) {
         setTerrainReady(true)
+        onTerrainReadyChangeRef.current?.(true)
         setTerrainLabel(
           `DEM z${terrain.stats.demMaxZ} · ${terrain.stats.tiles} tuiles · Δ${Math.round(relief)} m · LOD ${farKm} km`,
         )
@@ -643,43 +676,74 @@ export function ImmersiveView({
           : `DEM z${terrain.stats.demMaxZ} · ${terrain.stats.tiles} tuiles · Δ${Math.round(relief)} m · ortho z18`,
       )
     }
-    void createLocalTerrainMesh({
-      lat,
-      lon,
-      centerElevationM: groundElevationM,
-      radiusM: NEAR_TERRAIN_RADIUS_M,
-      // 1600 + triple 4096 atlas bake OOMed the GPU (Context Lost). Stay ≤1400.
-      resolution: 1200,
-      onPreview: (terrain) => mountTerrain(terrain),
-      onUpgrade: (terrain) => mountTerrain(terrain),
-      onProgress: ({ phase, progress }) => {
-        if (disposed) return
-        setTerrainPhase(phase)
-        setTerrainProgress(progress)
-        if (phase === 'ready') {
-          setTerrainReady(true)
-          window.setTimeout(() => {
-            if (!disposed) setLoaderVisible(false)
-          }, 650)
-        }
-      },
-    })
-      .then((terrain) => {
-        if (disposed) {
-          terrain.dispose()
-          return
-        }
-        mountTerrain(terrain)
+
+    const parked = takeParkedLocalTerrain(lat, lon, sceneGroundElevM)
+      if (parked) {
+      reviveLocalTerrainTextures(parked)
+      setTerrainDemFromCache(true)
+      setTerrainPhase('ready')
+      setTerrainProgress(1)
+      setTerrainReady(true)
+      onTerrainReadyChangeRef.current?.(true)
+      terrainUnlockedRef.current = true
+      setTerrainUnlocked(true)
+      setLoaderVisible(false)
+      mountTerrain(parked)
+    } else {
+      clearParkedLocalTerrain()
+      setTerrainLabel('Relief…')
+      setTerrainPhase('dem')
+      setTerrainDemFromCache(false)
+      setTerrainProgress(0)
+      setTerrainReady(false)
+      onTerrainReadyChangeRef.current?.(false)
+      terrainUnlockedRef.current = false
+      setTerrainUnlocked(false)
+      setLoaderVisible(true)
+      void createLocalTerrainMesh({
+        lat,
+        lon,
+        centerElevationM: sceneGroundElevM,
+        radiusM: NEAR_TERRAIN_RADIUS_M,
+        // 1600 + triple 4096 atlas bake OOMed the GPU (Context Lost). Stay ≤1400.
+        resolution: 1200,
+        onPreview: (terrain) => mountTerrain(terrain),
+        onUpgrade: (terrain) => mountTerrain(terrain),
+        onProgress: ({ phase, progress, cacheHitRatio }) => {
+          if (disposed) return
+          setTerrainPhase(phase)
+          setTerrainProgress(progress)
+          if (cacheHitRatio != null && cacheHitRatio >= 0.7) {
+            setTerrainDemFromCache(true)
+          }
+          if (phase === 'ready') {
+            setTerrainReady(true)
+            onTerrainReadyChangeRef.current?.(true)
+            window.setTimeout(() => {
+              if (!disposed) setLoaderVisible(false)
+            }, 650)
+          }
+        },
       })
-      .catch((err: unknown) => {
-        console.error('[terrain]', err)
-        if (!disposed) {
-          setTerrainLabel('Relief indisponible')
-          terrainUnlockedRef.current = true
-          setTerrainUnlocked(true)
-          setLoaderVisible(false)
-        }
-      })
+        .then((terrain) => {
+          if (disposed) {
+            releaseTerrain(terrain)
+            return
+          }
+          mountTerrain(terrain)
+        })
+        .catch((err: unknown) => {
+          console.error('[terrain]', err)
+          if (!disposed) {
+            setTerrainLabel('Relief indisponible')
+            terrainUnlockedRef.current = true
+            setTerrainUnlocked(true)
+            setTerrainReady(true)
+            onTerrainReadyChangeRef.current?.(true)
+            setLoaderVisible(false)
+          }
+        })
+    }
 
     const resize = () => {
       const w = host.clientWidth || 1
@@ -855,6 +919,10 @@ export function ImmersiveView({
 
     const tick = () => {
       if (disposed) return
+      if (!activeRef.current) {
+        raf = window.requestAnimationFrame(tick)
+        return
+      }
       const diag = renderDiagLiveRef.current.settings
       if (lastCull !== diag.frustumCulling) {
         lastCull = diag.frustumCulling
@@ -889,7 +957,7 @@ export function ImmersiveView({
         utcMs: latestSkyUtc,
         lat,
         lon,
-        elevationM: groundElevationM,
+        elevationM: sceneGroundElevM,
         sunAltitudeDeg: latestSunAltDeg,
         camera,
         showMilkyWay: skyToggles.showMilkyWay,
@@ -975,13 +1043,20 @@ export function ImmersiveView({
       renderer.dispose()
       renderer.domElement.remove()
     }
-    // bearingDeg must NOT remount the whole WebGL scene — that dropped back to
-    // the muddy preview atlas on every look jump.
-  }, [lat, lon, groundElevationM])
+    // lat/lon only — groundElevationM updates from the map DEM must NOT remount
+    // (that was reloading the whole terrain on every quit→relaunch).
+    // bearingDeg must NOT remount either — that dropped back to muddy preview.
+  }, [lat, lon])
 
   useEffect(() => {
     apiRef.current?.setSkyUtc(skyUtcMs)
   }, [skyUtcMs, showAtmosphere])
+
+  // Re-entering the parked same-spot view: restore ready flag for the timeline.
+  useEffect(() => {
+    if (!active) return
+    if (terrainReady) onTerrainReadyChangeRef.current?.(true)
+  }, [active, terrainReady])
 
   useEffect(() => {
     const api: QaImmersiveApi = {
@@ -1150,7 +1225,9 @@ export function ImmersiveView({
               <p className="immersive__loader-phase">
                 {terrainReady
                   ? 'Vue prête'
-                  : TERRAIN_PHASE_LABEL[terrainPhase]}
+                  : terrainPhase === 'dem' && terrainDemFromCache
+                    ? 'Relief (cache)\u2026'
+                    : TERRAIN_PHASE_LABEL[terrainPhase]}
               </p>
               <p className="immersive__loader-pct">
                 {Math.round(terrainProgress * 100)} %

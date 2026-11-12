@@ -104,6 +104,8 @@ export default function App() {
     bearingDeg: number
     pitchDeg: number
   } | null>(null)
+  /** Immersive terrain fully loaded — timeline stays hidden until then. */
+  const [immersiveTerrainReady, setImmersiveTerrainReady] = useState(false)
 
   useEffect(() => {
     savePersonalSpots(personalSpots)
@@ -334,10 +336,52 @@ export default function App() {
   )
 
   const immersive = mode === 'ground' && spot != null
+  /**
+   * Keep the last immersive Three.js scene mounted (hidden) while the user is
+   * back on the map at the SAME spot — quit→relaunch must not rebuild terrain.
+   */
+  const [parkedImmersiveSpot, setParkedImmersiveSpot] =
+    useState<SpotState | null>(null)
+
+  useEffect(() => {
+    if (immersive && spot) setParkedImmersiveSpot(spot)
+  }, [immersive, spot])
+
+  useEffect(() => {
+    if (!parkedImmersiveSpot || !spot) return
+    const same =
+      Math.abs(parkedImmersiveSpot.lat - spot.lat) < 1e-6 &&
+      Math.abs(parkedImmersiveSpot.lon - spot.lon) < 1e-6
+    if (!same) setParkedImmersiveSpot(null)
+  }, [spot, parkedImmersiveSpot])
+
+  const keepImmersiveMounted =
+    parkedImmersiveSpot != null &&
+    spot != null &&
+    Math.abs(parkedImmersiveSpot.lat - spot.lat) < 1e-6 &&
+    Math.abs(parkedImmersiveSpot.lon - spot.lon) < 1e-6
+  const mountImmersive = immersive || keepImmersiveMounted
+  const showTimeline = !immersive || immersiveTerrainReady
 
   return (
     <div className="app">
-      {!immersive ? (
+      {/* Keep the map mounted across immersive sessions — remounting it was
+          rewriting spot.heightM via DEM and forcing a full Three.js rebuild. */}
+      <div
+        className="map-host"
+        hidden={immersive}
+        aria-hidden={immersive}
+        style={
+          immersive
+            ? {
+                position: 'fixed',
+                inset: 0,
+                visibility: 'hidden',
+                pointerEvents: 'none',
+              }
+            : undefined
+        }
+      >
         <MapCanvas
           mode={mode}
           threeDimensional={threeDimensional}
@@ -380,23 +424,43 @@ export default function App() {
           markerMenuOpen={markerMenuOpen}
           onMarkerMenuOpenChange={setMarkerMenuOpen}
         />
-      ) : (
-        <ImmersiveView
-          lat={spot.lat}
-          lon={spot.lon}
-          groundElevationM={spot.heightM}
-          bearingDeg={immersiveLook?.bearingDeg ?? spot.bearingDeg}
-          initialPitchDeg={immersiveLook?.pitchDeg ?? 0}
-          skyUtcMs={playheadUtcMs}
-          date={date}
-          selectedCelestial={selectedCelestial}
-          onSelectCelestial={setSelectedCelestial}
-          onExit={() => {
-            setImmersiveLook(null)
-            setMode('orbit')
-          }}
-        />
-      )}
+      </div>
+      {mountImmersive && spot != null ? (
+        <div
+          className="immersive-host"
+          hidden={!immersive}
+          aria-hidden={!immersive}
+          style={
+            immersive
+              ? undefined
+              : {
+                  position: 'fixed',
+                  inset: 0,
+                  visibility: 'hidden',
+                  pointerEvents: 'none',
+                }
+          }
+        >
+          <ImmersiveView
+            active={immersive}
+            lat={spot.lat}
+            lon={spot.lon}
+            groundElevationM={spot.heightM}
+            bearingDeg={immersiveLook?.bearingDeg ?? spot.bearingDeg}
+            initialPitchDeg={immersiveLook?.pitchDeg ?? 0}
+            skyUtcMs={playheadUtcMs}
+            date={date}
+            selectedCelestial={selectedCelestial}
+            onSelectCelestial={setSelectedCelestial}
+            onTerrainReadyChange={setImmersiveTerrainReady}
+            onExit={() => {
+              setImmersiveLook(null)
+              setImmersiveTerrainReady(false)
+              setMode('orbit')
+            }}
+          />
+        </div>
+      ) : null}
 
       {!immersive ? (
         <div className="map-ui" aria-label="Aperçu et météo">
@@ -557,15 +621,17 @@ export default function App() {
         />
       ) : null}
 
-      <TimelineDock
-        lat={observer.lat}
-        lon={observer.lon}
-        elevationM={observer.elevationM}
-        date={date}
-        playheadUtcMs={playheadUtcMs}
-        onDateChange={onDateChange}
-        onPlayheadChange={setPlayheadUtcMs}
-      />
+      {showTimeline ? (
+        <TimelineDock
+          lat={observer.lat}
+          lon={observer.lon}
+          elevationM={observer.elevationM}
+          date={date}
+          playheadUtcMs={playheadUtcMs}
+          onDateChange={onDateChange}
+          onPlayheadChange={setPlayheadUtcMs}
+        />
+      ) : null}
 
     </div>
   )

@@ -2127,10 +2127,11 @@ html[data-qa-hide-chrome='1'] .render-diag {
 
 .immersive__loader {
   position: absolute;
-  top: 72px;
+  top: auto;
   left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
   z-index: 8;
-  width: min(280px, calc(100% - 200px));
+  width: min(320px, calc(100% - 48px));
   transform: translateX(-50%);
   pointer-events: none;
   transition: opacity 0.45s ease;
@@ -2141,18 +2142,18 @@ html[data-qa-hide-chrome='1'] .render-diag {
 }
 
 .immersive__loader--upgrading .immersive__loader-card {
-  background: rgba(8, 12, 20, 0.58);
+  background: rgba(8, 12, 20, 0.62);
 }
 
 .immersive__loader-card {
   box-sizing: border-box;
   width: 100%;
-  padding: 5px 8px 6px;
+  padding: 8px 12px 9px;
   border: 1px solid rgba(232, 234, 237, 0.14);
-  border-radius: 8px;
-  background: rgba(8, 12, 20, 0.78);
+  border-radius: 10px;
+  background: rgba(8, 12, 20, 0.8);
   backdrop-filter: blur(6px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
   color: #e8eaed;
 }
 
@@ -2160,22 +2161,22 @@ html[data-qa-hide-chrome='1'] .render-diag {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 4px;
+  gap: 10px;
+  margin: 0 0 6px;
 }
 
 .immersive__loader-phase {
   margin: 0;
-  font-size: 0.68rem;
-  line-height: 1.15;
-  color: rgba(232, 234, 237, 0.78);
+  font-size: 0.74rem;
+  line-height: 1.2;
+  color: rgba(232, 234, 237, 0.82);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .immersive__loader-track {
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
   background: rgba(232, 234, 237, 0.12);
   overflow: hidden;
@@ -2192,8 +2193,8 @@ html[data-qa-hide-chrome='1'] .render-diag {
 .immersive__loader-pct {
   margin: 0;
   flex-shrink: 0;
-  font-size: 0.62rem;
-  line-height: 1.15;
+  font-size: 0.68rem;
+  line-height: 1.2;
   color: var(--ui-primary);
   font-variant-numeric: tabular-nums;
   font-weight: 650;

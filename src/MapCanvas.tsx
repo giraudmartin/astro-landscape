@@ -598,6 +598,8 @@ export function MapCanvas({
     })
 
     const elevTimer = window.setInterval(() => {
+      // Never rewrite height while immersive — that remounts the Three.js scene.
+      if (modeRef.current === 'ground') return
       const current = spotRef.current
       if (!current) return
       const heightM = readElevation(current.lon, current.lat)

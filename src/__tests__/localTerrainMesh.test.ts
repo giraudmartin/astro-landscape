@@ -1,9 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
+  clearParkedLocalTerrain,
   demZoomForDistance,
   enhanceOceanPixelData,
   FAR_TERRAIN_RADIUS_M,
+  hasParkedLocalTerrainForTests,
   NEAR_TERRAIN_RADIUS_M,
+  parkLocalTerrain,
+  pruneTileCachesToWorkingSet,
+  resetParkedLocalTerrainForTests,
+  resetTerrainTileCachesForTests,
+  seedTerrainTileCachesForTests,
+  takeParkedLocalTerrain,
+  terrainTileCacheKeysForTests,
+  type LocalTerrainHandle,
 } from '../localTerrainMesh'
 
 describe('demZoomForDistance', () => {
@@ -57,5 +67,121 @@ describe('enhanceOceanPixelData', () => {
     expect(data[8]).toBe(land[0])
     expect(data[9]).toBe(land[1])
     expect(data[10]).toBe(land[2])
+  })
+})
+
+describe('terrain tile working set', () => {
+  afterEach(() => {
+    resetTerrainTileCachesForTests()
+  })
+
+  it('evicts the previous spot and keeps only the new working set', () => {
+    seedTerrainTileCachesForTests({
+      dem: ['17/1/1', '17/2/2', '12/0/0'],
+      esri: ['15/10/10', '14/3/3'],
+    })
+
+    pruneTileCachesToWorkingSet(['17/2/2', '12/0/0'], ['15/10/10'])
+
+    expect(terrainTileCacheKeysForTests()).toEqual({
+      dem: ['12/0/0', '17/2/2'],
+      esri: ['15/10/10'],
+      decoded: [],
+    })
+  })
+
+  it('keeps overlapping keys when the new spot reuses the old footprint', () => {
+    const shared = ['17/100/200', '14/50/50']
+    seedTerrainTileCachesForTests({
+      dem: [...shared, '17/999/999'],
+      esri: [...shared, '13/1/1'],
+    })
+
+    pruneTileCachesToWorkingSet(shared, shared)
+
+    expect(terrainTileCacheKeysForTests().dem).toEqual(shared.slice().sort())
+    expect(terrainTileCacheKeysForTests().esri).toEqual(shared.slice().sort())
+  })
+
+  it('clears everything when the new working set is empty', () => {
+    seedTerrainTileCachesForTests({
+      dem: ['10/1/1'],
+      esri: ['11/2/2'],
+    })
+    pruneTileCachesToWorkingSet([], [])
+    expect(terrainTileCacheKeysForTests()).toEqual({
+      dem: [],
+      esri: [],
+      decoded: [],
+    })
+  })
+})
+
+describe('parked local terrain', () => {
+  afterEach(() => {
+    resetParkedLocalTerrainForTests()
+  })
+
+  function stubHandle(ready: boolean): {
+    handle: LocalTerrainHandle
+    disposed: { value: boolean }
+  } {
+    const disposed = { value: false }
+    const handle: LocalTerrainHandle = {
+      mesh: {
+        removeFromParent() {},
+        traverse() {},
+      } as unknown as LocalTerrainHandle['mesh'],
+      farMesh: null,
+      materials: [],
+      adaptToEye: () => {},
+      groundYAt: () => 0,
+      groundElevationMslAt: () => 0,
+      ready,
+      stats: {
+        minH: 0,
+        maxH: 1,
+        tiles: 1,
+        demMaxZ: 17,
+        farRadiusM: 0,
+        phase: 'ready',
+        progress: 1,
+      },
+      dispose: () => {
+        disposed.value = true
+      },
+    }
+    return { handle, disposed }
+  }
+
+  it('returns the parked handle for the same spot and forgets the slot', () => {
+    const { handle } = stubHandle(true)
+    parkLocalTerrain(45.1, 6.2, 1000, handle)
+    expect(hasParkedLocalTerrainForTests()).toBe(true)
+    const taken = takeParkedLocalTerrain(45.1, 6.2, 1000)
+    expect(taken).toBe(handle)
+    expect(hasParkedLocalTerrainForTests()).toBe(false)
+  })
+
+  it('does not return a parked handle for a different spot', () => {
+    const { handle } = stubHandle(true)
+    parkLocalTerrain(45.1, 6.2, 1000, handle)
+    expect(takeParkedLocalTerrain(45.2, 6.2, 1000)).toBeNull()
+    expect(hasParkedLocalTerrainForTests()).toBe(true)
+    clearParkedLocalTerrain()
+    expect(hasParkedLocalTerrainForTests()).toBe(false)
+  })
+
+  it('still hits park when only DEM height changed', () => {
+    const { handle } = stubHandle(true)
+    parkLocalTerrain(45.1, 6.2, 1000, handle)
+    expect(takeParkedLocalTerrain(45.1, 6.2, 1125)).toBe(handle)
+  })
+
+  it('disposes incomplete (not ready) terrain instead of parking', () => {
+    const { handle, disposed } = stubHandle(false)
+    parkLocalTerrain(45.1, 6.2, 1000, handle)
+    expect(hasParkedLocalTerrainForTests()).toBe(false)
+    expect(disposed.value).toBe(true)
   })
 })

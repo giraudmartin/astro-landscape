@@ -8,12 +8,11 @@ export const DEFAULT_MAP_VIEW = {
 } as const
 
 export const TRIPOD_HEIGHT_M = 1.6
-/** Below ~0.5 m the camera sits in the DEM and stereo pan spawns glass shards. */
-export const EYE_HEIGHT_MIN_M = 0.5
-export const EYE_HEIGHT_MAX_M = 30
+/** Stepper / nudge interval for lens elevation above ground (m). */
+export const EYE_HEIGHT_STEP_M = 0.5
 
+/** Any finite elevation is allowed (including negative / underground). */
 export function clampEyeHeightM(meters: number): number {
   if (!Number.isFinite(meters)) return TRIPOD_HEIGHT_M
-  const stepped = Math.round(meters * 10) / 10
-  return Math.min(EYE_HEIGHT_MAX_M, Math.max(EYE_HEIGHT_MIN_M, stepped))
+  return meters
 }

@@ -2094,6 +2094,13 @@ export type LocalTerrainHandle = {
   /** Materials tinted by day/night in ImmersiveView. */
   materials: Array<THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>
   adaptToEye: (ex: number, ey: number, ez: number) => void
+  /**
+   * Mesh Y of the DEM surface at local ENU (east, north). Spot center ≈ 0.
+   * Used to keep the camera a fixed eye-height above the ground while walking.
+   */
+  groundYAt: (east: number, north: number) => number
+  /** True MSL elevation (m) of the DEM surface at local ENU. */
+  groundElevationMslAt: (east: number, north: number) => number
   dispose: () => void
   /** False while preview ortho is up; true after nested atlases + far LOD. */
   ready: boolean
@@ -2259,10 +2266,14 @@ export async function createLocalTerrainMesh(input: {
   }
 
   const baseElev = Number.isFinite(spotGridElev) ? spotGridElev : demAtSpot
-  const sampleTerrainY = (east: number, north: number) => {
+  const sampleTerrainElevMsl = (east: number, north: number) => {
     const dist = Math.hypot(east, north)
     const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-    const elev = elevationFromCache(lat, lon, dist, cache, demAtSpot)
+    return elevationFromCache(lat, lon, dist, cache, demAtSpot)
+  }
+  const sampleTerrainY = (east: number, north: number) => {
+    const dist = Math.hypot(east, north)
+    const elev = sampleTerrainElevMsl(east, north)
     return (
       (elev - baseElev) * VERTICAL_EXAGGERATION - earthCurvatureDropM(dist)
     )
@@ -2455,6 +2466,8 @@ export async function createLocalTerrainMesh(input: {
     farMesh: null,
     materials: [material],
     adaptToEye: (ex, ey, ez) => adaptFn(ex, ey, ez),
+    groundYAt: sampleTerrainY,
+    groundElevationMslAt: sampleTerrainElevMsl,
     ready: false,
     stats: {
       minH,

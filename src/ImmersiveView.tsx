@@ -40,7 +40,7 @@ const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
 }
 import { createNightSky } from './nightSky'
 import { PhotoFrameOverlay } from './PhotoFrameOverlay'
-import { clampEyeHeightM, EYE_HEIGHT_MIN_M, EYE_HEIGHT_MAX_M } from './presets'
+import { clampEyeHeightM, EYE_HEIGHT_STEP_M } from './presets'
 import { ViewBearingHud } from './ViewBearingHud'
 import { type PanoramaPlan } from './panorama'
 import { ViewfinderCameraPanel } from './ViewfinderCameraPanel'
@@ -175,6 +175,8 @@ export function ImmersiveView({
   )
   const eyeHeightRef = useRef(clampEyeHeightM(savedImmersive.eyeHeightM))
   eyeHeightRef.current = eyeHeightM
+  /** Draft while typing in the elevation field (`null` = show committed value). */
+  const [eyeHeightDraft, setEyeHeightDraft] = useState<string | null>(null)
   const [keyHeld, setKeyHeld] = useState(emptyMoveHeld)
   const [pointerHeld, setPointerHeld] = useState(emptyMoveHeld)
   const moveRepeatRef = useRef<Partial<Record<MoveDir, number>>>({})
@@ -340,6 +342,12 @@ export function ImmersiveView({
     let disposed = false
     let terrainDispose: (() => void) | null = null
     let adaptTerrain: ((x: number, y: number, z: number) => void) | null = null
+    /** DEM mesh Y at ENU — keeps walking glued to the ground. */
+    let groundYAt: ((east: number, north: number) => number) | null = null
+    let groundElevMslAt: ((east: number, north: number) => number) | null =
+      null
+    /** Spot MSL under the camera (updates on walk). */
+    let eyeGroundElevMsl = groundElevationM
     let landscapeMats: Array<
       THREE.MeshBasicMaterial | THREE.MeshStandardMaterial
     > = []
@@ -359,10 +367,26 @@ export function ImmersiveView({
         terrainDispose?.()
         terrainDispose = null
         adaptTerrain = null
+        groundYAt = null
+        groundElevMslAt = null
         apiRef.current = null
       },
       false,
     )
+
+    /** Keep a fixed eye-height clearance above local DEM (no cliff flying). */
+    const snapEyeToGround = (eyeH = eyeHeightRef.current) => {
+      const east = camera.position.x
+      const north = -camera.position.z
+      const groundY = groundYAt?.(east, north) ?? 0
+      camera.position.y = groundY + eyeH
+      eyeGroundElevMsl =
+        groundElevMslAt?.(east, north) ?? groundElevationM
+      sky.material.uniforms.uEyeElevM.value = Math.max(
+        0,
+        eyeGroundElevMsl + eyeH,
+      )
+    }
 
     const applyCamera = () => {
       const yawRad = (yaw * Math.PI) / 180
@@ -393,7 +417,7 @@ export function ImmersiveView({
       updateAstroSkyDome(sky, {
         sunAltitudeDeg: alt,
         sunDirection: dir,
-        eyeElevationMslM: groundElevationM + eyeHeightRef.current,
+        eyeElevationMslM: eyeGroundElevMsl + eyeHeightRef.current,
         showAtmosphere: atmosphereOn,
       })
 
@@ -524,7 +548,7 @@ export function ImmersiveView({
         renderer.setClearColor(0x000000, 1)
       } else if (atmosphereOn) {
         // Match distant sea/haze under the geometric horizon (not a brown void).
-        const elev = groundElevationM + eyeHeightRef.current
+        const elev = eyeGroundElevMsl + eyeHeightRef.current
         const seaAmt = Math.min(1, Math.max(0, (elev - 120) / 780))
         const clearR = (0.05 + (1 - night) * 0.35) * (1 - seaAmt * 0.55)
         const clearG = (0.06 + (1 - night) * 0.3) * (1 - seaAmt * 0.35)
@@ -565,10 +589,14 @@ export function ImmersiveView({
         terrain.dispose()
       }
       adaptTerrain = (x, y, z) => terrain.adaptToEye(x, y, z)
+      groundYAt = (east, north) => terrain.groundYAt(east, north)
+      groundElevMslAt = (east, north) =>
+        terrain.groundElevationMslAt(east, north)
       landscapeMats = terrain.materials
       landscapeMat = terrain.mesh.material as
         | THREE.MeshBasicMaterial
         | THREE.MeshStandardMaterial
+      snapEyeToGround()
       const uniform = landscapeMat.userData.eyeHeight as
         | { value: number }
         | undefined
@@ -577,6 +605,7 @@ export function ImmersiveView({
         | { value: THREE.Vector2 }
         | undefined
       eyeXZ?.value.set(camera.position.x, camera.position.z)
+      applyCamera()
       applySky(latestSkyUtc)
       const relief = Math.max(0, terrain.stats.maxH - terrain.stats.minH)
       const farKm = Math.round(terrain.stats.farRadiusM / 1000)
@@ -706,14 +735,9 @@ export function ImmersiveView({
       },
       setEyeHeight: (meters) => {
         const h = clampEyeHeightM(meters)
-        camera.position.y = h
+        snapEyeToGround(h)
         syncEyeUniform()
         applyCamera()
-        // Horizon dip depends on MSL eye height.
-        sky.material.uniforms.uEyeElevM.value = Math.max(
-          0,
-          groundElevationM + h,
-        )
       },
       step: (dir) => {
         const yawRad = (yaw * Math.PI) / 180
@@ -728,6 +752,8 @@ export function ImmersiveView({
         const sign = dir === 'down' || dir === 'left' ? -1 : 1
         camera.position.x += along.x * sign
         camera.position.z += along.z * sign
+        // Follow DEM so cliffs / ridges don't leave the eye floating.
+        snapEyeToGround()
         syncEyeUniform()
         applyCamera()
       },
@@ -1253,74 +1279,132 @@ export function ImmersiveView({
           liveRef={renderDiagLiveRef}
           getContext={() => ({ ...diagContextRef.current })}
         />
-        <label className="eye-height">
-          <span className="eye-height__label">
-            Élévation
-            <span className="eye-height__value">
-              {eyeHeightM.toFixed(1)} m
-            </span>
-          </span>
-          <input
-            className="eye-height__range"
-            type="range"
-            min={EYE_HEIGHT_MIN_M}
-            max={EYE_HEIGHT_MAX_M}
-            step={0.1}
-            value={eyeHeightM}
-            aria-label="Élévation de l'objectif au-dessus du sol"
-            onChange={(event) => {
-              setEyeHeightM(clampEyeHeightM(Number(event.target.value)))
-            }}
-          />
-        </label>
       </div>
 
-      <div className="move-pad" role="group" aria-label="Déplacement, un mètre">
-        {MOVE_DIRS.map((dir) => {
-          const down = keyHeld[dir] || pointerHeld[dir]
-          return (
-            <button
-              key={dir}
-              type="button"
-              className={
-                down
-                  ? `move-pad__key move-pad__key--${dir} is-down`
-                  : `move-pad__key move-pad__key--${dir}`
-              }
-              aria-label={MOVE_LABEL[dir]}
-              aria-keyshortcuts={`Arrow${dir === 'up' ? 'Up' : dir === 'down' ? 'Down' : dir === 'left' ? 'Left' : 'Right'}`}
-              aria-pressed={down}
-              onPointerDown={(event) => {
-                event.preventDefault()
-                event.currentTarget.setPointerCapture(event.pointerId)
-                setPointerHeld((held) => ({ ...held, [dir]: true }))
-                apiRef.current?.step(dir)
-                window.clearInterval(moveRepeatRef.current[dir])
-                moveRepeatRef.current[dir] = window.setInterval(() => {
+      <div className="move-stack">
+        <div className="move-pad" role="group" aria-label="Déplacement, un mètre">
+          {MOVE_DIRS.map((dir) => {
+            const down = keyHeld[dir] || pointerHeld[dir]
+            return (
+              <button
+                key={dir}
+                type="button"
+                className={
+                  down
+                    ? `move-pad__key move-pad__key--${dir} is-down`
+                    : `move-pad__key move-pad__key--${dir}`
+                }
+                aria-label={MOVE_LABEL[dir]}
+                aria-keyshortcuts={`Arrow${dir === 'up' ? 'Up' : dir === 'down' ? 'Down' : dir === 'left' ? 'Left' : 'Right'}`}
+                aria-pressed={down}
+                onPointerDown={(event) => {
+                  event.preventDefault()
+                  event.currentTarget.setPointerCapture(event.pointerId)
+                  setPointerHeld((held) => ({ ...held, [dir]: true }))
                   apiRef.current?.step(dir)
-                }, MOVE_STEP_MS)
-              }}
-              onPointerUp={(event) => {
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                  event.currentTarget.releasePointerCapture(event.pointerId)
-                }
-                setPointerHeld((held) => ({ ...held, [dir]: false }))
-                window.clearInterval(moveRepeatRef.current[dir])
-                delete moveRepeatRef.current[dir]
-              }}
-              onPointerCancel={(event) => {
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                  event.currentTarget.releasePointerCapture(event.pointerId)
-                }
-                setPointerHeld((held) => ({ ...held, [dir]: false }))
-                window.clearInterval(moveRepeatRef.current[dir])
-                delete moveRepeatRef.current[dir]
+                  window.clearInterval(moveRepeatRef.current[dir])
+                  moveRepeatRef.current[dir] = window.setInterval(() => {
+                    apiRef.current?.step(dir)
+                  }, MOVE_STEP_MS)
+                }}
+                onPointerUp={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId)
+                  }
+                  setPointerHeld((held) => ({ ...held, [dir]: false }))
+                  window.clearInterval(moveRepeatRef.current[dir])
+                  delete moveRepeatRef.current[dir]
+                }}
+                onPointerCancel={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId)
+                  }
+                  setPointerHeld((held) => ({ ...held, [dir]: false }))
+                  window.clearInterval(moveRepeatRef.current[dir])
+                  delete moveRepeatRef.current[dir]
+                }}
+              >
+                <MoveArrow dir={dir} />
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="eye-height">
+          <span className="eye-height__label" id="eye-height-label">
+            Élévation
+          </span>
+          <div
+            className="eye-height__stepper"
+            role="group"
+            aria-labelledby="eye-height-label"
+          >
+            <button
+              type="button"
+              className="eye-height__btn"
+              aria-label={`Baisser de ${EYE_HEIGHT_STEP_M * 100} cm`}
+              onClick={() => {
+                setEyeHeightDraft(null)
+                setEyeHeightM((h) =>
+                  clampEyeHeightM(
+                    Math.round((h - EYE_HEIGHT_STEP_M) * 100) / 100,
+                  ),
+                )
               }}
             >
-              <MoveArrow dir={dir} />
+              −
             </button>
-          )
-        })}
+            <input
+              className="eye-height__input"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              spellCheck={false}
+              value={
+                eyeHeightDraft ?? formatEyeHeightDisplay(eyeHeightM)
+              }
+              aria-label="Élévation de l'objectif au-dessus du sol, en mètres"
+              onChange={(event) => {
+                setEyeHeightDraft(event.target.value)
+              }}
+              onBlur={() => {
+                if (eyeHeightDraft == null) return
+                const parsed = Number(
+                  eyeHeightDraft.trim().replace(',', '.'),
+                )
+                setEyeHeightDraft(null)
+                if (!Number.isFinite(parsed)) return
+                setEyeHeightM(clampEyeHeightM(parsed))
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur()
+                } else if (event.key === 'Escape') {
+                  setEyeHeightDraft(null)
+                  event.currentTarget.blur()
+                }
+              }}
+            />
+            <span className="eye-height__unit" aria-hidden="true">
+              m
+            </span>
+            <button
+              type="button"
+              className="eye-height__btn"
+              aria-label={`Monter de ${EYE_HEIGHT_STEP_M * 100} cm`}
+              onClick={() => {
+                setEyeHeightDraft(null)
+                setEyeHeightM((h) =>
+                  clampEyeHeightM(
+                    Math.round((h + EYE_HEIGHT_STEP_M) * 100) / 100,
+                  ),
+                )
+              }}
+            >
+              +
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="immersive__chrome immersive__chrome--right">
@@ -1468,6 +1552,12 @@ export function ImmersiveView({
       </div>
     </div>
   )
+}
+
+function formatEyeHeightDisplay(meters: number): string {
+  const tenths = Math.round(meters * 10)
+  if (Math.abs(meters * 10 - tenths) < 1e-6) return (tenths / 10).toFixed(1)
+  return String(meters)
 }
 
 function MoveArrow({ dir }: { dir: MoveDir }) {

@@ -34,6 +34,48 @@ export function CalendarIcon({ size = 16, className }: IconProps) {
   )
 }
 
+/** Lucide calendar-clock — collapsed timeline restore control. */
+export function CalendarClockIcon({ size, className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M16 14v2.2l1.6 1" />
+      <path d="M16 2v3" />
+      <path d="M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338" />
+      <path d="M3 9h5.859" />
+      <path d="M8 2v3" />
+      <circle cx="16" cy="16" r="6" />
+    </svg>
+  )
+}
+
+export function ChevronDownIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={size}
+      height={size}
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M3.5 6 8 10.5 12.5 6"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function ChevronLeftIcon({ size = 14, className }: IconProps) {
   return (
     <svg

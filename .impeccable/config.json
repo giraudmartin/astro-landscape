@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/App.css"
+        ],
+        "createdAt": "2026-11-12T16:05:52.294Z",
+        "reason": "False positive: pitch-tape caret is a CSS triangle pointer, not a card side-tab accent border"
+      }
+    ]
+  }
+}

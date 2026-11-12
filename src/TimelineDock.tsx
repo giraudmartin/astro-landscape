@@ -17,7 +17,11 @@ import {
   TIMELINE_VISIBLE_RADIUS_STEPS_MS,
 } from './DayTimeline'
 import { CalendarPopover } from './CalendarPopover'
-import { CalendarIcon } from './psIcons'
+import {
+  CalendarClockIcon,
+  CalendarIcon,
+  ChevronDownIcon,
+} from './psIcons'
 import { skyEventFromSunAltitude } from './skyLighting'
 
 type TimelineDockProps = {
@@ -48,6 +52,9 @@ export function TimelineDock({
   const [zoomIndex, setZoomIndex] = useState(
     () => loadAppSettings().timeline.zoomIndex,
   )
+  const [collapsed, setCollapsed] = useState(
+    () => loadAppSettings().timeline.collapsed,
+  )
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [jumpRequest, setJumpRequest] = useState(0)
   const [editingClock, setEditingClock] = useState(false)
@@ -69,8 +76,14 @@ export function TimelineDock({
   }, [calKey])
 
   useEffect(() => {
-    patchAppSettings({ timeline: { zoomIndex } })
-  }, [zoomIndex])
+    patchAppSettings({ timeline: { zoomIndex, collapsed } })
+  }, [zoomIndex, collapsed])
+
+  const collapseTimeline = () => {
+    setCalendarOpen(false)
+    setEditingClock(false)
+    setCollapsed(true)
+  }
 
   const calendarDays = useMemo(
     () => buildMonthCalendar(calYear, calMonth, lat, lon, elevationM),
@@ -123,6 +136,22 @@ export function TimelineDock({
     if (!event) return
     onPlayheadChange(Date.parse(event.datetimeUtc))
     setJumpRequest((n) => n + 1)
+  }
+
+  if (collapsed) {
+    return (
+      <div className="moon-timeline-dock__collapsed map-quick-actions">
+        <button
+          type="button"
+          className="map-quick-actions__button"
+          aria-label="Afficher la timeline"
+          title="Afficher la timeline"
+          onClick={() => setCollapsed(false)}
+        >
+          <CalendarClockIcon />
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -236,6 +265,15 @@ export function TimelineDock({
               onClick={() => setCalendarOpen((o) => !o)}
             >
               <CalendarIcon />
+            </button>
+            <button
+              type="button"
+              className="moon-timeline-dock__icon-btn"
+              aria-label="Réduire la timeline"
+              title="Réduire la timeline"
+              onClick={collapseTimeline}
+            >
+              <ChevronDownIcon />
             </button>
           </div>
         </div>

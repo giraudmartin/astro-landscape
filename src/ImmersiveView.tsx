@@ -1273,53 +1273,54 @@ export function ImmersiveView({
             }}
           />
         </label>
-        <div className="move-pad" role="group" aria-label="Déplacement, un mètre">
-          {MOVE_DIRS.map((dir) => {
-            const down = keyHeld[dir] || pointerHeld[dir]
-            return (
-              <button
-                key={dir}
-                type="button"
-                className={
-                  down
-                    ? `move-pad__key move-pad__key--${dir} is-down`
-                    : `move-pad__key move-pad__key--${dir}`
-                }
-                aria-label={MOVE_LABEL[dir]}
-                aria-keyshortcuts={`Arrow${dir === 'up' ? 'Up' : dir === 'down' ? 'Down' : dir === 'left' ? 'Left' : 'Right'}`}
-                aria-pressed={down}
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                  event.currentTarget.setPointerCapture(event.pointerId)
-                  setPointerHeld((held) => ({ ...held, [dir]: true }))
+      </div>
+
+      <div className="move-pad" role="group" aria-label="Déplacement, un mètre">
+        {MOVE_DIRS.map((dir) => {
+          const down = keyHeld[dir] || pointerHeld[dir]
+          return (
+            <button
+              key={dir}
+              type="button"
+              className={
+                down
+                  ? `move-pad__key move-pad__key--${dir} is-down`
+                  : `move-pad__key move-pad__key--${dir}`
+              }
+              aria-label={MOVE_LABEL[dir]}
+              aria-keyshortcuts={`Arrow${dir === 'up' ? 'Up' : dir === 'down' ? 'Down' : dir === 'left' ? 'Left' : 'Right'}`}
+              aria-pressed={down}
+              onPointerDown={(event) => {
+                event.preventDefault()
+                event.currentTarget.setPointerCapture(event.pointerId)
+                setPointerHeld((held) => ({ ...held, [dir]: true }))
+                apiRef.current?.step(dir)
+                window.clearInterval(moveRepeatRef.current[dir])
+                moveRepeatRef.current[dir] = window.setInterval(() => {
                   apiRef.current?.step(dir)
-                  window.clearInterval(moveRepeatRef.current[dir])
-                  moveRepeatRef.current[dir] = window.setInterval(() => {
-                    apiRef.current?.step(dir)
-                  }, MOVE_STEP_MS)
-                }}
-                onPointerUp={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                    event.currentTarget.releasePointerCapture(event.pointerId)
-                  }
-                  setPointerHeld((held) => ({ ...held, [dir]: false }))
-                  window.clearInterval(moveRepeatRef.current[dir])
-                  delete moveRepeatRef.current[dir]
-                }}
-                onPointerCancel={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                    event.currentTarget.releasePointerCapture(event.pointerId)
-                  }
-                  setPointerHeld((held) => ({ ...held, [dir]: false }))
-                  window.clearInterval(moveRepeatRef.current[dir])
-                  delete moveRepeatRef.current[dir]
-                }}
-              >
-                <MoveArrow dir={dir} />
-              </button>
-            )
-          })}
-        </div>
+                }, MOVE_STEP_MS)
+              }}
+              onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId)
+                }
+                setPointerHeld((held) => ({ ...held, [dir]: false }))
+                window.clearInterval(moveRepeatRef.current[dir])
+                delete moveRepeatRef.current[dir]
+              }}
+              onPointerCancel={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId)
+                }
+                setPointerHeld((held) => ({ ...held, [dir]: false }))
+                window.clearInterval(moveRepeatRef.current[dir])
+                delete moveRepeatRef.current[dir]
+              }}
+            >
+              <MoveArrow dir={dir} />
+            </button>
+          )
+        })}
       </div>
 
       <div className="immersive__chrome immersive__chrome--right">

@@ -309,6 +309,15 @@
   cursor: not-allowed;
 }
 
+.moon-timeline-dock__collapsed {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 30;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
 .moon-timeline-dock__ephemeris {
   display: flex;
   flex-wrap: wrap;

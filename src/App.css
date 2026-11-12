@@ -1683,7 +1683,10 @@ html[data-qa-hide-chrome='1'] .immersive__chrome,
 html[data-qa-hide-chrome='1'] .immersive__hint,
 html[data-qa-hide-chrome='1'] .immersive__exit,
 html[data-qa-hide-chrome='1'] .immersive__loader,
+html[data-qa-hide-chrome='1'] .move-pad,
 html[data-qa-hide-chrome='1'] .timeline-dock,
+html[data-qa-hide-chrome='1'] .moon-timeline-dock,
+html[data-qa-hide-chrome='1'] .moon-timeline-dock__collapsed,
 html[data-qa-hide-chrome='1'] .map-ui,
 html[data-qa-hide-chrome='1'] .photo-frame {
   display: none !important;
@@ -1789,6 +1792,10 @@ html[data-qa-hide-chrome='1'] .photo-frame {
 }
 
 .move-pad {
+  position: absolute;
+  z-index: 7;
+  right: 12px;
+  bottom: 16px;
   display: grid;
   grid-template-columns: repeat(3, 40px);
   grid-template-rows: 34px 34px;
@@ -1796,6 +1803,7 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   padding: 8px;
   border-radius: 12px;
   background: rgba(8, 10, 14, 0.72);
+  pointer-events: auto;
 }
 
 .move-pad__key {

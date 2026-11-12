@@ -51,6 +51,7 @@ export type MapSettings = {
 
 export type TimelineSettings = {
   zoomIndex: number
+  collapsed: boolean
 }
 
 export type AppSettings = {
@@ -82,6 +83,7 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
 
 export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = {
   zoomIndex: 2,
+  collapsed: false,
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -212,7 +214,10 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
 function normalizeTimeline(value: unknown): TimelineSettings {
   const row = asRecord(value)
   if (!row) return { ...DEFAULT_TIMELINE_SETTINGS }
-  return { zoomIndex: normalizeZoomIndex(row.zoomIndex) }
+  return {
+    zoomIndex: normalizeZoomIndex(row.zoomIndex),
+    collapsed: readBoolean(row.collapsed, DEFAULT_TIMELINE_SETTINGS.collapsed),
+  }
 }
 
 export function loadAppSettings(): AppSettings {

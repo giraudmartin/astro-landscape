@@ -161,6 +161,9 @@ export function ImmersiveView({
   const [terrainPhase, setTerrainPhase] = useState<TerrainLoadPhase>('dem')
   const [terrainProgress, setTerrainProgress] = useState(0)
   const [terrainReady, setTerrainReady] = useState(false)
+  /** First DEM+preview mesh mounted — user may look / walk; upgrades continue. */
+  const [terrainUnlocked, setTerrainUnlocked] = useState(false)
+  const terrainUnlockedRef = useRef(false)
   const [loaderVisible, setLoaderVisible] = useState(true)
   const [projection, setProjection] = useState<StageProjection>(
     savedImmersive.projection,
@@ -571,6 +574,8 @@ export function ImmersiveView({
     setTerrainPhase('dem')
     setTerrainProgress(0)
     setTerrainReady(false)
+    terrainUnlockedRef.current = false
+    setTerrainUnlocked(false)
     setLoaderVisible(true)
     const mountTerrain = (
       terrain: Awaited<ReturnType<typeof createLocalTerrainMesh>>,
@@ -607,6 +612,11 @@ export function ImmersiveView({
       eyeXZ?.value.set(camera.position.x, camera.position.z)
       applyCamera()
       applySky(latestSkyUtc)
+      // First drawable relief (DEM + preview ortho) — hand control back.
+      if (!terrainUnlockedRef.current) {
+        terrainUnlockedRef.current = true
+        setTerrainUnlocked(true)
+      }
       const relief = Math.max(0, terrain.stats.maxH - terrain.stats.minH)
       const farKm = Math.round(terrain.stats.farRadiusM / 1000)
       setTerrainPhase(terrain.stats.phase)
@@ -665,6 +675,8 @@ export function ImmersiveView({
         console.error('[terrain]', err)
         if (!disposed) {
           setTerrainLabel('Relief indisponible')
+          terrainUnlockedRef.current = true
+          setTerrainUnlocked(true)
           setLoaderVisible(false)
         }
       })
@@ -679,13 +691,14 @@ export function ImmersiveView({
     }
 
     const onPointerDown = (event: PointerEvent) => {
+      if (!terrainUnlockedRef.current) return
       dragging = true
       lastX = event.clientX
       lastY = event.clientY
       host.setPointerCapture(event.pointerId)
     }
     const onPointerMove = (event: PointerEvent) => {
-      if (!dragging) return
+      if (!dragging || !terrainUnlockedRef.current) return
       const dx = event.clientX - lastX
       const dy = event.clientY - lastY
       lastX = event.clientX
@@ -712,6 +725,7 @@ export function ImmersiveView({
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
+      if (!terrainUnlockedRef.current) return
       const factor = event.deltaY > 0 ? 1.12 : 0.9
       stageFov = applyStageProjection(camera, stageFov * factor)
       setStageVfovDeg(stageFov)
@@ -740,6 +754,7 @@ export function ImmersiveView({
         applyCamera()
       },
       step: (dir) => {
+        if (!terrainUnlockedRef.current) return
         const yawRad = (yaw * Math.PI) / 180
         const forwardX = Math.sin(yawRad)
         const forwardZ = -Math.cos(yawRad)
@@ -978,15 +993,17 @@ export function ImmersiveView({
       },
       isTerrainReady: () => terrainReady,
       isCaptureReady: () => {
-        if (terrainReady) return true
+        if (terrainReady || terrainUnlocked) return true
         const canvas = hostRef.current?.querySelector('canvas')
         if (!canvas || canvas.width < 64 || canvas.height < 64) return false
-        // Detail/far phases already show textured landscape; enough for FOV QA.
+        // Preview+ already shows textured landscape; enough for FOV QA.
         return (
+          terrainPhase === 'preview' ||
+          terrainPhase === 'ortho' ||
           terrainPhase === 'detail' ||
           terrainPhase === 'far' ||
           terrainPhase === 'ready' ||
-          terrainProgress >= 0.35
+          terrainProgress >= 0.3
         )
       },
       getStageVfovDeg: () => stageVfovLiveRef.current,
@@ -996,7 +1013,7 @@ export function ImmersiveView({
     return () => {
       if (window.__astroQaImmersive === api) delete window.__astroQaImmersive
     }
-  }, [terrainReady, terrainPhase, terrainProgress, projection])
+  }, [terrainReady, terrainUnlocked, terrainPhase, terrainProgress, projection])
 
   // Sync only when the PARENT bearing prop changes. Including pitchDeg here
   // re-applied the stale map bearing and wiped __astroSetLook / drag yaw.
@@ -1025,6 +1042,7 @@ export function ImmersiveView({
     const onKeyDown = (event: KeyboardEvent) => {
       const dir = MOVE_KEYS[event.key]
       if (!dir) return
+      if (!terrainUnlockedRef.current) return
       const target = event.target
       if (
         target instanceof HTMLElement &&
@@ -1070,8 +1088,15 @@ export function ImmersiveView({
   setStageProjection(projection)
 
   return (
-    <div className="immersive">
+    <div
+      className={
+        terrainUnlocked ? 'immersive' : 'immersive immersive--terrain-locked'
+      }
+    >
       <div ref={hostRef} className="immersive__canvas" />
+      {!terrainUnlocked ? (
+        <div className="immersive__input-lock" aria-hidden="true" />
+      ) : null}
       <PhotoFrameOverlay
         stageW={size.w}
         stageH={size.h}
@@ -1113,6 +1138,39 @@ export function ImmersiveView({
           groundElevationM + eyeHeightM,
         )} m`}
       />
+      {loaderVisible ? (
+        <div
+          className={`immersive__loader${terrainReady ? ' immersive__loader--done' : ''}${terrainUnlocked ? ' immersive__loader--upgrading' : ''}`}
+          role="status"
+          aria-live="polite"
+          aria-busy={!terrainReady}
+        >
+          <div className="immersive__loader-card">
+            <div className="immersive__loader-row">
+              <p className="immersive__loader-phase">
+                {terrainReady
+                  ? 'Vue prête'
+                  : TERRAIN_PHASE_LABEL[terrainPhase]}
+              </p>
+              <p className="immersive__loader-pct">
+                {Math.round(terrainProgress * 100)} %
+              </p>
+            </div>
+            <div
+              className="immersive__loader-track"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(terrainProgress * 100)}
+              role="progressbar"
+            >
+              <div
+                className="immersive__loader-fill"
+                style={{ width: `${Math.round(terrainProgress * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
       <ViewPitchHud pitchDeg={pitchDeg} />
 
       <div
@@ -1297,7 +1355,9 @@ export function ImmersiveView({
                 aria-label={MOVE_LABEL[dir]}
                 aria-keyshortcuts={`Arrow${dir === 'up' ? 'Up' : dir === 'down' ? 'Down' : dir === 'left' ? 'Left' : 'Right'}`}
                 aria-pressed={down}
+                disabled={!terrainUnlocked}
                 onPointerDown={(event) => {
+                  if (!terrainUnlockedRef.current) return
                   event.preventDefault()
                   event.currentTarget.setPointerCapture(event.pointerId)
                   setPointerHeld((held) => ({ ...held, [dir]: true }))
@@ -1509,39 +1569,6 @@ export function ImmersiveView({
           ✕
         </button>
       </div>
-
-      {loaderVisible ? (
-        <div
-          className={`immersive__loader${terrainReady ? ' immersive__loader--done' : ''}`}
-          role="status"
-          aria-live="polite"
-          aria-busy={!terrainReady}
-        >
-          <div className="immersive__loader-card">
-            <p className="immersive__loader-title">
-              {terrainReady ? 'Vue pr\u00eate' : 'Chargement du paysage'}
-            </p>
-            <p className="immersive__loader-phase">
-              {TERRAIN_PHASE_LABEL[terrainPhase]}
-            </p>
-            <div
-              className="immersive__loader-track"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(terrainProgress * 100)}
-              role="progressbar"
-            >
-              <div
-                className="immersive__loader-fill"
-                style={{ width: `${Math.round(terrainProgress * 100)}%` }}
-              />
-            </div>
-            <p className="immersive__loader-pct">
-              {Math.round(terrainProgress * 100)} %
-            </p>
-          </div>
-        </div>
-      ) : null}
 
       <div className="immersive__hint">
         <span>Molette pour zoomer</span>

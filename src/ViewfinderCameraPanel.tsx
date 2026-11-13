@@ -1,9 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import {
   clampFocalLengthMm,
+  clampFrameRollDeg,
   FOCAL_LENGTH_MAX_MM,
   FOCAL_LENGTH_MIN_MM,
   FOCAL_LENGTH_PRESETS_MM,
+  FRAME_ROLL_MAX_DEG,
+  FRAME_ROLL_MIN_DEG,
   isFocalLengthPreset,
   SENSOR_FORMAT_LABEL,
   SENSOR_FORMATS,
@@ -15,9 +18,11 @@ import { CameraLensIcon, ChevronDownIcon } from './psIcons'
 type ViewfinderCameraPanelProps = {
   focalMm: number
   orientation: ViewfinderOrientation
+  frameRollDeg: number
   sensorFormat: SensorFormat
   onFocalMmChange: (mm: number) => void
   onOrientationChange: (orientation: ViewfinderOrientation) => void
+  onFrameRollChange: (deg: number) => void
   onSensorFormatChange: (format: SensorFormat) => void
   /** Controlled open state (capsule / parent owns the trigger). */
   open?: boolean
@@ -33,9 +38,11 @@ type ViewfinderCameraPanelProps = {
 export function ViewfinderCameraPanel({
   focalMm,
   orientation,
+  frameRollDeg,
   sensorFormat,
   onFocalMmChange,
   onOrientationChange,
+  onFrameRollChange,
   onSensorFormatChange,
   open: openProp,
   onOpenChange,
@@ -57,6 +64,7 @@ export function ViewfinderCameraPanel({
   const panelId = useId()
   const sensorLabelId = useId()
   const customFocalId = useId()
+  const roll = clampFrameRollDeg(frameRollDeg)
 
   useEffect(() => {
     setFocalDraft(String(Math.round(focalMm)))
@@ -185,7 +193,7 @@ export function ViewfinderCameraPanel({
 
   const orientationBlock = (
     <div className="vf-camera-pop__field">
-      <span className="vf-camera-pop__label">Orientation</span>
+      <span className="vf-camera-pop__label">Format</span>
       <button
         type="button"
         className="moon-preview-orient-btn vf-camera-pop__orient"
@@ -242,6 +250,45 @@ export function ViewfinderCameraPanel({
         )}
         {orientation === 'portrait' ? 'Portrait' : 'Paysage'}
       </button>
+    </div>
+  )
+
+  const rotationBlock = (
+    <div className="vf-camera-pop__field">
+      <div className="vf-camera-pop__roll-head">
+        <span className="vf-camera-pop__label">Rotation</span>
+        {roll !== 0 ? (
+          <button
+            type="button"
+            className="vf-camera-pop__roll-reset"
+            onClick={() => onFrameRollChange(0)}
+          >
+            Remettre à 0
+          </button>
+        ) : null}
+      </div>
+      <div className="moon-preview-stepper">
+        <button
+          type="button"
+          aria-label="Diminuer la rotation"
+          disabled={roll <= FRAME_ROLL_MIN_DEG}
+          onClick={() => onFrameRollChange(clampFrameRollDeg(roll - 5))}
+        >
+          −
+        </button>
+        <output aria-live="polite">{roll}°</output>
+        <button
+          type="button"
+          aria-label="Augmenter la rotation"
+          disabled={roll >= FRAME_ROLL_MAX_DEG}
+          onClick={() => onFrameRollChange(clampFrameRollDeg(roll + 5))}
+        >
+          +
+        </button>
+      </div>
+      <p className="vf-camera-pop__hint">
+        Incline le cadre photo (antihoraire).
+      </p>
     </div>
   )
 
@@ -324,6 +371,8 @@ export function ViewfinderCameraPanel({
         {sensorBlock}
         {orientationBlock}
       </div>
+
+      {rotationBlock}
 
       <p className="vf-camera-pop__hint">
         Réglages communs au cadre photo et aux tuiles du panorama.

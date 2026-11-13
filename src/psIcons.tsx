@@ -581,6 +581,71 @@ export function TimelapseIcon({ size = 16, className }: IconProps) {
   )
 }
 
+/** Timelapse panel — play / preview sequence. */
+export function PlaySequenceIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M10 8.5v7l6-3.5-6-3.5z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="0.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** Timelapse preview — stop square. */
+export function StopSequenceIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+      <rect
+        x="8.5"
+        y="8.5"
+        width="7"
+        height="7"
+        rx="1"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+/** Timelapse preview — pause. */
+export function PauseSequenceIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="8.5" y="8" width="2.4" height="8" rx="0.6" fill="currentColor" />
+      <rect x="13.1" y="8" width="2.4" height="8" rx="0.6" fill="currentColor" />
+    </svg>
+  )
+}
+
 /** Viewfinder dock — lens / framing. */
 export function CameraLensIcon({ size = 14, className }: IconProps) {
   return (

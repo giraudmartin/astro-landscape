@@ -15,15 +15,19 @@ import {
   FrameModePanoIcon,
   FrameModePhotoIcon,
   SettingsSlidersIcon,
+  StopSequenceIcon,
   TimelapseIcon,
 } from './psIcons'
+import type { CelestialObject } from './celestialObjects'
+import type { TimelapsePlan } from './timelapse'
 import { ViewfinderCameraPanel } from './ViewfinderCameraPanel'
 import { ViewfinderPanoramaPanel } from './ViewfinderPanoramaPanel'
+import { ViewfinderTimelapsePanel } from './ViewfinderTimelapsePanel'
 
-/** Opens / expands the existing TimelineDock (no prototype timelapse player). */
+/** Opens / expands the existing TimelineDock (kept for other chrome). */
 export const EXPAND_TIMELINE_EVENT = 'astro-planner:expand-timeline'
 
-type SettingsPanel = 'camera' | 'pano' | null
+type SettingsPanel = 'camera' | 'pano' | 'timelapse' | null
 
 const FRAME_MODE_ICONS = {
   off: FrameModeLibreIcon,
@@ -37,16 +41,24 @@ const FRAME_MODE_ICONS = {
 type ViewfinderCaptureCapsuleProps = {
   focalMm: number
   orientation: ViewfinderOrientation
+  frameRollDeg: number
   sensorFormat: SensorFormat
   frameMode: ViewfinderFrameMode
   panorama: PanoramaPlan
+  timelapse: TimelapsePlan
   opticalHFovDeg: number
   opticalVFovDeg: number
   onFocalMmChange: (mm: number) => void
   onOrientationChange: (orientation: ViewfinderOrientation) => void
+  onFrameRollChange: (deg: number) => void
   onSensorFormatChange: (format: SensorFormat) => void
   onFrameModeChange: (mode: ViewfinderFrameMode) => void
   onPanoramaChange: (next: PanoramaPlan) => void
+  onTimelapseChange: (next: TimelapsePlan) => void
+  onStartTimelapsePreview: () => void
+  onStopTimelapsePreview?: () => void
+  timelapsePreviewPlaying?: boolean
+  selectedCelestial: CelestialObject | null
 }
 
 /**
@@ -56,16 +68,24 @@ type ViewfinderCaptureCapsuleProps = {
 export function ViewfinderCaptureCapsule({
   focalMm,
   orientation,
+  frameRollDeg,
   sensorFormat,
   frameMode,
   panorama,
+  timelapse,
   opticalHFovDeg,
   opticalVFovDeg,
   onFocalMmChange,
   onOrientationChange,
+  onFrameRollChange,
   onSensorFormatChange,
   onFrameModeChange,
   onPanoramaChange,
+  onTimelapseChange,
+  onStartTimelapsePreview,
+  onStopTimelapsePreview,
+  timelapsePreviewPlaying = false,
+  selectedCelestial,
 }: ViewfinderCaptureCapsuleProps) {
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -101,9 +121,10 @@ export function ViewfinderCaptureCapsule({
     setSettingsPanel(mode === 'pano' ? 'pano' : null)
   }
 
-  const openTimeline = () => {
-    setSettingsPanel(null)
-    window.dispatchEvent(new CustomEvent(EXPAND_TIMELINE_EVENT))
+  const openTimelapse = () => {
+    // Timelapse always frames a single photo shot — leave Libre / Pano.
+    if (frameMode !== 'dslr') onFrameModeChange('dslr')
+    toggleSettings('timelapse')
   }
 
   return (
@@ -203,16 +224,35 @@ export function ViewfinderCaptureCapsule({
 
         <div className="vf-capture-capsule__divider" aria-hidden="true" />
 
-        <button
-          type="button"
-          className="vf-capture-capsule__timelapse"
-          title="Ouvrir la timeline"
-          aria-label="Ouvrir la timeline"
-          onClick={openTimeline}
-        >
-          <TimelapseIcon size={16} />
-          <span>Timelapse</span>
-        </button>
+        {timelapsePreviewPlaying ? (
+          <button
+            type="button"
+            className="vf-capture-capsule__timelapse is-stop"
+            title="Quitter le mode lecture"
+            aria-label="Quitter le mode lecture"
+            onClick={() => onStopTimelapsePreview?.()}
+          >
+            <StopSequenceIcon size={16} />
+            <span>Quitter</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={
+              settingsPanel === 'timelapse'
+                ? 'vf-capture-capsule__timelapse is-active'
+                : 'vf-capture-capsule__timelapse'
+            }
+            aria-expanded={settingsPanel === 'timelapse'}
+            aria-haspopup="dialog"
+            title="Réglages timelapse"
+            aria-label="Réglages timelapse"
+            onClick={openTimelapse}
+          >
+            <TimelapseIcon size={16} />
+            <span>Timelapse</span>
+          </button>
+        )}
       </div>
 
       <ViewfinderCameraPanel
@@ -221,9 +261,11 @@ export function ViewfinderCaptureCapsule({
         onOpenChange={(open) => setSettingsPanel(open ? 'camera' : null)}
         focalMm={focalMm}
         orientation={orientation}
+        frameRollDeg={frameRollDeg}
         sensorFormat={sensorFormat}
         onFocalMmChange={onFocalMmChange}
         onOrientationChange={onOrientationChange}
+        onFrameRollChange={onFrameRollChange}
         onSensorFormatChange={onSensorFormatChange}
       />
 
@@ -238,6 +280,18 @@ export function ViewfinderCaptureCapsule({
         focalMm={focalMm}
         orientation={orientation}
         onEditCamera={() => setSettingsPanel('camera')}
+      />
+
+      <ViewfinderTimelapsePanel
+        hideToggle
+        open={settingsPanel === 'timelapse'}
+        onOpenChange={(open) => setSettingsPanel(open ? 'timelapse' : null)}
+        plan={timelapse}
+        onChange={onTimelapseChange}
+        onStartPreview={onStartTimelapsePreview}
+        previewPlaying={timelapsePreviewPlaying}
+        selectedCelestial={selectedCelestial}
+        focalMm={focalMm}
       />
     </div>
   )

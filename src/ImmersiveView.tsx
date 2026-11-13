@@ -15,6 +15,7 @@ import {
 } from './celestialObjects'
 import { sunPositionAt } from './celestial'
 import {
+  clampFrameRollDeg,
   horizontalFovDegFromFocalMm,
   SENSOR_CROP_FACTOR,
   verticalFovDegFromFocalMm,
@@ -56,6 +57,12 @@ import { PhotoFrameOverlay } from './PhotoFrameOverlay'
 import { clampEyeHeightM, EYE_HEIGHT_STEP_M } from './presets'
 import { ViewBearingHud } from './ViewBearingHud'
 import { type PanoramaPlan } from './panorama'
+import {
+  timelapseStarTrailArcRad,
+  type TimelapsePlan,
+} from './timelapse'
+import { TimelapsePreviewHud } from './TimelapsePreviewHud'
+import { useTimelapsePreview } from './useTimelapsePreview'
 import { ViewfinderCaptureCapsule } from './ViewfinderCaptureCapsule'
 import { ViewfinderLandscapeControl } from './ViewfinderLandscapeControl'
 import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
@@ -118,12 +125,16 @@ type ImmersiveViewProps = {
   /** Optional initial pitch when entering from a celestial center request. */
   initialPitchDeg?: number
   skyUtcMs: number
+  /** Drive the shared timeline playhead (timelapse preview, etc.). */
+  onSkyUtcChange?: (utcMs: number) => void
   date: string
   selectedCelestial: CelestialObject | null
   onSelectCelestial: (object: CelestialObject | null) => void
   onExit: () => void
   /** True once full terrain LOD is ready (timeline can show). */
   onTerrainReadyChange?: (ready: boolean) => void
+  /** So App can hide the timeline dock while playback mode is active. */
+  onTimelapsePreviewPlayingChange?: (active: boolean) => void
   /**
    * When false, the WebGL scene stays mounted (same-spot cache) but skips
    * rendering — used while the user is back on the orbit map.
@@ -150,11 +161,13 @@ export function ImmersiveView({
   bearingDeg,
   initialPitchDeg = 0,
   skyUtcMs,
+  onSkyUtcChange,
   date,
   selectedCelestial,
   onSelectCelestial,
   onExit,
   onTerrainReadyChange,
+  onTimelapsePreviewPlayingChange,
   active = true,
 }: ImmersiveViewProps) {
   const onTerrainReadyChangeRef = useRef(onTerrainReadyChange)
@@ -180,6 +193,14 @@ export function ImmersiveView({
   const [panorama, setPanorama] = useState<PanoramaPlan>(
     savedImmersive.panorama,
   )
+  const [timelapse, setTimelapse] = useState<TimelapsePlan>(
+    savedImmersive.timelapse,
+  )
+  const [frameRollDeg, setFrameRollDeg] = useState(() =>
+    clampFrameRollDeg(savedImmersive.frameRollDeg),
+  )
+  /** Extra overlay roll from equatorial timelapse « Cadre seul ». */
+  const [timelapseFrameRollDeg, setTimelapseFrameRollDeg] = useState(0)
   const [yawDeg, setYawDeg] = useState(bearingDeg)
   const [pitchDeg, setPitchDeg] = useState(
     Math.max(LOOK_PITCH_MIN, Math.min(LOOK_PITCH_MAX, initialPitchDeg)),
@@ -193,7 +214,10 @@ export function ImmersiveView({
   const lookRef = useRef({
     yaw: bearingDeg,
     pitch: Math.max(LOOK_PITCH_MIN, Math.min(LOOK_PITCH_MAX, initialPitchDeg)),
+    roll: 0,
   })
+  const skyUtcLiveRef = useRef(skyUtcMs)
+  skyUtcLiveRef.current = skyUtcMs
   const [celestialSearchOpen, setCelestialSearchOpen] = useState(false)
   const lookAnimRef = useRef<number | null>(null)
   const [terrainLabel, setTerrainLabel] = useState('Relief…')
@@ -275,15 +299,23 @@ export function ImmersiveView({
     showCelestialGrid,
     showAzimuthGrid,
   }
+  /** Live fixed-tripod star-trail arc from the timelapse planner. */
+  const starTrailArcRadRef = useRef(0)
+  starTrailArcRadRef.current = timelapseStarTrailArcRad(
+    timelapse.poseS,
+    timelapse.support,
+  )
 
   useEffect(() => {
     patchAppSettings({
       immersive: {
         focalMm,
         orientation,
+        frameRollDeg,
         sensorFormat,
         frameMode,
         panorama,
+        timelapse,
         projection,
         stageVfovDeg,
         eyeHeightM,
@@ -301,9 +333,11 @@ export function ImmersiveView({
   }, [
     focalMm,
     orientation,
+    frameRollDeg,
     sensorFormat,
     frameMode,
     panorama,
+    timelapse,
     projection,
     stageVfovDeg,
     eyeHeightM,
@@ -335,7 +369,7 @@ export function ImmersiveView({
   diagContextRef.current.eyeHeightM = eyeHeightM
 
   const apiRef = useRef<{
-    setLook: (yaw: number, pitch: number) => void
+    setLook: (yaw: number, pitch: number, rollDeg?: number) => void
     setSkyUtc: (utcMs: number) => void
     setStageFov: (vfovDeg: number) => void
     setEyeHeight: (meters: number) => void
@@ -367,6 +401,58 @@ export function ImmersiveView({
     }
     if (frameMode === 'pano') setFrameMode('dslr')
   }
+
+  const timelapsePreview = useTimelapsePreview({
+    lat,
+    lon,
+    elevationM: groundElevationM,
+    selectedCelestial,
+    getLook: () => lookRef.current,
+    getSkyUtcMs: () => skyUtcLiveRef.current,
+    onSkyUtcChange: (utcMs) => {
+      apiRef.current?.setSkyUtc(utcMs)
+      onSkyUtcChange?.(utcMs)
+    },
+    onLookChange: (yaw, pitch, rollDeg = 0) => {
+      apiRef.current?.setLook(yaw, pitch, rollDeg)
+    },
+    onFrameRollChange: setTimelapseFrameRollDeg,
+  })
+  const timelapsePreviewActive = timelapsePreview.status.active
+  const timelapsePreviewPlayingRef = useRef(false)
+  timelapsePreviewPlayingRef.current =
+    timelapsePreview.status.phase === 'playing'
+
+  useEffect(() => {
+    onTimelapsePreviewPlayingChange?.(timelapsePreviewActive)
+  }, [timelapsePreviewActive, onTimelapsePreviewPlayingChange])
+
+  const timelapsePhase = timelapsePreview.status.phase
+  useEffect(() => {
+    if (!timelapsePreviewActive) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (timelapsePhase === 'ended') {
+        timelapsePreview.exit()
+        return
+      }
+      if (timelapsePhase === 'playing') {
+        timelapsePreview.pause()
+        return
+      }
+      if (timelapsePhase === 'paused') {
+        timelapsePreview.resume()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [
+    timelapsePreviewActive,
+    timelapsePhase,
+    timelapsePreview.exit,
+    timelapsePreview.pause,
+    timelapsePreview.resume,
+  ])
 
   useEffect(() => {
     const host = hostRef.current
@@ -490,6 +576,8 @@ export function ImmersiveView({
       )
     }
 
+    let roll = 0
+
     const applyCamera = () => {
       const yawRad = (yaw * Math.PI) / 180
       const pitchRad = (pitch * Math.PI) / 180
@@ -504,6 +592,10 @@ export function ImmersiveView({
         camera.position.y + look.y,
         camera.position.z + look.z,
       )
+      // Equatorial field lock: roll around the view axis after horizon-level lookAt.
+      if (roll !== 0) {
+        camera.rotateZ((roll * Math.PI) / 180)
+      }
     }
 
     const applySky = (utcMs: number) => {
@@ -830,6 +922,7 @@ export function ImmersiveView({
 
     const onPointerDown = (event: PointerEvent) => {
       if (!terrainUnlockedRef.current) return
+      if (timelapsePreviewPlayingRef.current) return
       dragging = true
       lastX = event.clientX
       lastY = event.clientY
@@ -837,6 +930,7 @@ export function ImmersiveView({
     }
     const onPointerMove = (event: PointerEvent) => {
       if (!dragging || !terrainUnlockedRef.current) return
+      if (timelapsePreviewPlayingRef.current) return
       const dx = event.clientX - lastX
       const dy = event.clientY - lastY
       lastX = event.clientX
@@ -847,7 +941,8 @@ export function ImmersiveView({
         LOOK_PITCH_MIN,
         Math.min(LOOK_PITCH_MAX, pitch + dy * 0.14),
       )
-      lookRef.current = { yaw, pitch }
+      roll = 0
+      lookRef.current = { yaw, pitch, roll }
       setYawDeg(yaw)
       setPitchDeg(pitch)
       applyCamera()
@@ -870,10 +965,11 @@ export function ImmersiveView({
     }
 
     apiRef.current = {
-      setLook: (nextYaw, nextPitch) => {
+      setLook: (nextYaw, nextPitch, nextRoll = 0) => {
         yaw = ((nextYaw % 360) + 360) % 360
         pitch = Math.max(LOOK_PITCH_MIN, Math.min(LOOK_PITCH_MAX, nextPitch))
-        lookRef.current = { yaw, pitch }
+        roll = Number.isFinite(nextRoll) ? nextRoll : 0
+        lookRef.current = { yaw, pitch, roll }
         setYawDeg(yaw)
         setPitchDeg(pitch)
         applyCamera()
@@ -1040,6 +1136,7 @@ export function ImmersiveView({
         showConstellations: skyToggles.showConstellations,
         showCelestialGrid: skyToggles.showCelestialGrid,
         showAzimuthGrid: skyToggles.showAzimuthGrid,
+        starTrailArcRad: starTrailArcRadRef.current,
       })
       skyBodies.update({
         utcMs: latestSkyUtc,
@@ -1181,9 +1278,13 @@ export function ImmersiveView({
   // Sync only when the PARENT bearing prop changes. Including pitchDeg here
   // re-applied the stale map bearing and wiped __astroSetLook / drag yaw.
   useEffect(() => {
-    lookRef.current = { yaw: bearingDeg, pitch: lookRef.current.pitch }
+    lookRef.current = {
+      yaw: bearingDeg,
+      pitch: lookRef.current.pitch,
+      roll: 0,
+    }
     setYawDeg(bearingDeg)
-    apiRef.current?.setLook(bearingDeg, lookRef.current.pitch)
+    apiRef.current?.setLook(bearingDeg, lookRef.current.pitch, 0)
   }, [bearingDeg])
 
   useLayoutEffect(() => {
@@ -1252,9 +1353,13 @@ export function ImmersiveView({
 
   return (
     <div
-      className={
-        terrainUnlocked ? 'immersive' : 'immersive immersive--terrain-locked'
-      }
+      className={[
+        'immersive',
+        terrainUnlocked ? '' : 'immersive--terrain-locked',
+        timelapsePreviewActive ? 'immersive--tlapse-playing' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <div ref={hostRef} className="immersive__canvas" />
       {!terrainUnlocked ? (
@@ -1269,6 +1374,7 @@ export function ImmersiveView({
         opticalVfovDeg={optical.v}
         opticalHfovDeg={optical.h}
         panorama={panorama}
+        frameRollDeg={frameRollDeg + timelapseFrameRollDeg}
         label={`${focalMm} mm · ${optical.h.toFixed(0)}° × ${optical.v.toFixed(0)}°`}
         worldLock={{
           locked: framesLocked,
@@ -1288,10 +1394,10 @@ export function ImmersiveView({
         }}
         onRecenterWorldLock={() => {
           const { yaw, pitch } = lockLook
-          lookRef.current = { yaw, pitch }
+          lookRef.current = { yaw, pitch, roll: 0 }
           setYawDeg(yaw)
           setPitchDeg(pitch)
-          apiRef.current?.setLook(yaw, pitch)
+          apiRef.current?.setLook(yaw, pitch, 0)
         }}
       />
 
@@ -1474,18 +1580,44 @@ export function ImmersiveView({
         <ViewfinderCaptureCapsule
           focalMm={focalMm}
           orientation={orientation}
+          frameRollDeg={frameRollDeg}
           sensorFormat={sensorFormat}
           frameMode={frameMode}
           panorama={panorama}
+          timelapse={timelapse}
           opticalHFovDeg={optical.h}
           opticalVFovDeg={optical.v}
           onFocalMmChange={setFocalMm}
           onOrientationChange={setOrientation}
+          onFrameRollChange={(deg) => setFrameRollDeg(clampFrameRollDeg(deg))}
           onSensorFormatChange={setSensorFormat}
           onFrameModeChange={applyFrameMode}
           onPanoramaChange={applyPanorama}
+          onTimelapseChange={setTimelapse}
+          onStartTimelapsePreview={() => {
+            if (frameMode !== 'dslr') applyFrameMode('dslr')
+            timelapsePreview.start(timelapse)
+          }}
+          onStopTimelapsePreview={timelapsePreview.exit}
+          timelapsePreviewPlaying={timelapsePreviewActive}
+          selectedCelestial={selectedCelestial}
         />
       </div>
+
+      {timelapsePreviewActive ? (
+        <TimelapsePreviewHud
+          phase={timelapsePreview.status.phase}
+          shotIndex={timelapsePreview.status.shotIndex}
+          shotCount={timelapsePreview.status.shotCount}
+          support={timelapsePreview.status.support}
+          eqRotation={timelapsePreview.status.eqRotation}
+          onPause={timelapsePreview.pause}
+          onResume={timelapsePreview.resume}
+          onStopToEnded={timelapsePreview.stopToEnded}
+          onReplay={timelapsePreview.replay}
+          onExit={timelapsePreview.exit}
+        />
+      ) : null}
 
       <div className="move-stack">
         <div className="move-pad" role="group" aria-label="Déplacement, un mètre">

@@ -104,6 +104,8 @@ export type NightSkyHandle = {
     showConstellations?: boolean
     showCelestialGrid?: boolean
     showAzimuthGrid?: boolean
+    /** Fixed-tripod exposure trail (rad of sky arc); 0 = pinpricks. */
+    starTrailArcRad?: number
   }) => void
   /** Lazy-load the Hα equirect on first enable. */
   ensureHalphaLoaded: () => Promise<void>
@@ -305,6 +307,7 @@ export function createNightSky(): NightSkyHandle {
       showConstellations = false,
       showCelestialGrid = false,
       showAzimuthGrid = false,
+      starTrailArcRad = 0,
     }) => {
       if (disposed) return
       root.position.copy(camera.position)
@@ -331,6 +334,9 @@ export function createNightSky(): NightSkyHandle {
         typeof stageFov === 'number' && Number.isFinite(stageFov)
           ? stageFov
           : camera.fov,
+      )
+      vectorLayers.setStarTrailArcRad(
+        nightOn && Number.isFinite(starTrailArcRad) ? starTrailArcRad : 0,
       )
       vectorLayers.setStarsVisible(nightOn)
       vectorLayers.setConstellationsVisible(nightOn && showConstellations)

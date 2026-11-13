@@ -1602,6 +1602,11 @@
   background: #05070c;
 }
 
+/* Preview must sit above the timeline dock (z≈30) so Stop stays clickable. */
+.immersive.immersive--tlapse-playing {
+  z-index: 40;
+}
+
 .immersive__canvas {
   position: absolute;
   inset: 0;
@@ -1713,6 +1718,7 @@ html[data-qa-hide-chrome='1'] .immersive__hint,
 html[data-qa-hide-chrome='1'] .immersive__exit,
 html[data-qa-hide-chrome='1'] .immersive__loader,
 html[data-qa-hide-chrome='1'] .move-stack,
+html[data-qa-hide-chrome='1'] .tlapse-hud,
 html[data-qa-hide-chrome='1'] .timeline-dock,
 html[data-qa-hide-chrome='1'] .moon-timeline-dock,
 html[data-qa-hide-chrome='1'] .moon-timeline-dock__collapsed,
@@ -2260,6 +2266,24 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   border-color: transparent;
 }
 
+.vf-capture-capsule__timelapse.is-active {
+  border-color: transparent;
+  background: var(--ui-accent-active-fill);
+  color: var(--ui-accent);
+}
+
+.vf-capture-capsule__timelapse.is-stop {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.16);
+  color: #fecaca;
+}
+
+.vf-capture-capsule__timelapse.is-stop:hover {
+  border-color: rgba(248, 113, 113, 0.7);
+  background: rgba(248, 113, 113, 0.28);
+  color: #fff;
+}
+
 .vf-capture-capsule .vf-camera-panel {
   position: absolute;
   top: calc(100% + 8px);
@@ -2415,6 +2439,38 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   justify-content: flex-start;
 }
 
+.vf-camera-pop__roll-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.vf-camera-pop__roll-head .vf-camera-pop__label {
+  margin: 0;
+}
+
+.vf-camera-pop__roll-reset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.vf-camera-pop__roll-reset:hover {
+  text-decoration: underline;
+}
+
+.vf-camera-pop__field > .moon-preview-stepper {
+  width: 100%;
+}
+
 .vf-camera-pop__hint {
   margin: 2px 0 0;
   font-size: 0.68rem;
@@ -2507,6 +2563,204 @@ html[data-qa-hide-chrome='1'] .photo-frame {
 
 .vf-pano-pop .moon-preview-stepper {
   width: 100%;
+}
+
+/* Capsule timelapse popup — validated prototype « Timelapse » */
+.vf-tlapse-pop .moon-preview-stepper {
+  width: 100%;
+}
+
+.vf-tlapse-pop__interval-hint {
+  margin-top: -6px;
+}
+
+.vf-tlapse-pop__trail.is-hot {
+  color: color-mix(in srgb, var(--ui-accent) 80%, #fff 20%);
+}
+
+.vf-tlapse-pop__count {
+  color: var(--ui-text);
+}
+
+.vf-tlapse-pop__count .vf-camera-pop__unit {
+  color: var(--ui-text-muted);
+}
+
+.vf-tlapse-pop__preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--ui-accent-border);
+  border-radius: 10px;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vf-tlapse-pop__preview:hover {
+  background: color-mix(in srgb, var(--ui-accent-soft) 70%, var(--ui-accent) 30%);
+}
+
+.vf-tlapse-pop__preview:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-ring-offset);
+}
+
+.vf-tlapse-pop__preview.is-playing {
+  border-color: var(--ui-border-strong);
+  background: var(--surface-glass);
+  color: var(--ui-text);
+}
+
+.vf-tlapse-pop__foot {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-stroke-soft);
+}
+
+/* Timelapse preview strip — outside the settings card */
+.tlapse-hud {
+  /* Timeline slot, but raised — timeline is hidden in playback mode. */
+  position: absolute;
+  left: 50%;
+  top: auto;
+  bottom: max(72px, calc(env(safe-area-inset-bottom, 0px) + 56px));
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(520px, calc(100vw - 24px));
+  padding: 12px 14px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 18px;
+  background: rgba(16, 16, 20, 0.78);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(22px) saturate(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  transform: translateX(-50%);
+  color: #e8f5ee;
+  pointer-events: auto;
+}
+
+.tlapse-hud__bar {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tlapse-hud__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ui-accent);
+}
+
+.tlapse-hud__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tlapse-hud__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.tlapse-hud__btn:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-ring-offset);
+}
+
+.tlapse-hud__btn--primary {
+  border: 1px solid var(--ui-accent-border);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+}
+
+.tlapse-hud__btn--primary:hover {
+  background: color-mix(in srgb, var(--ui-accent-soft) 65%, var(--ui-accent) 35%);
+}
+
+.tlapse-hud__btn--stop {
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
+}
+
+.tlapse-hud__btn--stop:hover {
+  border-color: rgba(248, 113, 113, 0.85);
+  background: rgba(248, 113, 113, 0.32);
+  color: #fff;
+}
+
+.tlapse-hud__btn--ghost {
+  border: 1px solid var(--ui-border-strong);
+  background: var(--surface-glass);
+  color: var(--ui-text);
+}
+
+.tlapse-hud__btn--ghost:hover {
+  border-color: var(--ui-accent-border);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+}
+
+.tlapse-hud__badge {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ui-text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tlapse-hud__count {
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.tlapse-hud__slash {
+  margin: 0 2px;
+  color: var(--ui-text-muted);
+  font-weight: 500;
+}
+
+.tlapse-hud__meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Compact projection control (top-right) */
@@ -3853,13 +4107,53 @@ html[data-qa-hide-chrome='1'] .render-diag {
   cursor: not-allowed;
 }
 
-.moon-preview-stepper output {
+.moon-preview-stepper output,
+.moon-preview-stepper__input {
   flex: 1 1 auto;
+  min-width: 0;
   text-align: center;
   font-size: 0.78rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   color: #e8f5ee;
+}
+
+.moon-preview-stepper__input {
+  box-sizing: border-box;
+  height: 28px;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.moon-preview-stepper__input::-webkit-outer-spin-button,
+.moon-preview-stepper__input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.moon-preview-stepper__input:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.moon-preview-stepper__input:focus {
+  outline: none;
+  border-color: var(--ui-accent-border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ui-accent);
+}
+
+.moon-preview-stepper__input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .vf-pano-controls {

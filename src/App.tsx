@@ -109,6 +109,8 @@ export default function App() {
   } | null>(null)
   /** Immersive terrain fully loaded — timeline stays hidden until then. */
   const [immersiveTerrainReady, setImmersiveTerrainReady] = useState(false)
+  /** Timelapse preview occupies the timeline slot — hide the dock. */
+  const [timelapsePreviewPlaying, setTimelapsePreviewPlaying] = useState(false)
 
   useEffect(() => {
     savePersonalSpots(personalSpots)
@@ -372,7 +374,8 @@ export default function App() {
     Math.abs(parkedImmersiveSpot.lat - spot.lat) < 1e-6 &&
     Math.abs(parkedImmersiveSpot.lon - spot.lon) < 1e-6
   const mountImmersive = immersive || keepImmersiveMounted
-  const showTimeline = !immersive || immersiveTerrainReady
+  const showTimeline =
+    (!immersive || immersiveTerrainReady) && !timelapsePreviewPlaying
 
   return (
     <div className="app">
@@ -449,13 +452,16 @@ export default function App() {
             bearingDeg={immersiveLook?.bearingDeg ?? spot.bearingDeg}
             initialPitchDeg={immersiveLook?.pitchDeg ?? 0}
             skyUtcMs={playheadUtcMs}
+            onSkyUtcChange={onPlayheadChange}
             date={date}
             selectedCelestial={selectedCelestial}
             onSelectCelestial={setSelectedCelestial}
             onTerrainReadyChange={setImmersiveTerrainReady}
+            onTimelapsePreviewPlayingChange={setTimelapsePreviewPlaying}
             onExit={() => {
               setImmersiveLook(null)
               setImmersiveTerrainReady(false)
+              setTimelapsePreviewPlaying(false)
               setMode('orbit')
             }}
           />

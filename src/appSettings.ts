@@ -3,8 +3,10 @@ import { TRIPOD_HEIGHT_M, clampEyeHeightM } from './presets'
 import { TIMELINE_VISIBLE_RADIUS_STEPS_MS } from './DayTimeline'
 import {
   clampFocalLengthMm,
+  clampFrameRollDeg,
   DEFAULT_FOCAL_LENGTH_MM,
   DEFAULT_FRAME_MODE,
+  DEFAULT_FRAME_ROLL_DEG,
   DEFAULT_ORIENTATION,
   DEFAULT_SENSOR_FORMAT,
   normalizeViewfinderFrameMode,
@@ -24,6 +26,11 @@ import {
   type PanoramaPlan,
 } from './panorama'
 import {
+  DEFAULT_TIMELAPSE_PLAN,
+  normalizeTimelapsePlan,
+  type TimelapsePlan,
+} from './timelapse'
+import {
   clampGroundNightBrightness,
   clampGroundNightContrast,
   clampGroundNightTemperature,
@@ -41,10 +48,13 @@ export const APP_SETTINGS_STORAGE_KEY = 'astro-landscape.settings.v1'
 export type ImmersiveSettings = {
   focalMm: number
   orientation: ViewfinderOrientation
+  /** Photo-frame roll in degrees (CCW), on top of paysage/portrait. */
+  frameRollDeg: number
   sensorFormat: SensorFormat
   /** Which viewfinder overlay to draw: none / single shot / panorama grid. */
   frameMode: ViewfinderFrameMode
   panorama: PanoramaPlan
+  timelapse: TimelapsePlan
   projection: StageProjection
   stageVfovDeg: number
   /** Camera height above the spot ground, metres. */
@@ -90,9 +100,11 @@ export const DEFAULT_MAP_SETTINGS: MapSettings = {
 export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   focalMm: DEFAULT_FOCAL_LENGTH_MM,
   orientation: DEFAULT_ORIENTATION,
+  frameRollDeg: DEFAULT_FRAME_ROLL_DEG,
   sensorFormat: DEFAULT_SENSOR_FORMAT,
   frameMode: DEFAULT_FRAME_MODE,
   panorama: { ...DEFAULT_PANORAMA_PLAN },
+  timelapse: { ...DEFAULT_TIMELAPSE_PLAN },
   projection: 'stereographic',
   stageVfovDeg: STAGE_VFOV_DEFAULT_DEG,
   eyeHeightM: TRIPOD_HEIGHT_M,
@@ -117,6 +129,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   immersive: {
     ...DEFAULT_IMMERSIVE_SETTINGS,
     panorama: { ...DEFAULT_PANORAMA_PLAN },
+    timelapse: { ...DEFAULT_TIMELAPSE_PLAN },
   },
   timeline: { ...DEFAULT_TIMELINE_SETTINGS },
 }
@@ -198,9 +211,11 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
     return {
       ...DEFAULT_IMMERSIVE_SETTINGS,
       panorama: { ...DEFAULT_PANORAMA_PLAN },
+      timelapse: { ...DEFAULT_TIMELAPSE_PLAN },
     }
   }
   const panorama = normalizePanorama(row.panorama)
+  const timelapse = normalizeTimelapsePlan(row.timelapse)
   // Migrate older saves that only had panorama.enabled.
   const frameMode = normalizeViewfinderFrameMode(
     row.frameMode ?? (panorama.enabled ? 'pano' : DEFAULT_FRAME_MODE),
@@ -208,12 +223,16 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
   return {
     focalMm: clampFocalLengthMm(Number(row.focalMm)),
     orientation: normalizeOrientation(row.orientation),
+    frameRollDeg: clampFrameRollDeg(
+      Number(row.frameRollDeg ?? DEFAULT_FRAME_ROLL_DEG),
+    ),
     sensorFormat: normalizeSensorFormat(row.sensorFormat),
     frameMode,
     panorama: {
       ...panorama,
       enabled: frameMode === 'pano',
     },
+    timelapse,
     projection: normalizeStageProjection(row.projection),
     stageVfovDeg: normalizeStageVfov(row.stageVfovDeg),
     eyeHeightM: clampEyeHeightM(
@@ -314,6 +333,9 @@ export function patchAppSettings(
       panorama: patch.immersive?.panorama
         ? { ...patch.immersive.panorama }
         : { ...current.immersive.panorama },
+      timelapse: patch.immersive?.timelapse
+        ? { ...patch.immersive.timelapse }
+        : { ...current.immersive.timelapse },
     },
     timeline: { ...current.timeline, ...patch.timeline },
   }

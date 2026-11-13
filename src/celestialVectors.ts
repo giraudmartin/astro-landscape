@@ -67,6 +67,11 @@ export type CelestialVectorLayerHandle = {
   setOpacity: (opacity: number) => void
   /** Drive mag reveal + zoom punch from the viewfinder FOV. */
   setView: (fovYDeg: number) => void
+  /**
+   * Fixed-tripod star trail: sky arc (rad) swept during the exposure.
+   * 0 hides trails; equatorial tracking should pass 0.
+   */
+  setStarTrailArcRad: (arcRad: number) => void
   dispose: () => void
 }
 
@@ -243,6 +248,133 @@ function createHygStarPoints(
   }
 }
 
+/**
+ * Star-trail chords: each star is a line whose endpoints are rotated ±½ arc
+ * around the NASA-map NCP (+Y). Vertex shader applies `uTrailArcRad` live.
+ */
+function createHygStarTrails(
+  catalog: readonly HygBrightStar[],
+  radius: number,
+): {
+  lines: THREE.LineSegments
+  material: THREE.ShaderMaterial
+  dispose: () => void
+} {
+  const count = catalog.length
+  const positions = new Float32Array(count * 2 * 3)
+  const ends = new Float32Array(count * 2)
+  const brightness = new Float32Array(count * 2)
+  const mags = new Float32Array(count * 2)
+  const colors = new Float32Array(count * 2 * 3)
+  const dir = new THREE.Vector3()
+  for (let i = 0; i < count; i += 1) {
+    const star = catalog[i]!
+    dir.copy(j2000ToNasaMapDirection(star.raHours, star.decDeg)).multiplyScalar(
+      radius,
+    )
+    const bright = celestialStarBrightness(star.mag)
+    const [r, g, b] = starColorFromBv(star.ci)
+    const cr = Math.min(1, r * 1.1 + 0.08)
+    const cg = Math.min(1, g * 1.1 + 0.08)
+    const cb = Math.min(1, b * 1.1 + 0.1)
+    for (let e = 0; e < 2; e += 1) {
+      const idx = i * 2 + e
+      positions[idx * 3] = dir.x
+      positions[idx * 3 + 1] = dir.y
+      positions[idx * 3 + 2] = dir.z
+      ends[idx] = e === 0 ? -1 : 1
+      brightness[idx] = bright
+      mags[idx] = star.mag
+      colors[idx * 3] = cr
+      colors[idx * 3 + 1] = cg
+      colors[idx * 3 + 2] = cb
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('aEnd', new THREE.BufferAttribute(ends, 1))
+  geometry.setAttribute('aBrightness', new THREE.BufferAttribute(brightness, 1))
+  geometry.setAttribute('aMag', new THREE.BufferAttribute(mags, 1))
+  geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3))
+
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+    toneMapped: false,
+    uniforms: {
+      uStelMode: stelModeUniform,
+      uOpacity: { value: 1 },
+      uTrailArcRad: { value: 0 },
+      uMagLimit: { value: 6.5 },
+    },
+    vertexShader: /* glsl */ `
+      ${STEL_PROJECT_GLSL}
+      attribute float aEnd;
+      attribute float aBrightness;
+      attribute float aMag;
+      attribute vec3 aColor;
+      uniform float uTrailArcRad;
+      uniform float uMagLimit;
+      varying vec3 vColor;
+      varying float vBrightness;
+      void main() {
+        float reveal = smoothstep(uMagLimit + 0.7, uMagLimit - 0.25, aMag);
+        vColor = aColor;
+        vBrightness = aBrightness * reveal;
+        if (vBrightness < 0.03 || uTrailArcRad < 1.0e-5) {
+          vStelRay = vec3(0.0, 0.0, -1.0);
+          vStelSt = vec2(0.0);
+          vStelBad = 1.0;
+          gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+          return;
+        }
+        // Rotate around NASA-map NCP (+Y): equatorial stars trail the most.
+        float a = aEnd * uTrailArcRad * 0.5;
+        float c = cos(a);
+        float s = sin(a);
+        vec3 p = vec3(
+          position.x * c + position.z * s,
+          position.y,
+          -position.x * s + position.z * c
+        );
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = stelProject(mv);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      ${STEL_FRAGMENT_GLSL}
+      uniform float uOpacity;
+      varying vec3 vColor;
+      varying float vBrightness;
+      void main() {
+        stelDiscardBow();
+        if (vBrightness < 0.03) discard;
+        // Soft trail energy — brighter stars leave a denser streak.
+        float energy = vBrightness * uOpacity * 0.55;
+        gl_FragColor = vec4(vColor * energy, energy);
+      }
+    `,
+  })
+
+  const lines = new THREE.LineSegments(geometry, material)
+  lines.name = 'hygCelestialStarTrails'
+  lines.frustumCulled = false
+  lines.visible = false
+  lines.renderOrder = -4
+  return {
+    lines,
+    material,
+    dispose: () => {
+      geometry.dispose()
+      material.dispose()
+    },
+  }
+}
+
 function createConstellationLines(
   figures: readonly ConstellationFigure[],
   radius: number,
@@ -354,24 +486,45 @@ export function createCelestialVectorLayers(
   root.name = 'celestialVectorLayers'
 
   const stars = createHygStarPoints(HYG_BRIGHT_STARS, radius * 0.994)
+  const trails = createHygStarTrails(HYG_BRIGHT_STARS, radius * 0.994)
   const figures = createConstellationLines(CONSTELLATION_FIGURES, radius * 0.993)
   const grid = createCelestialRaDecGrid(radius * 0.992)
 
   stars.points.visible = false
+  trails.lines.visible = false
   figures.lines.visible = false
   grid.lines.visible = false
-  root.add(stars.points, figures.lines, grid.lines)
+  root.add(trails.lines, stars.points, figures.lines, grid.lines)
 
   const starMat = stars.points.material as THREE.ShaderMaterial
+  const trailMat = trails.material
   const figureMat = figures.lines.material as THREE.LineBasicMaterial
   const gridMat = grid.lines.material as THREE.LineBasicMaterial
   const figureBase = figureMat.opacity
   const gridBase = gridMat.opacity
+  let starsWanted = false
+  let trailArcRad = 0
+  let layerOpacity = 1
+
+  const applyStarOpacity = () => {
+    const trailing = starsWanted && trailArcRad > 1e-5
+    // Soften pinpricks so the streak reads as the exposure, not a double image.
+    starMat.uniforms.uOpacity.value = trailing ? layerOpacity * 0.35 : layerOpacity
+    trailMat.uniforms.uOpacity.value = layerOpacity
+  }
+
+  const syncTrailVisibility = () => {
+    trails.lines.visible = starsWanted && trailArcRad > 1e-5
+    trailMat.uniforms.uTrailArcRad.value = trailArcRad
+    applyStarOpacity()
+  }
 
   return {
     root,
     setStarsVisible: (visible) => {
+      starsWanted = visible
       stars.points.visible = visible
+      syncTrailVisibility()
     },
     setConstellationsVisible: (visible) => {
       figures.lines.visible = visible
@@ -380,20 +533,31 @@ export function createCelestialVectorLayers(
       grid.lines.visible = visible
     },
     setOpacity: (opacity) => {
-      const o = THREE.MathUtils.clamp(opacity, 0, 1)
-      starMat.uniforms.uOpacity.value = o
-      figureMat.opacity = figureBase * o
-      gridMat.opacity = gridBase * o
+      layerOpacity = THREE.MathUtils.clamp(opacity, 0, 1)
+      applyStarOpacity()
+      figureMat.opacity = figureBase * layerOpacity
+      gridMat.opacity = gridBase * layerOpacity
       if (typeof window !== 'undefined') {
-        starMat.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio || 1, 2)
+        starMat.uniforms.uPixelRatio.value = Math.min(
+          window.devicePixelRatio || 1,
+          2,
+        )
       }
     },
     setView: (fovYDeg) => {
-      starMat.uniforms.uMagLimit.value = starMagLimitForFov(fovYDeg)
+      const mag = starMagLimitForFov(fovYDeg)
+      starMat.uniforms.uMagLimit.value = mag
       starMat.uniforms.uZoomBoost.value = starZoomBoostForFov(fovYDeg)
+      trailMat.uniforms.uMagLimit.value = mag
+    },
+    setStarTrailArcRad: (arcRad) => {
+      trailArcRad =
+        Number.isFinite(arcRad) && arcRad > 0 ? Math.min(arcRad, Math.PI) : 0
+      syncTrailVisibility()
     },
     dispose: () => {
       stars.dispose()
+      trails.dispose()
       figures.dispose()
       grid.dispose()
     },

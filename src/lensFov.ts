@@ -31,6 +31,20 @@ export const VIEWFINDER_FRAME_MODE_TITLE: Record<ViewfinderFrameMode, string> = 
 export const DEFAULT_FOCAL_LENGTH_MM: FocalLengthMm = 20
 export const DEFAULT_ORIENTATION: ViewfinderOrientation = 'landscape'
 export const DEFAULT_FRAME_MODE: ViewfinderFrameMode = 'dslr'
+/** Manual photo-frame roll (deg, CCW). Independent of paysage/portrait. */
+export const DEFAULT_FRAME_ROLL_DEG = 0
+export const FRAME_ROLL_MIN_DEG = -180
+export const FRAME_ROLL_MAX_DEG = 180
+
+export function clampFrameRollDeg(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_FRAME_ROLL_DEG
+  const clamped = Math.min(
+    FRAME_ROLL_MAX_DEG,
+    Math.max(FRAME_ROLL_MIN_DEG, value),
+  )
+  // Keep −180..180 with 1° steps for the stepper / number field.
+  return Math.round(clamped)
+}
 
 export function normalizeViewfinderFrameMode(
   value: unknown,

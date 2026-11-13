@@ -14,7 +14,13 @@ export {
   setCelestialCatalogForTests,
 } from './catalog'
 export { buildSearchIndex, searchCelestialObjects, type SearchHit } from './search'
-export { objectHorizontalAt, j2000ToHorizontal, bodyToHorizontal } from './position'
+export {
+  objectHorizontalAt,
+  j2000ToHorizontal,
+  horizontalToJ2000,
+  bodyToHorizontal,
+  type EquatorialJ2000,
+} from './position'
 export { computeDayVisibility } from './visibility'
 export { SOLAR_SYSTEM_OBJECTS } from './solarSystem'
 export { buildObjectLiveInfo } from './liveInfo'

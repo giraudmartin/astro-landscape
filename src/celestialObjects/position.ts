@@ -6,10 +6,17 @@ import {
   Observer,
   RotateVector,
   Rotation_EQJ_EQD,
+  Rotation_HOR_EQJ,
   Spherical,
+  VectorFromHorizon,
   VectorFromSphere,
 } from 'astronomy-engine'
 import type { CelestialObject, HorizontalPosition } from './types'
+
+export type EquatorialJ2000 = {
+  raHours: number
+  decDeg: number
+}
 
 /**
  * Convert J2000 RA/Dec to of-date equatorial (precession via EQJ→EQD),
@@ -84,6 +91,32 @@ export function objectHorizontalAt(
     elevationM,
     utcMs,
   )
+}
+
+/**
+ * Invert local horizontal (MapLibre-style az from north, alt) → J2000 RA/Dec.
+ * Used to lock an equatorial mount on the current look centre.
+ */
+export function horizontalToJ2000(
+  altitudeDeg: number,
+  azimuthDeg: number,
+  lat: number,
+  lon: number,
+  elevationM: number,
+  utcMs: number,
+): EquatorialJ2000 {
+  const at = new Date(utcMs)
+  const observer = new Observer(lat, lon, elevationM / 1000)
+  // Spherical: lat=altitude, lon=azimuth (clockwise from north — engine toggles).
+  const hor = VectorFromHorizon(
+    new Spherical(altitudeDeg, azimuthDeg, 1),
+    at,
+    'normal',
+  )
+  const eqj = EquatorFromVector(
+    RotateVector(Rotation_HOR_EQJ(at, observer), hor),
+  )
+  return { raHours: eqj.ra, decDeg: eqj.dec }
 }
 
 /** Sample altitude only — used by rise/set search. */

@@ -45,6 +45,11 @@ type PhotoFrameOverlayProps = {
   onToggleWorldLock?: () => void
   /** Look back at the locked framing (only meaningful while locked). */
   onRecenterWorldLock?: () => void
+  /**
+   * Screen-space roll (deg) for the unlocked follow frame — used by
+   * equatorial timelapse « Cadre seul » mode. Positive = CCW.
+   */
+  frameRollDeg?: number
 }
 
 type Vec3 = { x: number; y: number; z: number }
@@ -818,6 +823,7 @@ export function PhotoFrameOverlay({
   worldLock = null,
   onToggleWorldLock,
   onRecenterWorldLock,
+  frameRollDeg = 0,
 }: PhotoFrameOverlayProps) {
   if (stageW < 2 || stageH < 2) return null
   if (frameMode === 'off') return null
@@ -921,6 +927,16 @@ export function PhotoFrameOverlay({
 
   const left = (stageW - frameW) / 2
   const top = (stageH - frameH) / 2
+  const frameCx = left + frameW / 2
+  const frameCy = top + frameH / 2
+  const followRoll =
+    showFollowFrame && Number.isFinite(frameRollDeg) && frameRollDeg !== 0
+      ? frameRollDeg
+      : 0
+  const followRollTransform =
+    followRoll !== 0
+      ? `rotate(${followRoll} ${frameCx} ${frameCy})`
+      : undefined
 
   const showFrames = panoOn && panorama.showFrames
   const showOverlap = panoOn && panorama.showOverlap
@@ -1000,14 +1016,16 @@ export function PhotoFrameOverlay({
                 : showLockedFrame ? (
                     <polygon points={quadPoints} fill="black" />
                   ) : showFollowFrame ? (
-                    <rect
-                      x={left}
-                      y={top}
-                      width={frameW}
-                      height={frameH}
-                      fill="black"
-                      rx={2}
-                    />
+                    <g transform={followRollTransform}>
+                      <rect
+                        x={left}
+                        y={top}
+                        width={frameW}
+                        height={frameH}
+                        fill="black"
+                        rx={2}
+                      />
+                    </g>
                   ) : null}
             </mask>
           ) : null}
@@ -1114,7 +1132,7 @@ export function PhotoFrameOverlay({
         ) : null}
 
         {showFollowFrame ? (
-          <>
+          <g transform={followRollTransform}>
             <rect
               x={left}
               y={top}
@@ -1141,7 +1159,7 @@ export function PhotoFrameOverlay({
               stroke={accentRgba(0.22)}
               strokeWidth={1}
             />
-          </>
+          </g>
         ) : null}
       </svg>
 

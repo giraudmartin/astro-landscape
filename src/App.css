@@ -5335,11 +5335,47 @@ button.ov-capsule:hover {
 }
 
 .celestial-target__actions {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
   margin-top: 12px;
 }
 
+.celestial-target__lock {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-height: 38px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--ui-stroke);
+  border-radius: var(--r-md);
+  background: rgba(14, 16, 22, 0.55);
+  color: var(--ui-text);
+  cursor: pointer;
+}
+
+.celestial-target__lock:hover:not(:disabled) {
+  border-color: var(--ui-accent-border);
+  color: var(--ui-action-primary-text);
+}
+
+.celestial-target__lock.is-locked {
+  border-color: var(--ui-action-primary-border);
+  background: var(--ui-action-primary-bg);
+  color: var(--ui-action-primary-text);
+}
+
+.celestial-target__lock:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .celestial-target__center {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 38px;
   margin: 0;
   padding: 0 12px;
@@ -5362,6 +5398,7 @@ button.ov-capsule:hover {
   cursor: not-allowed;
 }
 
+.celestial-target__lock:focus-visible,
 .celestial-target__center:focus-visible,
 .celestial-dock__toggle:focus-visible,
 .celestial-search__option:focus-visible {

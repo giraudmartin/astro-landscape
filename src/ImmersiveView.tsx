@@ -219,6 +219,16 @@ export function ImmersiveView({
   const skyUtcLiveRef = useRef(skyUtcMs)
   skyUtcLiveRef.current = skyUtcMs
   const [celestialSearchOpen, setCelestialSearchOpen] = useState(false)
+  /** Keep the view aimed at the selected target while the timeline moves. */
+  const [targetLocked, setTargetLocked] = useState(false)
+  const targetLockedRef = useRef(false)
+  targetLockedRef.current = targetLocked
+  const unlockTargetFollowRef = useRef(() => {})
+  unlockTargetFollowRef.current = () => {
+    if (!targetLockedRef.current) return
+    targetLockedRef.current = false
+    setTargetLocked(false)
+  }
   const lookAnimRef = useRef<number | null>(null)
   const [terrainLabel, setTerrainLabel] = useState('Relief…')
   const [terrainPhase, setTerrainPhase] = useState<TerrainLoadPhase>('dem')
@@ -946,6 +956,8 @@ export function ImmersiveView({
       setYawDeg(yaw)
       setPitchDeg(pitch)
       applyCamera()
+      // Manual look breaks target follow (timeline lock).
+      if (dx !== 0 || dy !== 0) unlockTargetFollowRef.current()
     }
     const onPointerUp = (event: PointerEvent) => {
       dragging = false
@@ -1236,6 +1248,40 @@ export function ImmersiveView({
     groundNightContrast,
     groundNightTemperature,
   ])
+
+  // Target lock: re-aim whenever the playhead / selection / site changes.
+  useEffect(() => {
+    if (!targetLocked || !selectedCelestial) return
+    const pos = objectHorizontalAt(
+      selectedCelestial,
+      lat,
+      lon,
+      groundElevationM,
+      skyUtcMs,
+    )
+    if (!pos) return
+    const targetYaw = ((pos.azimuthDeg % 360) + 360) % 360
+    const targetPitch = Math.max(
+      LOOK_PITCH_MIN,
+      Math.min(LOOK_PITCH_MAX, pos.altitudeDeg),
+    )
+    if (lookAnimRef.current != null) {
+      window.cancelAnimationFrame(lookAnimRef.current)
+      lookAnimRef.current = null
+    }
+    apiRef.current?.setLook(targetYaw, targetPitch)
+  }, [
+    targetLocked,
+    selectedCelestial,
+    skyUtcMs,
+    lat,
+    lon,
+    groundElevationM,
+  ])
+
+  useEffect(() => {
+    if (!selectedCelestial) setTargetLocked(false)
+  }, [selectedCelestial])
 
   // Re-entering the parked same-spot view: restore ready flag for the timeline.
   useEffect(() => {
@@ -1789,7 +1835,35 @@ export function ImmersiveView({
               lon={lon}
               elevationM={groundElevationM}
               canCenter
+              targetLocked={targetLocked}
               onClose={() => onSelectCelestial(null)}
+              onToggleTargetLock={() => {
+                if (targetLocked) {
+                  setTargetLocked(false)
+                  return
+                }
+                const pos = objectHorizontalAt(
+                  selectedCelestial,
+                  lat,
+                  lon,
+                  groundElevationM,
+                  skyUtcMs,
+                )
+                if (!pos) return
+                if (Math.abs(pos.altitudeDeg) > LOOK_PITCH_MAX) return
+                // Aim now; the skyUtc effect keeps following while locked.
+                const targetYaw = ((pos.azimuthDeg % 360) + 360) % 360
+                const targetPitch = Math.max(
+                  LOOK_PITCH_MIN,
+                  Math.min(LOOK_PITCH_MAX, pos.altitudeDeg),
+                )
+                if (lookAnimRef.current != null) {
+                  window.cancelAnimationFrame(lookAnimRef.current)
+                  lookAnimRef.current = null
+                }
+                apiRef.current?.setLook(targetYaw, targetPitch)
+                setTargetLocked(true)
+              }}
               onCenter={() => {
                 const pos = objectHorizontalAt(
                   selectedCelestial,

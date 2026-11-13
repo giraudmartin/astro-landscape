@@ -13,6 +13,8 @@ type CelestialTargetCardProps = {
   lon: number
   elevationM: number
   canCenter: boolean
+  targetLocked: boolean
+  onToggleTargetLock: () => void
   onCenter: () => void
   onClose: () => void
 }
@@ -59,6 +61,28 @@ function visibilityStatusLabel(
   }
 }
 
+/** Lucide-style crosshair — lock view on the selected target. */
+function TargetLockIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    </svg>
+  )
+}
+
 export function CelestialTargetCard({
   object,
   date,
@@ -67,6 +91,8 @@ export function CelestialTargetCard({
   lon,
   elevationM,
   canCenter,
+  targetLocked,
+  onToggleTargetLock,
   onCenter,
   onClose,
 }: CelestialTargetCardProps) {
@@ -81,6 +107,7 @@ export function CelestialTargetCard({
     info.position != null && info.position.altitudeDeg < 0
   const pitchClamped =
     info.position != null && Math.abs(info.position.altitudeDeg) > 85
+  const canAim = canCenter && info.position != null && !pitchClamped
 
   return (
     <aside className="celestial-target" aria-label="Objet sélectionné">
@@ -195,8 +222,31 @@ export function CelestialTargetCard({
       <div className="celestial-target__actions">
         <button
           type="button"
+          className={
+            targetLocked
+              ? 'celestial-target__lock is-locked'
+              : 'celestial-target__lock'
+          }
+          disabled={!canAim && !targetLocked}
+          aria-pressed={targetLocked}
+          title={
+            targetLocked
+              ? 'Déverrouiller la cible (ou déplacer la vue)'
+              : 'Verrouiller la cible — suit la timeline'
+          }
+          aria-label={
+            targetLocked
+              ? 'Déverrouiller la cible'
+              : 'Verrouiller la cible sur la timeline'
+          }
+          onClick={onToggleTargetLock}
+        >
+          <TargetLockIcon />
+        </button>
+        <button
+          type="button"
           className="celestial-target__center"
-          disabled={!canCenter || !info.position || pitchClamped}
+          disabled={!canAim}
           onClick={onCenter}
         >
           Centrer sur la cible

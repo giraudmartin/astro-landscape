@@ -31,6 +31,22 @@ import {
   type TimelapsePlan,
 } from './timelapse'
 import {
+  clampStarBrightness,
+  clampStarGlow,
+  clampStarMagDepth,
+  clampStarZoomSpan,
+  STAR_BRIGHTNESS_DEFAULT,
+  STAR_GLOW_DEFAULT,
+  STAR_MAG_DEPTH_DEFAULT,
+  STAR_ZOOM_SPAN_DEFAULT,
+} from './starRevealSettings'
+import {
+  AIRGLOW_AMOUNT_DEFAULT,
+  AIRGLOW_HUE_DEFAULT,
+  ATMOSPHERE_AMOUNT_DEFAULT,
+  clampAirglowAmount,
+  clampAirglowHue,
+  clampAtmosphereAmount,
   clampGroundNightBrightness,
   clampGroundNightContrast,
   clampGroundNightTemperature,
@@ -68,9 +84,28 @@ export type ImmersiveSettings = {
   groundNightContrast: number
   /** Dusk/night ground temperature −1…+1 (0 = neutral). */
   groundNightTemperature: number
+  /**
+   * Extra HYG magnitude depth (0 = default FOV curve).
+   * Raises wide and tele limits together — denser sky, same zoom proportion.
+   */
+  starMagDepth: number
+  /**
+   * Wide↔tele magnitude-span multiplier (1 = default).
+   * 0 = flat limit at every FOV; higher = more stars unlocked when zooming.
+   */
+  starZoomSpan: number
+  /** Star luminance multiplier (1 = default). */
+  starBrightness: number
+  /** Halo on bright stars (0 = cores only, 1 = default). */
+  starGlow: number
   showMilkyWay: boolean
   showHalpha: boolean
-  showAtmosphere: boolean
+  /** Rayleigh sky amount 0…1 (replaces the old on/off Atmo toggle). */
+  atmosphereAmount: number
+  /** Additive OI airglow amount 0…1 (on top of atmosphere, night only). */
+  airglowAmount: number
+  /** Airglow hue 0…1 (green 557 nm → red 630 nm). */
+  airglowHue: number
   showConstellations: boolean
   showCelestialGrid: boolean
   showAzimuthGrid: boolean
@@ -111,9 +146,15 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   groundNightBrightness: GROUND_NIGHT_BRIGHTNESS_DEFAULT,
   groundNightContrast: GROUND_NIGHT_CONTRAST_DEFAULT,
   groundNightTemperature: GROUND_NIGHT_TEMPERATURE_DEFAULT,
+  starMagDepth: STAR_MAG_DEPTH_DEFAULT,
+  starZoomSpan: STAR_ZOOM_SPAN_DEFAULT,
+  starBrightness: STAR_BRIGHTNESS_DEFAULT,
+  starGlow: STAR_GLOW_DEFAULT,
   showMilkyWay: true,
   showHalpha: false,
-  showAtmosphere: true,
+  atmosphereAmount: ATMOSPHERE_AMOUNT_DEFAULT,
+  airglowAmount: AIRGLOW_AMOUNT_DEFAULT,
+  airglowHue: AIRGLOW_HUE_DEFAULT,
   showConstellations: true,
   showCelestialGrid: false,
   showAzimuthGrid: false,
@@ -256,6 +297,18 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
           DEFAULT_IMMERSIVE_SETTINGS.groundNightTemperature,
       ),
     ),
+    starMagDepth: clampStarMagDepth(
+      Number(row.starMagDepth ?? DEFAULT_IMMERSIVE_SETTINGS.starMagDepth),
+    ),
+    starZoomSpan: clampStarZoomSpan(
+      Number(row.starZoomSpan ?? DEFAULT_IMMERSIVE_SETTINGS.starZoomSpan),
+    ),
+    starBrightness: clampStarBrightness(
+      Number(row.starBrightness ?? DEFAULT_IMMERSIVE_SETTINGS.starBrightness),
+    ),
+    starGlow: clampStarGlow(
+      Number(row.starGlow ?? DEFAULT_IMMERSIVE_SETTINGS.starGlow),
+    ),
     showMilkyWay: readBoolean(
       row.showMilkyWay,
       DEFAULT_IMMERSIVE_SETTINGS.showMilkyWay,
@@ -264,9 +317,19 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
       row.showHalpha,
       DEFAULT_IMMERSIVE_SETTINGS.showHalpha,
     ),
-    showAtmosphere: readBoolean(
-      row.showAtmosphere,
-      DEFAULT_IMMERSIVE_SETTINGS.showAtmosphere,
+    atmosphereAmount: clampAtmosphereAmount(
+      Number(
+        row.atmosphereAmount ??
+          (row.showAtmosphere === false
+            ? 0
+            : DEFAULT_IMMERSIVE_SETTINGS.atmosphereAmount),
+      ),
+    ),
+    airglowAmount: clampAirglowAmount(
+      Number(row.airglowAmount ?? DEFAULT_IMMERSIVE_SETTINGS.airglowAmount),
+    ),
+    airglowHue: clampAirglowHue(
+      Number(row.airglowHue ?? DEFAULT_IMMERSIVE_SETTINGS.airglowHue),
     ),
     showConstellations: readBoolean(
       row.showConstellations,

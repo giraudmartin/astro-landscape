@@ -11,6 +11,33 @@ import {
   type ConstellationFigure,
 } from './constellationFigures'
 import { HYG_BRIGHT_STARS, type HygBrightStar } from './hygBrightStars'
+import {
+  clampStarBrightness,
+  clampStarGlow,
+  starMagLimitForFov,
+  type StarRevealOptions,
+} from './starRevealSettings'
+
+export {
+  STAR_BRIGHTNESS_DEFAULT,
+  STAR_BRIGHTNESS_MAX,
+  STAR_BRIGHTNESS_MIN,
+  STAR_GLOW_DEFAULT,
+  STAR_GLOW_MAX,
+  STAR_GLOW_MIN,
+  STAR_MAG_DEPTH_DEFAULT,
+  STAR_MAG_DEPTH_MAX,
+  STAR_MAG_DEPTH_MIN,
+  STAR_ZOOM_SPAN_DEFAULT,
+  STAR_ZOOM_SPAN_MAX,
+  STAR_ZOOM_SPAN_MIN,
+  clampStarBrightness,
+  clampStarGlow,
+  clampStarMagDepth,
+  clampStarZoomSpan,
+  starMagLimitForFov,
+  type StarRevealOptions,
+} from './starRevealSettings'
 
 /**
  * Base star disc radius (CSS px at ~40° FOV) from visual magnitude.
@@ -18,35 +45,29 @@ import { HYG_BRIGHT_STARS, type HygBrightStar } from './hygBrightStars'
  */
 export function celestialStarSizePx(mag: number): number {
   const m = THREE.MathUtils.clamp(mag, -1.5, 6.5)
-  // Relative flux vs mag 4, soft-rooted so Rigel/Betelgeuse read as discs.
+  // Base disc stays modest — diffuse glow expands via glowPad, not a fat core.
   const flux = 10 ** (-0.4 * (m - 4))
-  return 2.2 + flux ** 0.42 * 7.5
+  return 2.0 + flux ** 0.32 * 3.2
 }
 
 /**
  * Additive luminance weight (Stellarium "cmag"-like), before FOV adaptation.
+ * Soft floor so the full HYG bright extract stays readable under atmosphere.
  */
 export function celestialStarBrightness(mag: number): number {
   const m = THREE.MathUtils.clamp(mag, -1.5, 6.5)
-  return THREE.MathUtils.clamp(10 ** (-0.2 * (m - 2)) * 0.55, 0.45, 1.25)
-}
-
-/** Soft halo weight — brighter stars bloom more (Stellarium big-halo path). */
-export function celestialStarHalo(mag: number): number {
-  const m = THREE.MathUtils.clamp(mag, -1.5, 6.5)
-  return THREE.MathUtils.clamp((4.5 - m) / 6, 0.08, 0.85)
+  return THREE.MathUtils.clamp(10 ** (-0.2 * (m - 2)) * 0.55, 0.5, 1.25)
 }
 
 /**
- * Faintest magnitude revealed at this FOV.
- * Wide: naked-eye bright set; telephoto: deeper HYG stars.
+ * Soft halo weight — brighter stars bloom more (Stellarium big-halo path).
+ * Faint density stars → ~0 (pinprick); bright stars keep a soft halo.
  */
-export function starMagLimitForFov(fovYDeg: number): number {
-  return THREE.MathUtils.clamp(
-    THREE.MathUtils.mapLinear(fovYDeg, 55, 8, 4.2, 6.5),
-    4.2,
-    6.5,
-  )
+export function celestialStarHalo(mag: number): number {
+  const m = THREE.MathUtils.clamp(mag, -1.5, 6.5)
+  // Bright stars get a strong bloom weight; faint stay near pinprick.
+  // uGlow scales this in the shader (0 = cores only).
+  return THREE.MathUtils.clamp((5.0 - m) / 5.5, 0.05, 1.0)
 }
 
 /**
@@ -65,8 +86,14 @@ export type CelestialVectorLayerHandle = {
   setConstellationsVisible: (visible: boolean) => void
   setGridVisible: (visible: boolean) => void
   setOpacity: (opacity: number) => void
+  /** User star luminance multiplier (1 = default), on top of night fade. */
+  setStarBrightness: (brightness: number) => void
+  /** Halo strength on bright stars (0 = cores only, 1 = default). */
+  setStarGlow: (glow: number) => void
+  /** Extra gain so stars punch through residual atmosphere (1 = none). */
+  setSkyComp: (comp: number) => void
   /** Drive mag reveal + zoom punch from the viewfinder FOV. */
-  setView: (fovYDeg: number) => void
+  setView: (fovYDeg: number, reveal?: StarRevealOptions) => void
   /**
    * Fixed-tripod star trail: sky arc (rad) swept during the exposure.
    * 0 hides trails; equatorial tracking should pass 0.
@@ -163,8 +190,12 @@ function createHygStarPoints(
     transparent: true,
     depthWrite: false,
     depthTest: true,
-    // Stellarium uses GL_ONE, GL_ONE additive sprites for star halos.
-    blending: THREE.AdditiveBlending,
+    // Stellarium-style GL_ONE, GL_ONE — soft halo adds directly (no SrcAlpha² kill).
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneFactor,
+    blendSrcAlpha: THREE.OneFactor,
+    blendDstAlpha: THREE.OneFactor,
     fog: false,
     toneMapped: false,
     uniforms: {
@@ -173,13 +204,26 @@ function createHygStarPoints(
       uPixelRatio: {
         value: typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1,
       },
+      // Diffuse max-glow needs a wide sprite; energy stays soft (no white pâté).
       uMaxPointSize: { value: 72 },
       uMagLimit: { value: 6.5 },
       // FOV adaptation (Stellarium lnfovFactor): grows as FOV shrinks.
       uZoomBoost: { value: 1 },
+      // >1 helps stars punch through residual Rayleigh glow.
+      uSkyComp: { value: 1 },
+      // User glow on bright stars (0 = cores only).
+      uGlow: { value: 1 },
     },
     vertexShader: /* glsl */ `
       ${STEL_PROJECT_GLSL}
+      // Match Mesh*Materials under logarithmicDepthBuffer (Points don't get
+      // Three's logdepthbuf chunks — without this they lose the depth test
+      // against the sky dome and vanish).
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        varying float vFragDepth;
+        varying float vIsPerspective;
+        bool isPerspectiveMatrix(mat4 m) { return m[2][3] == -1.0; }
+      #endif
       attribute float aSize;
       attribute float aBrightness;
       attribute float aHalo;
@@ -189,6 +233,7 @@ function createHygStarPoints(
       uniform float uMaxPointSize;
       uniform float uMagLimit;
       uniform float uZoomBoost;
+      uniform float uGlow;
       varying vec3 vColor;
       varying float vBrightness;
       varying float vHalo;
@@ -196,7 +241,9 @@ function createHygStarPoints(
         float reveal = smoothstep(uMagLimit + 0.7, uMagLimit - 0.25, aMag);
         vColor = aColor;
         vBrightness = aBrightness * reveal;
-        vHalo = aHalo;
+        // Glow → diffuse weight; max spreads wide, not a hard pâté.
+        float g = clamp(uGlow, 0.0, 1.0);
+        vHalo = aHalo * (0.25 * g + 0.75 * g * g);
         if (vBrightness < 0.03) {
           vStelRay = vec3(0.0, 0.0, -1.0);
           vStelSt = vec2(0.0);
@@ -207,28 +254,51 @@ function createHygStarPoints(
         }
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = stelProject(mv);
-        // Stellarium: smaller FOV → larger on-screen halo (not fixed CSS px).
-        float r = aSize * uPixelRatio * uZoomBoost;
-        // Avoid sub-pixel flicker (Stellarium clamps tiny stars to ~1.2px).
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          vFragDepth = 1.0 + gl_Position.w;
+          vIsPerspective = float(isPerspectiveMatrix(projectionMatrix));
+        #endif
+        // Wide sprite only for bloom room (PSF stays soft & dim in the fringe).
+        float glowPad = 1.0 + g * clamp(aHalo, 0.0, 1.0) * 2.6;
+        float r = aSize * uPixelRatio * uZoomBoost * glowPad;
         gl_PointSize = clamp(max(r, 2.4), 2.4, uMaxPointSize);
       }
     `,
     fragmentShader: /* glsl */ `
       ${STEL_FRAGMENT_GLSL}
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        uniform float logDepthBufFC;
+        varying float vFragDepth;
+        varying float vIsPerspective;
+      #endif
       uniform float uOpacity;
+      uniform float uSkyComp;
       varying vec3 vColor;
       varying float vBrightness;
       varying float vHalo;
       void main() {
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          gl_FragDepth = vIsPerspective == 0.0 ? gl_FragCoord.z : log2(vFragDepth) * logDepthBufFC * 0.5;
+        #endif
         stelDiscardBow();
         if (vBrightness < 0.03) discard;
         vec2 p = gl_PointCoord * 2.0 - 1.0;
         float r2 = dot(p, p);
         if (r2 > 1.0) discard;
-        // Soft Stellarium-like PSF: tight core + wide glow for bright stars.
-        float core = exp(-r2 * 11.0);
-        float halo = exp(-r2 * mix(3.2, 1.15, vHalo)) * mix(0.12, 0.55, vHalo);
-        float energy = (core + halo) * vBrightness * uOpacity;
+        // Long soft fade — never a hard disc rim.
+        float edge = 1.0 - smoothstep(0.2, 1.0, r2);
+        // Tiny hot core (pinprick). Glow must NOT enlarge this into a pâté.
+        float coreGain = vBrightness * uOpacity * uSkyComp;
+        float core = exp(-r2 * 110.0) * 2.0 * coreGain;
+        float coreE = 1.0 - exp(-core * 0.8);
+        // Diffuse bloom: wide + dim. Peak stays well under white clip.
+        float bloomGain = (0.55 + 0.45 * vBrightness) * uOpacity
+          * mix(0.9, 1.1, clamp(uSkyComp - 1.0, 0.0, 1.0));
+        // At max vHalo, falloffs go very soft → large milky aura, not a cookie.
+        float mid = exp(-r2 * mix(4.8, 1.25, vHalo)) * vHalo * 0.55 * bloomGain;
+        float outer = exp(-r2 * mix(2.0, 0.45, vHalo)) * vHalo * 0.38 * bloomGain;
+        float far = exp(-r2 * mix(0.95, 0.18, vHalo)) * vHalo * 0.2 * bloomGain;
+        float energy = (coreE + mid + outer + far) * edge;
         gl_FragColor = vec4(vColor * energy, energy);
       }
     `,
@@ -313,6 +383,11 @@ function createHygStarTrails(
     },
     vertexShader: /* glsl */ `
       ${STEL_PROJECT_GLSL}
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        varying float vFragDepth;
+        varying float vIsPerspective;
+        bool isPerspectiveMatrix(mat4 m) { return m[2][3] == -1.0; }
+      #endif
       attribute float aEnd;
       attribute float aBrightness;
       attribute float aMag;
@@ -343,14 +418,26 @@ function createHygStarTrails(
         );
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = stelProject(mv);
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          vFragDepth = 1.0 + gl_Position.w;
+          vIsPerspective = float(isPerspectiveMatrix(projectionMatrix));
+        #endif
       }
     `,
     fragmentShader: /* glsl */ `
       ${STEL_FRAGMENT_GLSL}
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        uniform float logDepthBufFC;
+        varying float vFragDepth;
+        varying float vIsPerspective;
+      #endif
       uniform float uOpacity;
       varying vec3 vColor;
       varying float vBrightness;
       void main() {
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          gl_FragDepth = vIsPerspective == 0.0 ? gl_FragCoord.z : log2(vFragDepth) * logDepthBufFC * 0.5;
+        #endif
         stelDiscardBow();
         if (vBrightness < 0.03) discard;
         // Soft trail energy — brighter stars leave a denser streak.
@@ -505,12 +592,18 @@ export function createCelestialVectorLayers(
   let starsWanted = false
   let trailArcRad = 0
   let layerOpacity = 1
+  let starBrightness = 1
+  let starGlow = 1
+  let skyComp = 1
 
   const applyStarOpacity = () => {
     const trailing = starsWanted && trailArcRad > 1e-5
+    const gain = layerOpacity * starBrightness
     // Soften pinpricks so the streak reads as the exposure, not a double image.
-    starMat.uniforms.uOpacity.value = trailing ? layerOpacity * 0.35 : layerOpacity
-    trailMat.uniforms.uOpacity.value = layerOpacity
+    starMat.uniforms.uOpacity.value = trailing ? gain * 0.35 : gain
+    trailMat.uniforms.uOpacity.value = gain
+    starMat.uniforms.uSkyComp.value = skyComp
+    starMat.uniforms.uGlow.value = starGlow
   }
 
   const syncTrailVisibility = () => {
@@ -544,8 +637,22 @@ export function createCelestialVectorLayers(
         )
       }
     },
-    setView: (fovYDeg) => {
-      const mag = starMagLimitForFov(fovYDeg)
+    setStarBrightness: (brightness) => {
+      starBrightness = clampStarBrightness(brightness)
+      applyStarOpacity()
+    },
+    setStarGlow: (glow) => {
+      // Soft cap — slider max is already 1; never allow the old ugly 2× discs.
+      starGlow = Math.min(1, clampStarGlow(glow))
+      applyStarOpacity()
+    },
+    setSkyComp: (comp) => {
+      skyComp =
+        Number.isFinite(comp) && comp > 0 ? Math.min(3, Math.max(0.5, comp)) : 1
+      applyStarOpacity()
+    },
+    setView: (fovYDeg, reveal) => {
+      const mag = starMagLimitForFov(fovYDeg, reveal)
       starMat.uniforms.uMagLimit.value = mag
       starMat.uniforms.uZoomBoost.value = starZoomBoostForFov(fovYDeg)
       trailMat.uniforms.uMagLimit.value = mag

@@ -51,6 +51,12 @@ const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
   far: 'Horizon 300 km\u2026',
   ready: 'Pr\u00eat',
 }
+import {
+  clampStarBrightness,
+  clampStarGlow,
+  clampStarMagDepth,
+  clampStarZoomSpan,
+} from './starRevealSettings'
 import { createNightSky } from './nightSky'
 import { createSkyBodies } from './skyBodies'
 import { PhotoFrameOverlay } from './PhotoFrameOverlay'
@@ -66,6 +72,7 @@ import { useTimelapsePreview } from './useTimelapsePreview'
 import { ViewfinderCaptureCapsule } from './ViewfinderCaptureCapsule'
 import { ViewfinderLandscapeControl } from './ViewfinderLandscapeControl'
 import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
+import { ViewfinderSkyControl } from './ViewfinderSkyControl'
 import { ViewPitchHud } from './ViewPitchHud'
 import {
   AzimuthGridIcon,
@@ -86,6 +93,9 @@ import {
 } from './stelProjector'
 import { createStereoCubemapPass } from './stereoCubemapPass'
 import {
+  clampAirglowAmount,
+  clampAirglowHue,
+  clampAtmosphereAmount,
   clampGroundNightBrightness,
   clampGroundNightContrast,
   clampGroundNightTemperature,
@@ -275,13 +285,43 @@ export function ImmersiveView({
     clampGroundNightTemperature(savedImmersive.groundNightTemperature),
   )
   groundNightTemperatureRef.current = groundNightTemperature
+  const [starMagDepth, setStarMagDepth] = useState(() =>
+    clampStarMagDepth(savedImmersive.starMagDepth),
+  )
+  const starMagDepthRef = useRef(clampStarMagDepth(savedImmersive.starMagDepth))
+  starMagDepthRef.current = starMagDepth
+  const [starZoomSpan, setStarZoomSpan] = useState(() =>
+    clampStarZoomSpan(savedImmersive.starZoomSpan),
+  )
+  const starZoomSpanRef = useRef(
+    clampStarZoomSpan(savedImmersive.starZoomSpan),
+  )
+  starZoomSpanRef.current = starZoomSpan
+  const [starBrightness, setStarBrightness] = useState(() =>
+    clampStarBrightness(savedImmersive.starBrightness),
+  )
+  const starBrightnessRef = useRef(
+    clampStarBrightness(savedImmersive.starBrightness),
+  )
+  starBrightnessRef.current = starBrightness
+  const [starGlow, setStarGlow] = useState(() =>
+    clampStarGlow(savedImmersive.starGlow),
+  )
+  const starGlowRef = useRef(clampStarGlow(savedImmersive.starGlow))
+  starGlowRef.current = starGlow
   const [keyHeld, setKeyHeld] = useState(emptyMoveHeld)
   const [pointerHeld, setPointerHeld] = useState(emptyMoveHeld)
   const moveRepeatRef = useRef<Partial<Record<MoveDir, number>>>({})
   const [showMilkyWay, setShowMilkyWay] = useState(savedImmersive.showMilkyWay)
   const [showHalpha, setShowHalpha] = useState(savedImmersive.showHalpha)
-  const [showAtmosphere, setShowAtmosphere] = useState(
-    savedImmersive.showAtmosphere,
+  const [atmosphereAmount, setAtmosphereAmount] = useState(() =>
+    clampAtmosphereAmount(savedImmersive.atmosphereAmount),
+  )
+  const [airglowAmount, setAirglowAmount] = useState(() =>
+    clampAirglowAmount(savedImmersive.airglowAmount),
+  )
+  const [airglowHue, setAirglowHue] = useState(() =>
+    clampAirglowHue(savedImmersive.airglowHue),
   )
   const [showConstellations, setShowConstellations] = useState(
     savedImmersive.showConstellations,
@@ -296,7 +336,9 @@ export function ImmersiveView({
   const skyTogglesRef = useRef({
     showMilkyWay: savedImmersive.showMilkyWay,
     showHalpha: savedImmersive.showHalpha,
-    showAtmosphere: savedImmersive.showAtmosphere,
+    atmosphereAmount: clampAtmosphereAmount(savedImmersive.atmosphereAmount),
+    airglowAmount: clampAirglowAmount(savedImmersive.airglowAmount),
+    airglowHue: clampAirglowHue(savedImmersive.airglowHue),
     showConstellations: savedImmersive.showConstellations,
     showCelestialGrid: savedImmersive.showCelestialGrid,
     showAzimuthGrid: savedImmersive.showAzimuthGrid,
@@ -304,17 +346,19 @@ export function ImmersiveView({
   skyTogglesRef.current = {
     showMilkyWay,
     showHalpha,
-    showAtmosphere,
+    atmosphereAmount,
+    airglowAmount,
+    airglowHue,
     showConstellations,
     showCelestialGrid,
     showAzimuthGrid,
   }
-  /** Live fixed-tripod star-trail arc from the timelapse planner. */
+  /** Live fixed-tripod star-trail arc — only while the Timelapse planner is active. */
   const starTrailArcRadRef = useRef(0)
-  starTrailArcRadRef.current = timelapseStarTrailArcRad(
-    timelapse.poseS,
-    timelapse.support,
-  )
+  starTrailArcRadRef.current =
+    frameMode === 'timelapse'
+      ? timelapseStarTrailArcRad(timelapse.poseS, timelapse.support)
+      : 0
 
   useEffect(() => {
     patchAppSettings({
@@ -332,9 +376,15 @@ export function ImmersiveView({
         groundNightBrightness,
         groundNightContrast,
         groundNightTemperature,
+        starMagDepth,
+        starZoomSpan,
+        starBrightness,
+        starGlow,
         showMilkyWay,
         showHalpha,
-        showAtmosphere,
+        atmosphereAmount,
+        airglowAmount,
+        airglowHue,
         showConstellations,
         showCelestialGrid,
         showAzimuthGrid,
@@ -354,9 +404,15 @@ export function ImmersiveView({
     groundNightBrightness,
     groundNightContrast,
     groundNightTemperature,
+    starMagDepth,
+    starZoomSpan,
+    starBrightness,
+    starGlow,
     showMilkyWay,
     showHalpha,
-    showAtmosphere,
+    atmosphereAmount,
+    airglowAmount,
+    airglowHue,
     showConstellations,
     showCelestialGrid,
     showAzimuthGrid,
@@ -616,13 +672,22 @@ export function ImmersiveView({
       const dir = sunDirectionFromAltAz(alt, sun.azimuthDeg)
       const palette = skyPaletteFromSunAltitude(alt)
       const night = palette.nightAmount
-      const atmosphereOn = skyTogglesRef.current.showAtmosphere
+      const atmosphereAmountLive = clampAtmosphereAmount(
+        skyTogglesRef.current.atmosphereAmount,
+      )
+      const atmosphereOn = atmosphereAmountLive > 0.04
+      const airglowAmountLive = clampAirglowAmount(
+        skyTogglesRef.current.airglowAmount,
+      )
+      const airglowHueLive = clampAirglowHue(skyTogglesRef.current.airglowHue)
 
       updateAstroSkyDome(sky, {
         sunAltitudeDeg: alt,
         sunDirection: dir,
         eyeElevationMslM: eyeGroundElevMsl + eyeHeightRef.current,
-        showAtmosphere: atmosphereOn,
+        atmosphereAmount: atmosphereAmountLive,
+        airglowAmount: airglowAmountLive,
+        airglowHue: airglowHueLive,
       })
 
       sunLight.position.copy(dir).multiplyScalar(10_000)
@@ -1144,10 +1209,14 @@ export function ImmersiveView({
         camera,
         showMilkyWay: skyToggles.showMilkyWay,
         showHalpha: skyToggles.showHalpha,
-        showAtmosphere: skyToggles.showAtmosphere,
+        atmosphereAmount: skyToggles.atmosphereAmount,
         showConstellations: skyToggles.showConstellations,
         showCelestialGrid: skyToggles.showCelestialGrid,
         showAzimuthGrid: skyToggles.showAzimuthGrid,
+        starMagDepth: starMagDepthRef.current,
+        starZoomSpan: starZoomSpanRef.current,
+        starBrightness: starBrightnessRef.current,
+        starGlow: starGlowRef.current,
         starTrailArcRad: starTrailArcRadRef.current,
       })
       skyBodies.update({
@@ -1243,7 +1312,9 @@ export function ImmersiveView({
     apiRef.current?.setSkyUtc(skyUtcMs)
   }, [
     skyUtcMs,
-    showAtmosphere,
+    atmosphereAmount,
+    airglowAmount,
+    airglowHue,
     groundNightBrightness,
     groundNightContrast,
     groundNightTemperature,
@@ -1521,20 +1592,6 @@ export function ImmersiveView({
           <button
             type="button"
             className={
-              showAtmosphere
-                ? 'moon-preview-hud-tool is-active'
-                : 'moon-preview-hud-tool'
-            }
-            aria-pressed={showAtmosphere}
-            title="Atmosphère"
-            aria-label="Atmosphère"
-            onClick={() => setShowAtmosphere((v) => !v)}
-          >
-            <span className="moon-preview-hud-tool__atmo">Atmo</span>
-          </button>
-          <button
-            type="button"
-            className={
               showMilkyWay
                 ? 'moon-preview-hud-tool is-active'
                 : 'moon-preview-hud-tool'
@@ -1666,8 +1723,6 @@ export function ImmersiveView({
           phase={timelapsePreview.status.phase}
           shotIndex={timelapsePreview.status.shotIndex}
           shotCount={timelapsePreview.status.shotCount}
-          support={timelapsePreview.status.support}
-          eqRotation={timelapsePreview.status.eqRotation}
           onPause={timelapsePreview.pause}
           onResume={timelapsePreview.resume}
           onStopToEnded={timelapsePreview.stopToEnded}
@@ -1931,6 +1986,22 @@ export function ImmersiveView({
           onBrightnessChange={setGroundNightBrightness}
           onContrastChange={setGroundNightContrast}
           onTemperatureChange={setGroundNightTemperature}
+        />
+        <ViewfinderSkyControl
+          atmosphereAmount={atmosphereAmount}
+          airglowAmount={airglowAmount}
+          airglowHue={airglowHue}
+          starMagDepth={starMagDepth}
+          starZoomSpan={starZoomSpan}
+          starBrightness={starBrightness}
+          starGlow={starGlow}
+          onAtmosphereAmountChange={setAtmosphereAmount}
+          onAirglowAmountChange={setAirglowAmount}
+          onAirglowHueChange={setAirglowHue}
+          onStarMagDepthChange={setStarMagDepth}
+          onStarZoomSpanChange={setStarZoomSpan}
+          onStarBrightnessChange={setStarBrightness}
+          onStarGlowChange={setStarGlow}
         />
         <ViewfinderProjectionControl
           projection={projection}

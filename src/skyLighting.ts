@@ -87,8 +87,9 @@ export function hexToRgb01(hex: string): { r: number; g: number; b: number } {
   return { r: r / 255, g: g / 255, b: b / 255 }
 }
 
-export const GROUND_NIGHT_BRIGHTNESS_MIN = 0.15
-export const GROUND_NIGHT_BRIGHTNESS_MAX = 1.5
+/** 0 = sol tout noir la nuit ; défaut 1 = comportement historique. */
+export const GROUND_NIGHT_BRIGHTNESS_MIN = 0
+export const GROUND_NIGHT_BRIGHTNESS_MAX = 2
 export const GROUND_NIGHT_BRIGHTNESS_DEFAULT = 1
 
 export const GROUND_NIGHT_CONTRAST_MIN = 0.5
@@ -122,6 +123,56 @@ export function clampGroundNightTemperature(value: number): number {
     GROUND_NIGHT_TEMPERATURE_MAX,
     Math.max(GROUND_NIGHT_TEMPERATURE_MIN, value),
   )
+}
+
+/** Rayleigh sky amount (0 = space / stars only, 1 = full atmosphere). */
+export const ATMOSPHERE_AMOUNT_MIN = 0
+export const ATMOSPHERE_AMOUNT_MAX = 1
+export const ATMOSPHERE_AMOUNT_DEFAULT = 1
+
+export function clampAtmosphereAmount(value: number): number {
+  if (!Number.isFinite(value)) return ATMOSPHERE_AMOUNT_DEFAULT
+  return Math.min(
+    ATMOSPHERE_AMOUNT_MAX,
+    Math.max(ATMOSPHERE_AMOUNT_MIN, value),
+  )
+}
+
+/**
+ * Additive night airglow (OI) on top of Rayleigh — never replaces atmosphere.
+ * 0 = off; 1 = strong van-Rhijn limb glow.
+ */
+export const AIRGLOW_AMOUNT_MIN = 0
+export const AIRGLOW_AMOUNT_MAX = 1
+export const AIRGLOW_AMOUNT_DEFAULT = 0
+
+/** 0 = green OI 557.7 nm (~95 km); 1 = red OI 630.0 nm (~250 km). */
+export const AIRGLOW_HUE_MIN = 0
+export const AIRGLOW_HUE_MAX = 1
+export const AIRGLOW_HUE_DEFAULT = 0
+
+export function clampAirglowAmount(value: number): number {
+  if (!Number.isFinite(value)) return AIRGLOW_AMOUNT_DEFAULT
+  return Math.min(AIRGLOW_AMOUNT_MAX, Math.max(AIRGLOW_AMOUNT_MIN, value))
+}
+
+export function clampAirglowHue(value: number): number {
+  if (!Number.isFinite(value)) return AIRGLOW_HUE_DEFAULT
+  return Math.min(AIRGLOW_HUE_MAX, Math.max(AIRGLOW_HUE_MIN, value))
+}
+
+/** Display RGB for airglow hue slider (green → red atomic oxygen). */
+export function airglowColorFromHue(hue: number): {
+  r: number
+  g: number
+  b: number
+} {
+  const t = clampAirglowHue(hue)
+  return {
+    r: 0.32 + t * 0.68,
+    g: 1.0 - t * 0.82,
+    b: 0.42 - t * 0.3,
+  }
 }
 
 export type GroundAlbedoOpts = {
@@ -189,10 +240,10 @@ export function groundAlbedoFromSky(
     dim = 1 - night * 0.48
   }
   dim = Math.max(atmosphereOn ? 0.18 : 0.48, Math.min(1, dim))
-  // Slider after the soft floor so night dialing always has visible range.
+  // Slider after the soft floor — 0 = black ground at night if the user wants.
   const nightMix = atmosphereOn ? Math.max(dusk, night) : night
   dim *= 1 + (nightBrightness - 1) * nightMix
-  dim = Math.max(0.08, Math.min(1.4, dim))
+  dim = Math.max(0, Math.min(1.6, dim))
 
   // Hue strength: almost none at noon; warm at golden; cool after sunset.
   let chromaAmt = 0
@@ -223,8 +274,8 @@ export function groundAlbedoFromSky(
   }
 
   return {
-    r: Math.max(0.05, Math.min(1.5, r)),
-    g: Math.max(0.05, Math.min(1.5, g)),
-    b: Math.max(0.05, Math.min(1.5, b)),
+    r: Math.max(0, Math.min(1.6, r)),
+    g: Math.max(0, Math.min(1.6, g)),
+    b: Math.max(0, Math.min(1.6, b)),
   }
 }

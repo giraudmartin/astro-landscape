@@ -14,11 +14,11 @@ import { attachStelProjector } from './stelProjector'
  * With atmosphere: keep the translucent glow in the sky (not a solid sheet).
  * Bumped slightly vs the old 0.34 / 5 so the band is less washed out.
  */
-export const MILKY_WAY_EXPOSURE = 6
-export const MILKY_WAY_DOME_OPACITY = 0.42
+export const MILKY_WAY_EXPOSURE = 8.5
+export const MILKY_WAY_DOME_OPACITY = 0.72
 /** Atmosphere off: stronger read on a black sky. */
-export const MILKY_WAY_DOME_OPACITY_NO_ATMO = 0.92
-export const MILKY_WAY_EXPOSURE_NO_ATMO = 7.5
+export const MILKY_WAY_DOME_OPACITY_NO_ATMO = 0.96
+export const MILKY_WAY_EXPOSURE_NO_ATMO = 10
 export const HALPHA_GAIN = 2.4
 export const HALPHA_TEXTURE_URL = '/sky/halpha_j2000.webp?v=5'
 
@@ -100,10 +100,20 @@ export type NightSkyHandle = {
     camera: THREE.PerspectiveCamera
     showMilkyWay?: boolean
     showHalpha?: boolean
+    /** Rayleigh amount 0…1 (legacy: showAtmosphere true/false). */
+    atmosphereAmount?: number
     showAtmosphere?: boolean
     showConstellations?: boolean
     showCelestialGrid?: boolean
     showAzimuthGrid?: boolean
+    /** Extra HYG magnitude depth (0 = default FOV curve). */
+    starMagDepth?: number
+    /** Wide↔tele magnitude-span multiplier (1 = default). */
+    starZoomSpan?: number
+    /** Star luminance multiplier (1 = default). */
+    starBrightness?: number
+    /** Halo on bright stars (0 = cores only, 1 = default). */
+    starGlow?: number
     /** Fixed-tripod exposure trail (rad of sky arc); 0 = pinpricks. */
     starTrailArcRad?: number
   }) => void
@@ -221,7 +231,7 @@ export function createNightSky(): NightSkyHandle {
           `,
         )
     }
-    material.customProgramCacheKey = () => 'astro-milky-way-halpha-v5'
+    material.customProgramCacheKey = () => 'astro-milky-way-halpha-v7'
     material.depthWrite = false
     material.needsUpdate = true
     attachStelProjector(material)
@@ -304,9 +314,14 @@ export function createNightSky(): NightSkyHandle {
       showMilkyWay = true,
       showHalpha = false,
       showAtmosphere = true,
+      atmosphereAmount,
       showConstellations = false,
       showCelestialGrid = false,
       showAzimuthGrid = false,
+      starMagDepth = 0,
+      starZoomSpan = 1,
+      starBrightness = 1,
+      starGlow = 1,
       starTrailArcRad = 0,
     }) => {
       if (disposed) return
@@ -320,20 +335,33 @@ export function createNightSky(): NightSkyHandle {
         ),
       )
 
-      // Fade in from nautical → astronomical twilight (−8° → −18°).
+      // Stars start appearing from civil/nautical twilight (−4° → −16°).
       const deepNight = THREE.MathUtils.clamp(
-        (-sunAltitudeDeg - 8) / 10,
+        (-sunAltitudeDeg - 4) / 12,
         0,
         1,
       )
       const nightOn = deepNight > 0.02
 
-      vectorLayers.setOpacity(deepNight)
+      const atmoAmt =
+        typeof atmosphereAmount === 'number' && Number.isFinite(atmosphereAmount)
+          ? THREE.MathUtils.clamp(atmosphereAmount, 0, 1)
+          : showAtmosphere
+            ? 1
+            : 0
+
+      // Never let the field collapse to invisible under residual twilight.
+      vectorLayers.setOpacity(Math.max(deepNight, nightOn ? 0.75 : 0))
+      vectorLayers.setStarBrightness(starBrightness)
+      vectorLayers.setStarGlow(starGlow)
+      // Punch through Rayleigh without depending on night-crush hacks.
+      vectorLayers.setSkyComp(1.6 + atmoAmt * 0.5)
       const stageFov = camera.userData.stageVfovDeg
       vectorLayers.setView(
         typeof stageFov === 'number' && Number.isFinite(stageFov)
           ? stageFov
           : camera.fov,
+        { depth: starMagDepth, zoomSpan: starZoomSpan },
       )
       vectorLayers.setStarTrailArcRad(
         nightOn && Number.isFinite(starTrailArcRad) ? starTrailArcRad : 0,
@@ -349,9 +377,11 @@ export function createNightSky(): NightSkyHandle {
 
       milkyWayAmountUniform.value = showMilkyWay ? 1 : 0
       halphaAmountUniform.value = showHalpha && halphaTexture ? 1 : 0
-      exposureUniform.value = showAtmosphere
-        ? MILKY_WAY_EXPOSURE
-        : MILKY_WAY_EXPOSURE_NO_ATMO
+      exposureUniform.value = THREE.MathUtils.lerp(
+        MILKY_WAY_EXPOSURE_NO_ATMO,
+        MILKY_WAY_EXPOSURE,
+        atmoAmt,
+      )
 
       if (milkyWayTiles && milkyReady) {
         // Hα lives in the MW shader — keep the dome up if either layer is on.
@@ -362,9 +392,11 @@ export function createNightSky(): NightSkyHandle {
         milkyWayTiles.setVisible(showDome)
         milkyWayTiles.setOpacity(
           deepNight *
-            (showAtmosphere
-              ? MILKY_WAY_DOME_OPACITY
-              : MILKY_WAY_DOME_OPACITY_NO_ATMO),
+            THREE.MathUtils.lerp(
+              MILKY_WAY_DOME_OPACITY_NO_ATMO,
+              MILKY_WAY_DOME_OPACITY,
+              atmoAmt,
+            ),
         )
         if (showDome) milkyWayTiles.update(camera)
       }

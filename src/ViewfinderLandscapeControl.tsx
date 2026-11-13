@@ -22,7 +22,7 @@ type ViewfinderLandscapeControlProps = {
 }
 
 /**
- * Compact top-right landscape night settings — left of the projection control.
+ * Compact top-right landscape night settings — left of the sky / projection controls.
  */
 export function ViewfinderLandscapeControl({
   brightness,

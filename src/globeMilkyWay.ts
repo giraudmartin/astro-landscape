@@ -277,9 +277,9 @@ export function createGlobeMilkyWayLayer(
             vec2 p = gl_PointCoord * 2.0 - 1.0;
             float r2 = dot(p, p);
             if (r2 > 1.0) discard;
-            // Same soft PSF as immersive HYG stars: tight core + wide halo.
+            // Same soft PSF as immersive HYG stars: core + bloom if vHalo.
             float core = exp(-r2 * 11.0);
-            float halo = exp(-r2 * mix(3.2, 1.15, vHalo)) * mix(0.12, 0.55, vHalo);
+            float halo = exp(-r2 * mix(3.2, 1.15, vHalo)) * (vHalo * 0.55);
             float energy = (core + halo) * vBrightness * uBrightness;
             gl_FragColor = vec4(vColor * energy, energy);
           }

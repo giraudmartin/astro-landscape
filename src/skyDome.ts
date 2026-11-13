@@ -1,6 +1,11 @@
 import * as THREE from 'three'
 import { EARTH_RADIUS_M } from './globeConstants'
-import { skyPaletteFromSunAltitude } from './skyLighting'
+import {
+  airglowColorFromHue,
+  clampAirglowAmount,
+  clampAirglowHue,
+  skyPaletteFromSunAltitude,
+} from './skyLighting'
 import {
   STEL_FRAGMENT_GLSL,
   STEL_PROJECT_GLSL,
@@ -46,6 +51,9 @@ export function createAstroSkyDome(): AstroSkyDome {
       uExposure: { value: 0.55 },
       uEyeElevM: { value: 0 },
       uAtmosphere: { value: 1 },
+      uAirglow: { value: 0 },
+      uAirglowHue: { value: 0 },
+      uAirglowColor: { value: new THREE.Vector3(0.32, 1.0, 0.42) },
       uGroundColor: {
         value: new THREE.Vector3(GROUND_FILL.r, GROUND_FILL.g, GROUND_FILL.b),
       },
@@ -83,6 +91,9 @@ export function createAstroSkyDome(): AstroSkyDome {
       uniform float uExposure;
       uniform float uEyeElevM;
       uniform float uAtmosphere;
+      uniform float uAirglow;
+      uniform float uAirglowHue;
+      uniform vec3 uAirglowColor;
       uniform vec3 uGroundColor;
       uniform vec3 uSeaColor;
       varying vec3 vDir;
@@ -231,6 +242,7 @@ export function createAstroSkyDome(): AstroSkyDome {
 
         if (alt < -10.0) {
           float night = clamp((-alt - 10.0) / 8.0, 0.0, 1.0);
+          // Cool night base (not OI airglow — that is additive below).
           rgb = mix(rgb, vec3(0.02, 0.03, 0.07), night * (0.5 + 0.5 * elevN));
         }
 
@@ -249,14 +261,44 @@ export function createAstroSkyDome(): AstroSkyDome {
         distant = mix(distant, distant * vec3(0.22, 0.24, 0.32), nightDim);
         float below = smoothstep(horSin + 0.004, horSin - 0.03, v.y);
 
-        if (uAtmosphere < 0.5) {
-          if (below < 0.01) discard;
-          mapped = distant * (0.55 + 0.45 * (1.0 - nightDim));
+        // OI airglow: additive display-space layer (independent of Rayleigh amount).
+        // Green ~95 km, red ~250 km — van Rhijn path through a thin shell.
+        float agAmt = clamp(uAirglow, 0.0, 1.0);
+        float nightAg = clamp((-alt - 10.0) / 8.0, 0.0, 1.0);
+        vec3 airglowRgb = vec3(0.0);
+        if (agAmt > 0.001 && nightAg > 0.001 && below < 0.5) {
+          float hLayer = mix(95e3, 250e3, clamp(uAirglowHue, 0.0, 1.0));
+          float cosZ = clamp(v.y, 0.0, 1.0);
+          float sin2Z = max(0.0, 1.0 - cosZ * cosZ);
+          float rr = EARTH_R / (EARTH_R + hLayer);
+          float vanRhijn = 1.0 / sqrt(max(1e-4, 1.0 - rr * rr * sin2Z));
+          vanRhijn = min(vanRhijn, 4.2);
+          // Peak mid-low elevation; fade at limb (extinction) and zenith.
+          float band = vanRhijn
+            * smoothstep(0.0, 0.07, elevN)
+            * mix(1.0, 0.42, smoothstep(0.45, 1.0, elevN));
+          airglowRgb = uAirglowColor * (agAmt * nightAg * band * 0.085);
+        }
+
+        float atmo = clamp(uAtmosphere, 0.0, 1.0);
+        if (atmo < 0.001) {
+          // Full Rayleigh off: keep ground fill; sky only if airglow needs the dome.
+          if (below < 0.01 && agAmt * nightAg < 0.001) discard;
+          mapped = below >= 0.01
+            ? distant * (0.55 + 0.45 * (1.0 - nightDim))
+            : vec3(0.0);
+          mapped += airglowRgb;
           gl_FragColor = vec4(mapped, 1.0);
           return;
         }
 
         mapped = mix(mapped, mix(mapped, distant, 0.92), below);
+        // Partial amount: darken Rayleigh so additive stars read through.
+        if (below < 0.5) {
+          mapped *= atmo;
+        }
+        // Airglow on top of atmosphere — never scaled by uAtmosphere.
+        mapped += airglowRgb;
 
         gl_FragColor = vec4(mapped, 1.0);
       }
@@ -276,8 +318,16 @@ export function updateAstroSkyDome(
     sunDirection: THREE.Vector3
     /** Eye height above mean sea level (m) — drives geometric horizon dip. */
     eyeElevationMslM: number
-    /** When false, only the below-horizon sea/ground fill is drawn. */
+    /**
+     * Rayleigh amount 0…1 (0 = space, 1 = full sky).
+     * `showAtmosphere: false` still accepted as amount 0.
+     */
+    atmosphereAmount?: number
     showAtmosphere?: boolean
+    /** Additive OI airglow 0…1 (independent of atmosphereAmount). */
+    airglowAmount?: number
+    /** 0 = green 557 nm, 1 = red 630 nm. */
+    airglowHue?: number
   },
 ): void {
   const palette = skyPaletteFromSunAltitude(input.sunAltitudeDeg)
@@ -287,8 +337,24 @@ export function updateAstroSkyDome(
   sky.material.uniforms.uSunAltitude.value = input.sunAltitudeDeg
   sky.material.uniforms.uExposure.value = palette.exposure
   sky.material.uniforms.uEyeElevM.value = Math.max(0, input.eyeElevationMslM)
-  sky.material.uniforms.uAtmosphere.value =
-    input.showAtmosphere === false ? 0 : 1
+  const amount =
+    typeof input.atmosphereAmount === 'number' &&
+    Number.isFinite(input.atmosphereAmount)
+      ? Math.min(1, Math.max(0, input.atmosphereAmount))
+      : input.showAtmosphere === false
+        ? 0
+        : 1
+  sky.material.uniforms.uAtmosphere.value = amount
+  const agAmt = clampAirglowAmount(input.airglowAmount ?? 0)
+  const agHue = clampAirglowHue(input.airglowHue ?? 0)
+  const agCol = airglowColorFromHue(agHue)
+  sky.material.uniforms.uAirglow.value = agAmt
+  sky.material.uniforms.uAirglowHue.value = agHue
+  ;(sky.material.uniforms.uAirglowColor.value as THREE.Vector3).set(
+    agCol.r,
+    agCol.g,
+    agCol.b,
+  )
   // Always keep the dome: it paints sea/ground under the geometric horizon
   // even when Rayleigh atmosphere is toggled off (avoids a black void).
   sky.mesh.visible = true

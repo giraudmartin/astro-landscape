@@ -62,6 +62,13 @@ describe('groundAlbedoFromSky', () => {
     expect(luminance(nightLo)).toBeLessThan(luminance(nightHi) * 0.7)
   })
 
+  it('nightBrightness 0 can crush ground to black at night', () => {
+    const black = groundAlbedoFromSky(skyPaletteFromSunAltitude(-25), -25, {
+      nightBrightness: 0,
+    })
+    expect(luminance(black)).toBeLessThan(0.02)
+  })
+
   it('nightContrast and temperature leave noon alone', () => {
     const base = groundAlbedoFromSky(skyPaletteFromSunAltitude(40), 40)
     const dialed = groundAlbedoFromSky(skyPaletteFromSunAltitude(40), 40, {

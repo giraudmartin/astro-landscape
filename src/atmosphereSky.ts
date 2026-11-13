@@ -260,7 +260,7 @@ export function atmosphereRadiance(viewDir: Vec3, sunDir: Vec3): Vec3 {
     rgb = mix3(rgb, beltCol, beltBand * 0.55)
   }
 
-  // Night airglow — cool only, no pink.
+  // Cool night base only (OI airglow is an immersive additive layer in skyDome).
   if (sunAltDeg < -10) {
     const night = clamp01((-sunAltDeg - 10) / 8)
     const glow: Vec3 = [0.02, 0.03, 0.07]

@@ -133,9 +133,26 @@ function eyeToScreen(
   }
 }
 
-/** Drop the part of a tile that sits behind the camera before it is projected. */
-function clipEyeNear(poly: EyePt[], minZ = 0.08): EyePt[] {
+/**
+ * Near-plane floor matching what `stelProjectEye` / `warpEye` can still map.
+ *
+ * A fixed +0.08 (≈85° from look) falsely frustum-cut outer panorama tiles that
+ * remain on-screen under stereographic / equirect / ortho wide stage FOV.
+ */
+function nearClipMinZForStage(): number {
+  const mode = getStageProjection()
+  if (mode === 'rectilinear') return 1e-4
+  if (mode === 'orthographic') return -1e-4
+  // Equirect covers the full sphere; skip near clip.
+  if (mode === 'equirectangular') return Number.NEGATIVE_INFINITY
+  // Stereographic: valid until the antipode (h → 0).
+  return -1 + 2e-4
+}
+
+/** Drop the part of a tile that sits past the projection singularity. */
+function clipEyeNear(poly: EyePt[], minZ = nearClipMinZForStage()): EyePt[] {
   if (poly.length < 3) return []
+  if (!Number.isFinite(minZ)) return poly.slice()
   const out: EyePt[] = []
   for (let i = 0; i < poly.length; i += 1) {
     const a = poly[i]!
@@ -230,10 +247,10 @@ function projectEyePolyToScreen(
 }
 
 /**
- * Project world directions with near + generous frustum clip so partially
- * visible tiles stay drawn (never all-or-nothing cull).
+ * Project world directions with projection-aware near clip (no stage rect clip).
+ * Partially visible tiles stay drawn — never all-or-nothing cull / fake frustum.
  */
-function projectDirsToScreenClipped(
+function projectDirsToScreen(
   dirs: Vec3[],
   look: { forward: Vec3; right: Vec3; up: Vec3 },
   stageW: number,
@@ -241,16 +258,22 @@ function projectDirsToScreenClipped(
   stageVfovDeg: number,
 ): Pt2[] {
   if (dirs.length < 3) return []
-  const poly = clipEyeNear(dirs.map((d) => dirToEye(d, look)))
+  const poly = clipEyeNear(
+    dirs.map((d) => dirToEye(d, look)),
+    nearClipMinZForStage(),
+  )
   if (poly.length < 3) return []
   const out = poly
     .map((p) => eyeToScreen(p, stageW, stageH, stageVfovDeg))
     .filter((p): p is Pt2 => p != null && isFinitePt(p))
-  if (out.length < 3) return []
-  // Soft stage clip (±25 %) keeps SVG/mask stable while preserving edge tiles.
+  return out.length >= 3 ? out : []
+}
+
+/** Soft stage pad (±25 %) keeps SVG/mask stable for edge tiles. */
+function softClipToStage(poly: Pt2[], stageW: number, stageH: number): Pt2[] {
   const mx = stageW * 0.25
   const my = stageH * 0.25
-  return clipPolygonToRect(out, -mx, -my, stageW + mx, stageH + my)
+  return clipPolygonToRect(poly, -mx, -my, stageW + mx, stageH + my)
 }
 
 /** Unnormalized ray through the shot image plane (z=1 in camera tan-space). */
@@ -529,35 +552,32 @@ function sphericalRectDirs(
 }
 
 /**
- * Drop a cell whose outline jumps across the view.
- * That jump is the cut where the shot passes behind the camera:
- * one chord, much longer than the sensor-edge steps.
+ * Drop a cell whose outline jumps across the view (wrap / behind-camera chord).
+ * Outer stereographic tiles may balloon far past the optical frame — size is
+ * handled by softClipToStage; only a discontinuous wrap chord rejects here.
  */
-function tileFootprintSane(points: Pt2[], frameW: number, frameH: number): boolean {
+function tileFootprintSane(
+  points: Pt2[],
+  frameW: number,
+  frameH: number,
+  stageW: number,
+  stageH: number,
+): boolean {
   if (points.length < 3) return false
-  const maxW = Math.max(frameW, 48) * 2.5
-  const maxH = Math.max(frameH, 48) * 2.5
-  let minX = Infinity
-  let maxX = -Infinity
-  let minY = Infinity
-  let maxY = -Infinity
   const edges: number[] = []
   for (let i = 0; i < points.length; i += 1) {
     const a = points[i]!
     const b = points[(i + 1) % points.length]!
     if (!isFinitePt(a) || !isFinitePt(b)) return false
-    minX = Math.min(minX, a.x)
-    maxX = Math.max(maxX, a.x)
-    minY = Math.min(minY, a.y)
-    maxY = Math.max(maxY, a.y)
     edges.push(Math.hypot(a.x - b.x, a.y - b.y))
   }
-  if (maxX - minX > maxW || maxY - minY > maxH) return false
   const longest = Math.max(...edges)
   const ordered = [...edges].sort((a, b) => a - b)
   const median = ordered[Math.floor(ordered.length / 2)] ?? 0
-  const frame = Math.max(frameW, frameH, 48)
-  if (longest > frame * 1.25 && longest > median * 4) return false
+  // Wrap chord: one edge spans a large fraction of the stage while the rest
+  // of the outline stays fine-grained (tessellated sensor edge).
+  const stageSpan = Math.max(stageW, stageH, frameW, frameH, 48)
+  if (longest > stageSpan * 0.55 && longest > median * 5) return false
   return true
 }
 
@@ -568,7 +588,7 @@ function projectTileDirs(
   stageH: number,
   stageVfovDeg: number,
 ): Pt2[] {
-  return projectDirsToScreenClipped(dirs, look, stageW, stageH, stageVfovDeg)
+  return projectDirsToScreen(dirs, look, stageW, stageH, stageVfovDeg)
 }
 
 /**
@@ -657,8 +677,16 @@ function projectLockedPanorama(input: {
         input.stageH,
         input.stageVfovDeg,
       )
-      const polygon = tileFootprintSane(projected, input.frameW, input.frameH)
-        ? projected
+      // Sanity on the raw footprint (wrap chords). Soft-clip afterwards so a
+      // stage-edge cut is not mistaken for a behind-camera jump.
+      const polygon = tileFootprintSane(
+        projected,
+        input.frameW,
+        input.frameH,
+        input.stageW,
+        input.stageH,
+      )
+        ? softClipToStage(projected, input.stageW, input.stageH)
         : []
 
       const shot = cameraBasis(cyaw, cpitch)

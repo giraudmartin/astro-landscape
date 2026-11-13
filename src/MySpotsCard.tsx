@@ -134,7 +134,7 @@ export function MySpotsRail({
             <p className="my-spots-rail__sub">
               {picking
                 ? 'Clique la carte pour poser un marker.'
-                : 'Ajoute des markers et rouvre-les depuis la liste.'}
+                : 'Clic droit (ou appui long) sur la carte pour poser un marker.'}
               {normalizedQuery.length > 0 && spots.length > 0 ? (
                 <> · {visibleSpots.length} visible(s)</>
               ) : null}

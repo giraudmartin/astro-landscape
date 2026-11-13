@@ -163,7 +163,11 @@ function buildStyle(): StyleSpecification {
       anchor: 'map',
       color: '#ffffff',
       intensity: 0.55,
+      // Placeholder until playhead applies subsolar — never ease across the disk.
       position: [1.5, 210, 30],
+      'position-transition': { duration: 0, delay: 0 },
+      'color-transition': { duration: 0, delay: 0 },
+      'intensity-transition': { duration: 0, delay: 0 },
     },
     sky: {
       'sky-color': '#87b7ff',
@@ -301,12 +305,17 @@ export function MapCanvas({
           Math.abs(row.lat - lat) < 1e-6 && Math.abs(row.lon - lon) < 1e-6,
       ) ?? null
 
+    /** Ignore the map click that follows a touch long-press (mobile “right-click”). */
+    let suppressMapClickUntil = 0
+    let suppressSpotActionMenuUntil = 0
+
     const upsertMarker = (lng: number, lat: number) => {
       if (!markerRef.current || !markerUiRef.current) {
         markerUiRef.current?.destroy()
         const savedMatch = matchingSavedSpot(lat, lng)
         const markerUi = createSpotActionMarkerElement(Boolean(savedMatch), {
           onOpenChange: (open) => onMarkerMenuOpenChangeRef.current(open),
+          shouldBlockOpen: () => performance.now() < suppressSpotActionMenuUntil,
           onSelectSaved: () => {
             const current = spotRef.current
             if (!current) return false
@@ -375,41 +384,10 @@ export function MapCanvas({
       return next
     }
 
-    const goOrbit = (s: SpotState, zoom = 12.2) => {
-      const pitch = threeDimensionalRef.current
-        ? Math.min(Math.max(s.pitchDeg, 45), 65)
-        : FLAT_PITCH
-      map.easeTo({
-        center: [s.lon, s.lat],
-        zoom,
-        pitch,
-        bearing: s.bearingDeg,
-        duration: 900,
-      })
-    }
-
-    const goGround = (s: SpotState, zoom = 14.5) => {
-      map.easeTo({
-        center: [s.lon, s.lat],
-        zoom,
-        pitch: threeDimensionalRef.current ? 78 : FLAT_PITCH,
-        bearing: s.bearingDeg,
-        duration: 900,
-      })
-    }
-
-    const setMode = (next: CameraMode) => {
-      const current = spotRef.current
-      if (!current) return
-      if (next === 'ground') {
-        goGround(current)
-      } else {
-        goOrbit(
-          { ...current, pitchDeg: THREE_D_PITCH },
-          Math.max(map.getZoom(), 12.2),
-        )
-      }
-    }
+    // Ground mode is the Three.js view painted over this map. Flying the
+    // camera on the way in or out used to run against a collapsed map and
+    // left the spot markers off-screen when the user came back.
+    const setMode: (next: CameraMode) => void = () => {}
 
     const setThreeDimensional = (next: boolean) => {
       threeDimensionalRef.current = next
@@ -557,7 +535,19 @@ export function MapCanvas({
       setBasemapMode(basemapModeRef.current)
     })
 
-    map.on('click', (event: MapMouseEvent) => {
+    /** Place / move the working pin — no camera jump (PS: right-click pins in place). */
+    const placeWorkingPin = (lat: number, lng: number) => {
+      const bearing = map.getBearing()
+      const pitch = threeDimensionalRef.current
+        ? Math.max(map.getPitch(), THREE_D_PITCH)
+        : FLAT_PITCH
+      onModeChangeRef.current('orbit')
+      publishSpot(lat, lng, bearing, pitch)
+    }
+
+    const onMapClick = (event: MapMouseEvent) => {
+      if (performance.now() < suppressMapClickUntil) return
+
       const { lng, lat } = event.lngLat
       const bearing = map.getBearing()
       const pitch = threeDimensionalRef.current
@@ -565,6 +555,7 @@ export function MapCanvas({
         : FLAT_PITCH
       const heightM = readElevation(lng, lat) ?? 0
 
+      // "Mes spots" picking still uses left-click (same as Photo Sightline).
       if (personalSpotPickingRef.current) {
         publishSpot(lat, lng, bearing, pitch)
         onPlacePersonalSpotRef.current({
@@ -578,24 +569,92 @@ export function MapCanvas({
         return
       }
 
-      // Place / move the working pin — immersive opens via marker click (or Sol).
-      if (!threeDimensionalRef.current) {
-        onThreeDimensionalChangeRef.current(true)
-        threeDimensionalRef.current = true
+      // Left-click does not drop a pin — right-click / long-press does.
+    }
+
+    const onMapContextMenu = (event: MapMouseEvent) => {
+      event.preventDefault()
+      if (personalSpotPickingRef.current) return
+
+      // Touch long-press can synthesize contextmenu + a follow-up click on the
+      // new pin; block that accidental open. Mouse right-click must NOT suppress:
+      // users left-click the pin right away to open the actions panel.
+      const original = event.originalEvent
+      const fromTouch =
+        typeof PointerEvent !== 'undefined' && original instanceof PointerEvent
+          ? original.pointerType !== 'mouse'
+          : typeof TouchEvent !== 'undefined' && original instanceof TouchEvent
+      if (fromTouch) {
+        const until = performance.now() + 900
+        suppressMapClickUntil = until
+        suppressSpotActionMenuUntil = until
       }
-      publishSpot(lat, lng, bearing, pitch)
-      onModeChangeRef.current('orbit')
-      goOrbit(
-        {
-          lat,
-          lon: lng,
-          heightM,
-          bearingDeg: bearing,
-          pitchDeg: pitch,
-        },
-        Math.max(map.getZoom(), 12.5),
-      )
-    })
+      placeWorkingPin(event.lngLat.lat, event.lngLat.lng)
+    }
+
+    // Mobile has no right-click: long-press on the map canvas places the pin.
+    const LONG_PRESS_MS = 480
+    const LONG_PRESS_MOVE_PX = 14
+    let longPressTimer: number | null = null
+    let longPressStart: { x: number; y: number } | null = null
+
+    const clearLongPressTimer = () => {
+      if (longPressTimer != null) {
+        window.clearTimeout(longPressTimer)
+        longPressTimer = null
+      }
+      longPressStart = null
+    }
+
+    const onCanvasPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse') return
+      if (event.button !== 0) return
+      if (personalSpotPickingRef.current) return
+      const canvas = map.getCanvas()
+      const rect = canvas.getBoundingClientRect()
+      const x = event.clientX - rect.left
+      const y = event.clientY - rect.top
+      longPressStart = { x: event.clientX, y: event.clientY }
+      clearLongPressTimer()
+      longPressTimer = window.setTimeout(() => {
+        longPressTimer = null
+        longPressStart = null
+        const lngLat = map.unproject([x, y])
+        const until = performance.now() + 900
+        suppressMapClickUntil = until
+        suppressSpotActionMenuUntil = until
+        try {
+          navigator.vibrate?.(12)
+        } catch {
+          /* optional */
+        }
+        placeWorkingPin(lngLat.lat, lngLat.lng)
+      }, LONG_PRESS_MS)
+    }
+
+    const onCanvasPointerMove = (event: PointerEvent) => {
+      if (!longPressStart || longPressTimer == null) return
+      const dx = event.clientX - longPressStart.x
+      const dy = event.clientY - longPressStart.y
+      if (dx * dx + dy * dy > LONG_PRESS_MOVE_PX * LONG_PRESS_MOVE_PX) {
+        clearLongPressTimer()
+      }
+    }
+
+    const onCanvasPointerEnd = () => {
+      clearLongPressTimer()
+    }
+
+    map.on('click', onMapClick)
+    map.on('contextmenu', onMapContextMenu)
+    {
+      const canvas = map.getCanvas()
+      canvas.addEventListener('pointerdown', onCanvasPointerDown)
+      canvas.addEventListener('pointermove', onCanvasPointerMove)
+      canvas.addEventListener('pointerup', onCanvasPointerEnd)
+      canvas.addEventListener('pointercancel', onCanvasPointerEnd)
+      canvas.addEventListener('lostpointercapture', onCanvasPointerEnd)
+    }
 
     const elevTimer = window.setInterval(() => {
       // Never rewrite height while immersive — that remounts the Three.js scene.
@@ -609,6 +668,17 @@ export function MapCanvas({
 
     return () => {
       window.clearInterval(elevTimer)
+      clearLongPressTimer()
+      map.off('click', onMapClick)
+      map.off('contextmenu', onMapContextMenu)
+      {
+        const canvas = map.getCanvas()
+        canvas.removeEventListener('pointerdown', onCanvasPointerDown)
+        canvas.removeEventListener('pointermove', onCanvasPointerMove)
+        canvas.removeEventListener('pointerup', onCanvasPointerEnd)
+        canvas.removeEventListener('pointercancel', onCanvasPointerEnd)
+        canvas.removeEventListener('lostpointercapture', onCanvasPointerEnd)
+      }
       apiRef.current = null
       for (const marker of personalMarkersRef.current) marker.remove()
       personalMarkersRef.current = []

@@ -56,4 +56,13 @@ describe('stage FOV clamps', () => {
     expect(camFov).toBeGreaterThan(150)
     expect(camFov).toBeLessThan(160)
   })
+
+  it('telephoto zoom: stage FOV can reach 1° (fills ≤1200 mm frame)', () => {
+    setStageProjection('stereographic')
+    const cam = fakeCamera()
+    expect(framedStageVfov(1)).toBe(1)
+    expect(applyStageProjection(cam as never, 1)).toBe(1)
+    expect(applyStageProjection(cam as never, 0.25)).toBe(1)
+    expect(cam.fov).toBeCloseTo(perspectiveFovDeg(1), 5)
+  })
 })

@@ -102,9 +102,11 @@ export function MapAddressSearch({
       abortRef.current = controller
       setStatus('loading')
       setActiveIndex(-1)
+      const near = getMapCenter()
       void searchAddresses(trimmed, {
         limit: 5,
         signal: controller.signal,
+        near,
         viewbox: getViewboxRef.current?.() ?? null,
       })
         .then((next) => {
@@ -180,7 +182,7 @@ export function MapAddressSearch({
       </form>
       {center ? (
         <p className="map-address-search__near">
-          Autour de {center.lat.toFixed(2)}°, {center.lon.toFixed(2)}°
+          Priorité près de {center.lat.toFixed(2)}°, {center.lon.toFixed(2)}°
         </p>
       ) : null}
       {status === 'loading' ? (

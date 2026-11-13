@@ -7,7 +7,7 @@ import {
   buildDayInfo,
   buildDaySchedule,
   buildMonthCalendar,
-  civilDateFromUtc,
+  formatDurationMinutes,
   nearestScheduleKind,
 } from './celestial'
 
@@ -71,6 +71,7 @@ export function OverviewCard({
   )
 
   const illuminatedLabel = `${dayInfo.illuminationPercent} % illuminé`
+  const moonInNightLabel = `${formatDurationMinutes(dayInfo.moonInNightMinutes)} de lune dans la nuit`
 
   const dateCapsule = (
     <button
@@ -111,12 +112,12 @@ export function OverviewCard({
             <div className="ov-capsule__copy">
               <p className="ov-capsule__main">{dayInfo.phaseLabel}</p>
               <p className="ov-capsule__meta">{illuminatedLabel}</p>
+              <p className="ov-capsule__meta">{moonInNightLabel}</p>
             </div>
           </div>
           {schedule.length === 0 ? (
             <p className="ov-hint">
-              Aucun lever/coucher soleil, Lune ou ventre galactique pour cette
-              date.
+              Aucun lever/coucher soleil ou Lune pour cette date.
             </p>
           ) : (
             <ol className="ov-schedule" aria-label="Horaires du jour">
@@ -168,9 +169,7 @@ export function OverviewCard({
           setCalendarOpen(false)
         }}
         onNow={() => {
-          const now = Date.now()
-          onDateChange(civilDateFromUtc(now, lon))
-          onPlayheadChange(now)
+          onPlayheadChange(Date.now())
           setCalendarOpen(false)
         }}
       />

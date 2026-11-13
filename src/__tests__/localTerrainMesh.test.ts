@@ -7,6 +7,7 @@ import {
   hasParkedLocalTerrainForTests,
   NEAR_TERRAIN_RADIUS_M,
   parkLocalTerrain,
+  PLANET_DEM_MAX_ZOOM,
   pruneTileCachesToWorkingSet,
   resetParkedLocalTerrainForTests,
   resetTerrainTileCachesForTests,
@@ -20,6 +21,12 @@ describe('demZoomForDistance', () => {
   it('keeps max DEM near the tripod', () => {
     expect(demZoomForDistance(0)).toBe(17)
     expect(demZoomForDistance(1_500)).toBe(17)
+  })
+
+  it('documents planet archive max (Namibia has no z13+)', () => {
+    // Immersive must bilinear-sample z12 here — never nearest-overzoom to z17.
+    expect(PLANET_DEM_MAX_ZOOM).toBe(12)
+    expect(demZoomForDistance(0)).toBeGreaterThan(PLANET_DEM_MAX_ZOOM)
   })
 
   it('stays high through the mid-ground mountain band', () => {

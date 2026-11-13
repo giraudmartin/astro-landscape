@@ -214,7 +214,8 @@ export function viewfinderFrameSizeForProjection(
   return { frameW, frameH }
 }
 
-export const STAGE_VFOV_MIN_DEG = 18
+/** Wheel zoom floor — ≤ ~1.15° optical VFOV at 1200 mm FF so telephoto can fill the stage. */
+export const STAGE_VFOV_MIN_DEG = 1
 /**
  * Stereographic field. Stellarium's slider stops at 185°; past that the
  * same projection still opens the view, until it collapses near 360°.

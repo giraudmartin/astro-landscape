@@ -385,3 +385,46 @@ export function attachStelProjector(
   material.customProgramCacheKey = () =>
     `stel-proj-v38-terrain-bow|t${terrainSafe ? 1 : 0}|d${discardBow ? 1 : 0}|${previousKey()}`
 }
+
+/**
+ * Same Stellarium warp for custom ShaderMaterials that set gl_Position from
+ * an eye-space `mv` (or `modelViewMatrix * vec4(position,1)`), e.g. Sun/Moon
+ * discs. Without this, bodies/arcs swim vs stel-warped stars when panning.
+ */
+export function attachStelProjectorMv(
+  material: THREE.ShaderMaterial,
+  opts?: { discardBow?: boolean },
+): void {
+  if (material.userData.stelProjector) return
+  if (material.vertexShader.includes('vec4 stelProject')) {
+    material.userData.stelProjector = true
+    return
+  }
+  material.userData.stelProjector = true
+  const discardBow = opts?.discardBow !== false
+  material.uniforms.uStelMode = stelModeUniform
+
+  let vs = `${STEL_PROJECT_GLSL}\n${material.vertexShader}`
+  vs = vs.replace(
+    /gl_Position\s*=\s*projectionMatrix\s*\*\s*mv\s*;/,
+    'gl_Position = stelProject(mv);',
+  )
+  vs = vs.replace(
+    /gl_Position\s*=\s*projectionMatrix\s*\*\s*modelViewMatrix\s*\*\s*vec4\(\s*position\s*,\s*1\.0\s*\)\s*;/,
+    'gl_Position = stelProject(modelViewMatrix * vec4(position, 1.0));',
+  )
+  material.vertexShader = vs
+
+  if (discardBow && !material.fragmentShader.includes('stelDiscardBow')) {
+    material.fragmentShader = `${STEL_FRAGMENT_GLSL}\n${material.fragmentShader}`
+    material.fragmentShader = material.fragmentShader.replace(
+      /void\s+main\s*\(\s*\)\s*\{/,
+      'void main() {\n        stelDiscardBow();',
+    )
+  }
+
+  const previousKey = material.customProgramCacheKey?.bind(material)
+  material.customProgramCacheKey = () =>
+    `stel-mv-v38-terrain-bow|d${discardBow ? 1 : 0}|${previousKey?.() ?? material.uuid}`
+  material.needsUpdate = true
+}

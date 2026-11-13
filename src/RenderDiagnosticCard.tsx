@@ -4,6 +4,7 @@ import {
   type RenderDiagLive,
   type RenderDiagSettings,
 } from './renderDiagnostic'
+import { RenderDiagIcon } from './psIcons'
 import type { StageProjection } from './stelProjector'
 
 export type RenderDiagContext = {
@@ -128,6 +129,25 @@ export function RenderDiagnosticCard({ liveRef, getContext }: Props) {
     return () => window.clearInterval(id)
   }, [open, liveRef])
 
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (rootRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   const patch = (partial: Partial<RenderDiagSettings>) => {
     setSettings((prev) => ({ ...prev, ...partial }))
   }
@@ -165,23 +185,25 @@ export function RenderDiagnosticCard({ liveRef, getContext }: Props) {
   }
 
   return (
-    <div className="render-diag" ref={rootRef}>
+    <div
+      className={open ? 'render-diag is-open' : 'render-diag'}
+      ref={rootRef}
+    >
       <button
         type="button"
         className={
-          open ? 'render-diag__toggle is-open' : 'render-diag__toggle'
+          open ? 'render-diag__warn-btn is-open' : 'render-diag__warn-btn'
         }
+        aria-label="Diagnostic rendu"
+        title="Diagnostic rendu"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
       >
-        <span>Diagnostic rendu</span>
-        <span className="render-diag__chevron" aria-hidden>
-          {open ? '▾' : '▸'}
-        </span>
+        <RenderDiagIcon size={15} />
       </button>
       {open ? (
-        <div className="render-diag__panel" id={panelId}>
+        <div className="render-diag__panel" id={panelId} role="dialog" aria-label="Diagnostic rendu">
           <p className="render-diag__hint">
             Change <strong>un</strong> paramètre à la fois. La vue (yaw/pitch)
             est conservée. Far = plan de clip caméra, pas la distance LOD.

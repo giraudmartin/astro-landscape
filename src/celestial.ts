@@ -28,6 +28,10 @@ export type DayInfo = {
   sunset: HorizonEvent | null
   moonrise: HorizonEvent | null
   moonset: HorizonEvent | null
+  /** Night length sunset → next sunrise (minutes). */
+  nightMinutes: number
+  /** Minutes the Moon is above the horizon during that night. */
+  moonInNightMinutes: number
   /** Galactic center (Sgr A*) rise / set for the civil day. */
   galacticCenterRise: HorizonEvent | null
   galacticCenterSet: HorizonEvent | null
@@ -228,6 +232,19 @@ export function buildDayInfo(
     searchFrom + 2 * 3600_000,
   )
 
+  const nightStartMs = sunsetDate?.getTime() ?? NaN
+  const nextSunriseDate =
+    sunsetDate != null
+      ? searchEvent(Body.Sun, observer, +1, sunsetDate.getTime() + 60_000)
+      : null
+  const night = moonInNightFromBounds(
+    nightStartMs,
+    nextSunriseDate?.getTime() ?? NaN,
+    lat,
+    lon,
+    elevationM,
+  )
+
   return {
     date,
     lat,
@@ -240,18 +257,14 @@ export function buildDayInfo(
     sunset: toEvent(sunsetDate, lon),
     moonrise: toEvent(moonriseDate, lon, moonriseLighting),
     moonset: toEvent(moonsetDate, lon, moonsetLighting),
+    nightMinutes: night.nightMinutes,
+    moonInNightMinutes: night.moonInNightMinutes,
     galacticCenterRise: toEvent(gcRiseDate, lon),
     galacticCenterSet: toEvent(gcSetDate, lon),
   }
 }
 
-export type ScheduleKind =
-  | 'sunrise'
-  | 'sunset'
-  | 'moonrise'
-  | 'moonset'
-  | 'gc_rise'
-  | 'gc_set'
+export type ScheduleKind = 'sunrise' | 'sunset' | 'moonrise' | 'moonset'
 
 export type ScheduleRow = {
   kind: ScheduleKind
@@ -265,11 +278,9 @@ const SCHEDULE_LABELS: Record<ScheduleKind, string> = {
   sunset: 'Coucher du soleil',
   moonrise: 'Lever de Lune',
   moonset: 'Coucher de Lune',
-  gc_rise: 'Lever du ventre galactique',
-  gc_set: 'Coucher du ventre galactique',
 }
 
-/** Chronological day schedule for the Overview card (PS rows + galactic center). */
+/** Chronological day schedule for the Overview card (sun + moon only). */
 export function buildDaySchedule(info: DayInfo): ScheduleRow[] {
   const rows: ScheduleRow[] = []
   const push = (
@@ -288,8 +299,6 @@ export function buildDaySchedule(info: DayInfo): ScheduleRow[] {
   push('sunset', info.sunset)
   push('moonrise', info.moonrise)
   push('moonset', info.moonset)
-  push('gc_rise', info.galacticCenterRise)
-  push('gc_set', info.galacticCenterSet)
   rows.sort(
     (a, b) => Date.parse(a.datetimeUtc) - Date.parse(b.datetimeUtc),
   )

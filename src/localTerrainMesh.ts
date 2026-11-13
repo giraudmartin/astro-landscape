@@ -414,60 +414,48 @@ async function decodeTerrarium(bytes: ArrayBuffer): Promise<Uint8ClampedArray> {
   return ctx.getImageData(0, 0, TILE_SIZE, TILE_SIZE).data
 }
 
-/** Max zoom DEM with parent overzoom (same strategy as MapLibre protocol). */
+/**
+ * Mapterhorn planet archive tops out at z12 (~30 m). Regional z13–17 exist
+ * only where high-res sources are published (Europe, … — not Namibia).
+ * Immersive mesh must NOT nearest-overzoom past native data: that paints
+ * flat terraces ("dents de scie") at Spitzkoppe and similar sites.
+ */
+export const PLANET_DEM_MAX_ZOOM = 12
+
+/**
+ * Native DEM tile only. Missing high-z → null; elevationFromCache then
+ * bilinear-samples a cached planet parent (see addDemTileKeys).
+ * MapLibre's mapterhornSafeDem still nearest-overzooms for the 2D map.
+ */
 async function resolveDemTileUncached(
   z: number,
   x: number,
   y: number,
 ): Promise<DemTile | null> {
   const direct = await fetchDemBytesCached(z, x, y)
-  if (direct) {
-    return { z, x, y, data: await decodeTerrarium(direct) }
-  }
+  if (!direct) return null
+  return { z, x, y, data: await decodeTerrarium(direct) }
+}
 
-  for (let parentZ = z - 1; parentZ >= 0; parentZ--) {
-    const shift = z - parentZ
-    const parentX = x >> shift
-    const parentY = y >> shift
-    const parentBytes = await fetchDemBytesCached(parentZ, parentX, parentY)
-    if (!parentBytes) continue
-    const parentBmp = await createImageBitmap(
-      new Blob([parentBytes], { type: 'image/webp' }),
+/** Request z plus planet parents so bilinear fallback always has data. */
+function addDemTileKeys(
+  tileKeys: Set<string>,
+  lat: number,
+  lon: number,
+  z: number,
+) {
+  const { x, y } = latLonToTile(lat, lon, z)
+  tileKeys.add(`${z}/${Math.floor(x)}/${Math.floor(y)}`)
+  if (z > PLANET_DEM_MAX_ZOOM) {
+    const p = latLonToTile(lat, lon, PLANET_DEM_MAX_ZOOM)
+    tileKeys.add(
+      `${PLANET_DEM_MAX_ZOOM}/${Math.floor(p.x)}/${Math.floor(p.y)}`,
     )
-    try {
-      const span = 1 << shift
-      const localX = x - (parentX << shift)
-      const localY = y - (parentY << shift)
-      const srcSize = TILE_SIZE / span
-      const canvas = document.createElement('canvas')
-      canvas.width = TILE_SIZE
-      canvas.height = TILE_SIZE
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })
-      if (!ctx) return null
-      // Nearest overzoom — same as MapLibre mapterhornSafeDem (no soft seams).
-      ctx.imageSmoothingEnabled = false
-      ctx.drawImage(
-        parentBmp,
-        localX * srcSize,
-        localY * srcSize,
-        srcSize,
-        srcSize,
-        0,
-        0,
-        TILE_SIZE,
-        TILE_SIZE,
-      )
-      return {
-        z,
-        x,
-        y,
-        data: ctx.getImageData(0, 0, TILE_SIZE, TILE_SIZE).data,
-      }
-    } finally {
-      parentBmp.close()
-    }
   }
-  return null
+  if (z > 10) {
+    const p = latLonToTile(lat, lon, 10)
+    tileKeys.add(`10/${Math.floor(p.x)}/${Math.floor(p.y)}`)
+  }
 }
 
 async function resolveDemTile(
@@ -1737,8 +1725,7 @@ async function buildTerrainLodRing(input: {
     if (dist > ring.outerM * 1.02) return
     const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
     const z = forceZ ?? demZoomForDistance(dist)
-    const { x, y } = latLonToTile(lat, lon, z)
-    tileKeys.add(`${z}/${Math.floor(x)}/${Math.floor(y)}`)
+    addDemTileKeys(tileKeys, lat, lon, z)
   }
 
   for (let j = 0; j <= resolution; j++) {
@@ -1844,9 +1831,10 @@ async function buildTerrainLodRing(input: {
     polygonOffsetUnits: 2,
   })
   material.userData.isOrthoTerrain = true
-  // Overlap bands ? hard outer*0.995 left black slits between LOD rings on pan.
+  // Overlap bands ? hard outer*0.995 left black gaps between LOD rings on pan.
   attachRadiusBandDiscard(material, ring.innerM * 0.88, ring.outerM)
   attachWorldXZOrthoMap(material, radiusM)
+  attachOrthoSlopeShade(material)
   // Match sky stereographic — terrain without stel = yellow disk + sea shards.
   attachStelProjector(material, { terrainSafe: true })
   const mesh = new THREE.Mesh(geometry, material)
@@ -1902,9 +1890,7 @@ async function buildDetailTerrainDisc(input: {
       const dist = Math.hypot(east, north)
       if (dist > radiusM * 1.02 || dist < innerM * 0.85) continue
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-      const z = demZoomForDistance(dist)
-      const { x, y } = latLonToTile(lat, lon, z)
-      tileKeys.add(`${z}/${Math.floor(x)}/${Math.floor(y)}`)
+      addDemTileKeys(tileKeys, lat, lon, demZoomForDistance(dist))
     }
   }
   const missing = [...tileKeys].filter((key) => !cache.has(key))
@@ -2002,6 +1988,7 @@ async function buildDetailTerrainDisc(input: {
     input.radiusM,
   )
   attachWorldXZOrthoMap(material, radiusM)
+  attachOrthoSlopeShade(material)
   attachStelProjector(material, { terrainSafe: true })
   const mesh = new THREE.Mesh(geometry, material)
   mesh.frustumCulled = false
@@ -2125,7 +2112,7 @@ function buildSeaMesh(input: {
 }
 
 /**
- * Background LOD rings with Earth curvature — mid ridges ? far ? horizon
+ * Background LOD rings with Earth curvature — mid ridges → far → horizon
  * silhouettes out to ~300 km, plus a curved MSL sea underlay.
  */
 async function buildFarTerrainMesh(input: {
@@ -2209,6 +2196,60 @@ function mixAtlasGlsl(
              }
            }`,
   }
+}
+
+/**
+ * Gentle slope darkening only — never directional (nrm.x / light side).
+ * A +X bias made the same night settings look brighter on one side of the
+ * view than the other when panning.
+ */
+const ORTHO_SLOPE_SHADE_GLSL = /* glsl */ `
+  {
+    vec3 nrm = normalize(vOrthoShadeNrm);
+    float shade = clamp(0.72 + 0.38 * nrm.y, 0.55, 1.08);
+    diffuseColor.rgb *= shade;
+  }
+`
+
+function attachOrthoSlopeShade(material: THREE.Material): void {
+  if (material.userData.orthoSlopeShade) return
+  material.userData.orthoSlopeShade = true
+  const previous = material.onBeforeCompile
+  const previousKey = material.customProgramCacheKey?.bind(material)
+  material.onBeforeCompile = (shader, renderer) => {
+    previous?.call(material, shader, renderer)
+    if (shader.fragmentShader.includes('ASTRO_ORTHO_SLOPE_SHADE')) return
+    if (!shader.fragmentShader.includes('#include <map_fragment>')) return
+    // MeshBasic omits beginnormal_vertex → no objectNormal. Three's program
+    // prefix already injects `attribute vec3 normal` when the geometry has
+    // normals — never redeclare it (redefinition kills far LOD shaders →
+    // invisible 30–300 km rings, empty geometric horizon at La Palma etc.).
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+         varying vec3 vOrthoShadeNrm;`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+         vOrthoShadeNrm = normal;`,
+      )
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+         #define ASTRO_ORTHO_SLOPE_SHADE 1
+         varying vec3 vOrthoShadeNrm;`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+         ${ORTHO_SLOPE_SHADE_GLSL}`,
+      )
+  }
+  material.customProgramCacheKey = () =>
+    `ortho-slope-shade-v4|isoY|usePrefixNormal|${previousKey?.() ?? ''}`
 }
 
 /**
@@ -2402,9 +2443,7 @@ export async function createLocalTerrainMesh(input: {
       const north = -radiusM + v * radiusM * 2
       const dist = Math.hypot(east, north)
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-      const z = demZoomForDistance(dist)
-      const { x, y } = latLonToTile(lat, lon, z)
-      tileKeys.add(`${z}/${Math.floor(x)}/${Math.floor(y)}`)
+      addDemTileKeys(tileKeys, lat, lon, demZoomForDistance(dist))
     }
   }
 
@@ -2416,9 +2455,8 @@ export async function createLocalTerrainMesh(input: {
       const east = -radiusM + u * radiusM * 2
       const north = -radiusM + v * radiusM * 2
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-      for (const z of [12, 10, 8] as const) {
-        const { x, y } = latLonToTile(lat, lon, z)
-        tileKeys.add(`${z}/${Math.floor(x)}/${Math.floor(y)}`)
+      for (const z of [PLANET_DEM_MAX_ZOOM, 10, 8] as const) {
+        addDemTileKeys(tileKeys, lat, lon, z)
       }
     }
   }
@@ -2639,11 +2677,12 @@ export async function createLocalTerrainMesh(input: {
       const nearDiam = (radiusM * 2).toFixed(1)
       const feetDetail = `
            {
-             // NEVER dFdx/dFdy hillshade under stereographic warp ? screen
+             // NEVER dFdx/dFdy hillshade under stereographic warp — screen
              // derivatives explode into black squares / crushed tiles.
-             // Vertex normal stays stable across zoom and dezoom.
+             // Isotropic slope only (no nrm.x) — directional bias made the
+             // same night settings look brighter on one side when panning.
              vec3 nrm = normalize(vAstroNrm);
-             float shade = clamp(0.55 + 0.55 * nrm.y + 0.18 * nrm.x, 0.45, 1.25);
+             float shade = clamp(0.72 + 0.38 * nrm.y, 0.55, 1.08);
              diffuseColor.rgb *= shade;
              float groundR = length(vTerrainXZ);
              float closeW = 1.0 - smoothstep(6.0, 160.0, groundR);
@@ -2693,7 +2732,7 @@ export async function createLocalTerrainMesh(input: {
   }
   const previousKey = material.customProgramCacheKey.bind(material)
   material.customProgramCacheKey = () =>
-    `eye-clear-v20|vNrmShade|atlasEdge|stel|e${atlasEpoch.value}|w${atlasWeights.wide.value}|m${atlasWeights.mid.value}|n${atlasWeights.near.value}|u${atlasWeights.ultra.value}|${previousKey()}`
+    `eye-clear-v21|isoYShade|atlasEdge|stel|e${atlasEpoch.value}|w${atlasWeights.wide.value}|m${atlasWeights.mid.value}|n${atlasWeights.near.value}|u${atlasWeights.ultra.value}|${previousKey()}`
   // Exact handoff — overlap z-fights under log-depth (polygonOffset is a no-op).
   attachRadiusBandDiscard(material, 0, MID_DETAIL_INNER_M * 1.08)
   // Stel on terrain (terrainSafe) so stereo matches the sky. Ortho is sampled

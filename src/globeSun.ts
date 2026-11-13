@@ -52,6 +52,9 @@ export function sublunarPoint(utcMs: number): LngLat {
 /**
  * MapLibre `light` so globe atmosphere is lit from the subsolar point.
  * Atmosphere shader treats the Sun as opposite this light position.
+ *
+ * Position is Earth-fixed (subsolar only) — never derive it from map center,
+ * bearing, or local spot azimuth, or the terminator crawls while panning.
  */
 export function sunLightSpec(
   subsolar: LngLat,
@@ -66,10 +69,20 @@ export function sunLightSpec(
   return {
     anchor: 'map',
     position: [1.5, azimuthal, polar],
+    // Never ease the sun across the disk — pan/zoom would look like time jumps.
+    'position-transition': { duration: 0, delay: 0 },
+    'color-transition': { duration: 0, delay: 0 },
+    'intensity-transition': { duration: 0, delay: 0 },
     color: opts?.color ?? '#ffffff',
     intensity: opts?.intensity ?? 0.55,
   }
 }
+
+/** Last Earth-fixed light we pushed — skip setLight on pan/zoom churn. */
+const lastGlobeLightByMap = new WeakMap<
+  Map,
+  { key: string; intensity: number; color: string }
+>()
 
 export function moonIlluminationAt(utcMs: number): {
   fraction: number
@@ -87,7 +100,7 @@ export function applyGlobeSunLighting(
   map: Map,
   utcMs: number,
   opts: {
-    /** Local sun azimuth at map focus (degrees clockwise from north). */
+    /** Local sun azimuth at map focus (° clockwise from north) — ground only. */
     sunAzimuthDeg: number
     nightAmount: number
     /**
@@ -112,34 +125,52 @@ export function applyGlobeSunLighting(
         ? '#ffd2a8'
         : '#ffffff'
 
-  try {
-    map.setLight(sunLightSpec(subsolar, { intensity, color }))
-  } catch {
-    // Style not ready / light unsupported
+  // Subsolar quantized — pan/zoom must not rewrite light (MapLibre transitions
+  // would slide the terminator across continents).
+  const lightKey = `${subsolar.lon.toFixed(3)},${subsolar.lat.toFixed(3)}`
+  const prev = lastGlobeLightByMap.get(map)
+  if (
+    !prev ||
+    prev.key !== lightKey ||
+    prev.intensity !== intensity ||
+    prev.color !== color
+  ) {
+    try {
+      map.setLight(sunLightSpec(subsolar, { intensity, color }))
+    } catch {
+      // Style not ready / light unsupported
+    }
+    lastGlobeLightByMap.set(map, { key: lightKey, intensity, color })
   }
 
   // Real night veil (not just soft globe shade) — strongest when zoomed out.
   updateNightShadeLayer(map, utcMs, stable ? 1 : Math.max(0, 1 - night))
 
   if (map.getLayer('hillshade')) {
-    const az = ((opts.sunAzimuthDeg % 360) + 360) % 360
-    map.setPaintProperty('hillshade', 'hillshade-illumination-direction', az)
-    map.setPaintProperty('hillshade', 'hillshade-illumination-anchor', 'map')
-    map.setPaintProperty(
-      'hillshade',
-      'hillshade-exaggeration',
-      0.22 * (1 - night * 0.35),
-    )
-    map.setPaintProperty(
-      'hillshade',
-      'hillshade-highlight-color',
-      stable || night <= 0.55 ? '#fff6e8' : '#c8d4f0',
-    )
-    map.setPaintProperty(
-      'hillshade',
-      'hillshade-shadow-color',
-      stable || night <= 0.55 ? '#1a1208' : '#05070e',
-    )
+    // Globe: local spot azimuth as global hillshade reads as a second sun that
+    // fights the subsolar terminator — kill it until we're in ground framing.
+    if (stable) {
+      map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0)
+    } else {
+      const az = ((opts.sunAzimuthDeg % 360) + 360) % 360
+      map.setPaintProperty('hillshade', 'hillshade-illumination-direction', az)
+      map.setPaintProperty('hillshade', 'hillshade-illumination-anchor', 'map')
+      map.setPaintProperty(
+        'hillshade',
+        'hillshade-exaggeration',
+        0.22 * (1 - night * 0.35),
+      )
+      map.setPaintProperty(
+        'hillshade',
+        'hillshade-highlight-color',
+        night <= 0.55 ? '#fff6e8' : '#c8d4f0',
+      )
+      map.setPaintProperty(
+        'hillshade',
+        'hillshade-shadow-color',
+        night <= 0.55 ? '#1a1208' : '#05070e',
+      )
+    }
   }
 
   return subsolar

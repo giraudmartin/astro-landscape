@@ -103,15 +103,23 @@ export function applyMapSky(
 
   if (map.getLayer('imagery')) {
     // Globe: leave satellite at natural exposure — terminator darkens night.
-    const brightness = 1 - night * 0.55
-    const saturation = 1 - night * 0.35
-    map.setPaintProperty('imagery', 'raster-brightness-min', night * 0.08)
+    // Ground view: also cool/dim with local sky so the map floor tracks dusk.
+    const brightness = 1 - night * 0.58
+    const saturation = 1 - night * 0.4
+    const twilight = ground * palette.twilightStrength
+    map.setPaintProperty('imagery', 'raster-brightness-min', night * 0.1)
     map.setPaintProperty('imagery', 'raster-brightness-max', brightness)
     map.setPaintProperty('imagery', 'raster-saturation', saturation - 1)
+    // Soft cool shift into night / blue hour (degrees); day stays 0.
+    map.setPaintProperty(
+      'imagery',
+      'raster-hue-rotate',
+      night * 18 * ground + twilight * 8,
+    )
     map.setPaintProperty(
       'imagery',
       'raster-opacity',
-      1 - night * 0.12,
+      1 - night * 0.14,
     )
   }
 

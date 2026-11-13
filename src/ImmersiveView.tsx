@@ -51,6 +51,7 @@ const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
   ready: 'Pr\u00eat',
 }
 import { createNightSky } from './nightSky'
+import { createSkyBodies } from './skyBodies'
 import { PhotoFrameOverlay } from './PhotoFrameOverlay'
 import { clampEyeHeightM, EYE_HEIGHT_STEP_M } from './presets'
 import { ViewBearingHud } from './ViewBearingHud'
@@ -412,6 +413,10 @@ export function ImmersiveView({
     if (skyTogglesRef.current.showHalpha) {
       void nightSky.ensureHalphaLoaded()
     }
+
+    // Sun/Moon discs + day arcs — same models/sampling as PlanetStudio.
+    const skyBodies = createSkyBodies()
+    scene.add(skyBodies.root)
 
     const ambient = new THREE.AmbientLight(0xfff0dd, 0.85)
     scene.add(ambient)
@@ -1036,6 +1041,13 @@ export function ImmersiveView({
         showCelestialGrid: skyToggles.showCelestialGrid,
         showAzimuthGrid: skyToggles.showAzimuthGrid,
       })
+      skyBodies.update({
+        utcMs: latestSkyUtc,
+        lat,
+        lon,
+        elevationM: sceneGroundElevM,
+        camera,
+      })
 
       diagContextRef.current.cameraPos = {
         x: camera.position.x,
@@ -1107,6 +1119,7 @@ export function ImmersiveView({
       sky.geometry.dispose()
       sky.material.dispose()
       nightSky.dispose()
+      skyBodies.dispose()
       terrainDispose?.()
       stereoPass.dispose()
       renderer.dispose()

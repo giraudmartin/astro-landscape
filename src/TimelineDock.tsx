@@ -4,7 +4,6 @@ import {
   buildDayInfo,
   buildMonthCalendar,
   civilClockFromUtc,
-  civilDateFromUtc,
   civilDayStartUtcMs,
   isMorningAt,
   shiftIsoDate,
@@ -124,8 +123,10 @@ export function TimelineDock({
     null
 
   // Land playhead on a sensible event when the civil *date* changes and the
-  // clock sits outside that day. Do NOT depend on lon: selecting a spot must
-  // keep the UTC instant (App syncs the civil date label instead).
+  // clock sits outside that day (calendar / day buttons). Scrub across
+  // midnight already updates playhead+date together — leave that alone.
+  // Do NOT depend on lon: selecting a spot must keep the UTC instant
+  // (App syncs the civil date label instead).
   useEffect(() => {
     const start = civilDayStartUtcMs(date, lon)
     const end = start + 24 * 60 * 60_000
@@ -354,9 +355,7 @@ export function TimelineDock({
           setCalendarOpen(false)
         }}
         onNow={() => {
-          const now = Date.now()
-          onDateChange(civilDateFromUtc(now, lon))
-          onPlayheadChange(now)
+          onPlayheadChange(Date.now())
           setCalendarOpen(false)
           setJumpRequest((n) => n + 1)
         }}

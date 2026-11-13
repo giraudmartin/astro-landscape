@@ -44,6 +44,10 @@ function formatTick(utcMs: number, lon: number, stepMs: number): string {
   const iso = new Date(utcMs + Math.round(lon / 15) * 3600_000).toISOString()
   const hour = iso.slice(11, 13)
   const minute = iso.slice(14, 16)
+  // Midnight: show the civil date so multi-day scrub reads like Photo Sightline.
+  if (hour === '00' && minute === '00') {
+    return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+  }
   if (stepMs >= 60 * 60_000) return hour
   return `${hour}:${minute}`
 }
@@ -85,13 +89,9 @@ export function DayTimeline({
     utcMs: number
   }>({ active: false, lastX: 0, utcMs: 0 })
   const scrubRef = useRef<{
-    dayStart: number
-    dayEnd: number
     pxPerMs: number
     setUtcMs: (ms: number) => void
   }>({
-    dayStart: 0,
-    dayEnd: 0,
     pxPerMs: 0,
     setUtcMs: () => {},
   })
@@ -158,10 +158,12 @@ export function DayTimeline({
   const ticks: Array<{ utcMs: number; label: string; major: boolean }> = []
   const firstTick = Math.ceil(windowStart / tickStep) * tickStep
   for (let t = firstTick; t <= windowEnd; t += tickStep) {
+    const label = formatTick(t, lon, tickStep)
+    const isMidnight = label.includes('/')
     ticks.push({
       utcMs: t,
-      label: formatTick(t, lon, tickStep),
-      major: t % (60 * 60_000) === 0,
+      label,
+      major: isMidnight || t % (60 * 60_000) === 0,
     })
   }
 
@@ -171,11 +173,13 @@ export function DayTimeline({
     if (!jumpRequest) return
   }, [jumpRequest])
 
+  // Unbounded scrub — same as Photo Sightline: cross midnight into any day.
   const setUtcMs = (utcMs: number) => {
-    onPlayheadChange(Math.min(Math.max(utcMs, dayStart), dayEnd - 1))
+    if (!Number.isFinite(utcMs)) return
+    onPlayheadChange(utcMs)
   }
 
-  scrubRef.current = { dayStart, dayEnd, pxPerMs, setUtcMs }
+  scrubRef.current = { pxPerMs, setUtcMs }
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -185,10 +189,7 @@ export function DayTimeline({
       const dx = event.clientX - drag.lastX
       drag.lastX = event.clientX
       // PS: drag right → earlier (strip follows the finger under a fixed caret).
-      drag.utcMs = Math.min(
-        Math.max(drag.utcMs - dx / scrub.pxPerMs, scrub.dayStart),
-        scrub.dayEnd - 1,
-      )
+      drag.utcMs = drag.utcMs - dx / scrub.pxPerMs
       scrub.setUtcMs(drag.utcMs)
     }
     const onUp = () => {
@@ -218,8 +219,6 @@ export function DayTimeline({
         className="moon-preview-timeline__viewport"
         role="slider"
         tabIndex={0}
-        aria-valuemin={dayStart}
-        aria-valuemax={dayEnd}
         aria-valuenow={playheadUtcMs}
         aria-label="Timeline"
         onPointerDown={(event) => {

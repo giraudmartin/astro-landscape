@@ -184,6 +184,18 @@ export default function App() {
     [date, timelineLon, playheadUtcMs],
   )
 
+  /** Timeline scrub (PS-style): unbounded UTC — civil date follows the playhead. */
+  const onPlayheadChange = useCallback(
+    (utcMs: number) => {
+      setPlayheadUtcMs(utcMs)
+      setDate((prev) => {
+        const next = civilDateFromUtc(utcMs, timelineLon)
+        return next === prev ? prev : next
+      })
+    },
+    [timelineLon],
+  )
+
   const selectPersonalSpot = useCallback((saved: PersonalSpot) => {
     setSelectedPersonalSpotId(saved.id)
     setSpot({
@@ -460,7 +472,7 @@ export default function App() {
               date={date}
               playheadUtcMs={playheadUtcMs}
               onDateChange={onDateChange}
-              onPlayheadChange={setPlayheadUtcMs}
+              onPlayheadChange={onPlayheadChange}
             />
             <WeatherCard
               date={date}
@@ -468,10 +480,7 @@ export default function App() {
               location={
                 spot ? { lat: spot.lat, lon: spot.lon } : null
               }
-              onHourSelect={(utcMs, localDate) => {
-                if (localDate !== date) onDateChange(localDate)
-                setPlayheadUtcMs(utcMs)
-              }}
+              onHourSelect={(utcMs) => onPlayheadChange(utcMs)}
             />
           </div>
         </div>
@@ -541,7 +550,7 @@ export default function App() {
           playheadUtcMs={playheadUtcMs}
           clockIsUtc={clockIsUtc}
           onDateChange={onDateChange}
-          onPlayheadChange={setPlayheadUtcMs}
+          onPlayheadChange={onPlayheadChange}
         />
       ) : null}
 

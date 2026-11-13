@@ -3324,12 +3324,13 @@ html[data-qa-hide-chrome='1'] .render-diag {
   position: absolute;
   top: auto;
   left: 50%;
-  bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  bottom: max(28px, env(safe-area-inset-bottom, 0px));
   z-index: 8;
-  width: min(320px, calc(100% - 48px));
+  width: min(440px, calc(100% - 36px));
   transform: translateX(-50%);
   pointer-events: none;
   transition: opacity 0.45s ease;
+  animation: immersive-loader-enter 420ms var(--motion-ease-out) both;
 }
 
 .immersive__loader--done {
@@ -3337,62 +3338,150 @@ html[data-qa-hide-chrome='1'] .render-diag {
 }
 
 .immersive__loader--upgrading .immersive__loader-card {
-  background: rgba(8, 12, 20, 0.62);
+  background: rgba(16, 16, 20, 0.52);
 }
 
 .immersive__loader-card {
   box-sizing: border-box;
   width: 100%;
-  padding: 8px 12px 9px;
-  border: 1px solid rgba(232, 234, 237, 0.14);
-  border-radius: 10px;
-  background: rgba(8, 12, 20, 0.8);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
-  color: #e8eaed;
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-2xl);
+  background: rgba(16, 16, 20, 0.62);
+  color: #f5f5f7;
+  box-shadow:
+    0 22px 48px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: var(--vf-chrome-blur);
+  -webkit-backdrop-filter: var(--vf-chrome-blur);
+  font-family: var(--font-ui);
 }
 
-.immersive__loader-row {
+.immersive__loader-header {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  margin: 0 0 6px;
+  gap: 16px;
+}
+
+.immersive__loader-heading {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.immersive__loader-eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .immersive__loader-phase {
   margin: 0;
-  font-size: 0.74rem;
-  line-height: 1.2;
-  color: rgba(232, 234, 237, 0.82);
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #f5f5f7;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.immersive__loader-detail {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.48);
+}
+
 .immersive__loader-track {
-  height: 4px;
+  height: 8px;
   border-radius: 999px;
-  background: rgba(232, 234, 237, 0.12);
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.28);
 }
 
 .immersive__loader-fill {
   height: 100%;
   border-radius: inherit;
-  background: var(--ui-primary);
-  box-shadow: 0 0 8px var(--ui-accent-glow);
-  transition: width 0.35s ease;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--ui-accent-rgb), 0.55),
+    rgba(var(--ui-accent-rgb), 0.95)
+  );
+  box-shadow: 0 0 14px var(--ui-accent-glow);
+  transition: width 320ms ease;
+}
+
+.immersive__loader-fill--active {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--ui-accent-rgb), 0.4),
+    rgba(var(--ui-accent-rgb), 0.95),
+    rgba(186, 230, 253, 0.85)
+  );
+  background-size: 200% 100%;
+  animation: immersive-loader-shimmer 1.4s linear infinite;
 }
 
 .immersive__loader-pct {
   margin: 0;
   flex-shrink: 0;
-  font-size: 0.68rem;
-  line-height: 1.2;
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  font-size: 1.55rem;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.03em;
   color: var(--ui-primary);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px var(--ui-accent-glow);
+}
+
+.immersive__loader-pct-unit {
+  font-size: 0.72rem;
   font-weight: 650;
+  letter-spacing: 0.02em;
+  color: rgba(var(--ui-accent-rgb), 0.78);
+}
+
+@keyframes immersive-loader-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes immersive-loader-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .immersive__loader {
+    animation: none;
+  }
+
+  .immersive__loader-fill--active {
+    animation: none;
+    background-size: 100% 100%;
+  }
 }
 
 /* Photo Sightline viewfinder — heading tape */

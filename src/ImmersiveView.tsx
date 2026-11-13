@@ -1462,16 +1462,27 @@ export function ImmersiveView({
           aria-busy={!terrainReady}
         >
           <div className="immersive__loader-card">
-            <div className="immersive__loader-row">
-              <p className="immersive__loader-phase">
-                {terrainReady
-                  ? 'Vue prête'
-                  : terrainPhase === 'dem' && terrainDemFromCache
-                    ? 'Relief (cache)\u2026'
-                    : TERRAIN_PHASE_LABEL[terrainPhase]}
-              </p>
+            <div className="immersive__loader-header">
+              <div className="immersive__loader-heading">
+                <p className="immersive__loader-eyebrow">Terrain</p>
+                <p className="immersive__loader-phase">
+                  {terrainReady
+                    ? 'Vue prête'
+                    : terrainPhase === 'dem' && terrainDemFromCache
+                      ? 'Relief (cache)\u2026'
+                      : TERRAIN_PHASE_LABEL[terrainPhase]}
+                </p>
+                <p className="immersive__loader-detail">
+                  {terrainReady
+                    ? 'Relief et ortho disponibles'
+                    : terrainUnlocked
+                      ? 'Affinage en arrière-plan'
+                      : 'Construction de la scène immersive'}
+                </p>
+              </div>
               <p className="immersive__loader-pct">
-                {Math.round(terrainProgress * 100)} %
+                {Math.round(terrainProgress * 100)}
+                <span className="immersive__loader-pct-unit">%</span>
               </p>
             </div>
             <div
@@ -1482,7 +1493,7 @@ export function ImmersiveView({
               role="progressbar"
             >
               <div
-                className="immersive__loader-fill"
+                className={`immersive__loader-fill${terrainReady ? '' : ' immersive__loader-fill--active'}`}
                 style={{ width: `${Math.round(terrainProgress * 100)}%` }}
               />
             </div>

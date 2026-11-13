@@ -7,8 +7,38 @@ export const FOCAL_LENGTH_PRESETS_MM = [
 export type FocalLengthMm = (typeof FOCAL_LENGTH_PRESETS_MM)[number]
 export type ViewfinderOrientation = 'portrait' | 'landscape'
 
+/** Overlay drawn on the immersive stage. */
+export type ViewfinderFrameMode = 'off' | 'dslr' | 'pano'
+
+export const VIEWFINDER_FRAME_MODES: readonly ViewfinderFrameMode[] = [
+  'off',
+  'dslr',
+  'pano',
+] as const
+
+export const VIEWFINDER_FRAME_MODE_LABEL: Record<ViewfinderFrameMode, string> = {
+  off: 'Libre',
+  dslr: 'Photo',
+  pano: 'Pano',
+}
+
+export const VIEWFINDER_FRAME_MODE_TITLE: Record<ViewfinderFrameMode, string> = {
+  off: 'Vue libre sans cadre',
+  dslr: 'Afficher le champ de l’appareil photo',
+  pano: 'Afficher les tuiles du panorama',
+}
+
 export const DEFAULT_FOCAL_LENGTH_MM: FocalLengthMm = 20
 export const DEFAULT_ORIENTATION: ViewfinderOrientation = 'landscape'
+export const DEFAULT_FRAME_MODE: ViewfinderFrameMode = 'dslr'
+
+export function normalizeViewfinderFrameMode(
+  value: unknown,
+): ViewfinderFrameMode {
+  return VIEWFINDER_FRAME_MODES.includes(value as ViewfinderFrameMode)
+    ? (value as ViewfinderFrameMode)
+    : DEFAULT_FRAME_MODE
+}
 
 export const FOCAL_LENGTH_MIN_MM = 14
 export const FOCAL_LENGTH_MAX_MM = 1200
@@ -21,6 +51,13 @@ export const DEFAULT_SENSOR_FORMAT: SensorFormat = 'ff'
 
 export const SENSOR_FORMAT_LABEL: Record<SensorFormat, string> = {
   ff: 'Plein Format',
+  apsc15: 'APS-C 1.5',
+  apsc16: 'APS-C 1.6',
+}
+
+/** Compact sensor tag for the capture capsule summary (e.g. « 20 mm · FF · Paysage »). */
+export const SENSOR_FORMAT_SHORT: Record<SensorFormat, string> = {
+  ff: 'FF',
   apsc15: 'APS-C 1.5',
   apsc16: 'APS-C 1.6',
 }

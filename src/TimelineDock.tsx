@@ -23,6 +23,7 @@ import {
   ChevronDownIcon,
 } from './psIcons'
 import { skyEventFromSunAltitude } from './skyLighting'
+import { EXPAND_TIMELINE_EVENT } from './ViewfinderCaptureCapsule'
 
 type TimelineDockProps = {
   lat: number
@@ -30,6 +31,8 @@ type TimelineDockProps = {
   elevationM: number
   date: string
   playheadUtcMs: number
+  /** When true, clock/day are UTC (no spot yet). */
+  clockIsUtc?: boolean
   onDateChange: (date: string) => void
   onPlayheadChange: (utcMs: number) => void
 }
@@ -46,6 +49,7 @@ export function TimelineDock({
   elevationM,
   date,
   playheadUtcMs,
+  clockIsUtc = false,
   onDateChange,
   onPlayheadChange,
 }: TimelineDockProps) {
@@ -79,6 +83,16 @@ export function TimelineDock({
     patchAppSettings({ timeline: { zoomIndex, collapsed } })
   }, [zoomIndex, collapsed])
 
+  useEffect(() => {
+    const onExpand = () => {
+      setCalendarOpen(false)
+      setEditingClock(false)
+      setCollapsed(false)
+    }
+    window.addEventListener(EXPAND_TIMELINE_EVENT, onExpand)
+    return () => window.removeEventListener(EXPAND_TIMELINE_EVENT, onExpand)
+  }, [])
+
   const collapseTimeline = () => {
     setCalendarOpen(false)
     setEditingClock(false)
@@ -109,7 +123,9 @@ export function TimelineDock({
     dayInfo.moonset?.datetimeUtc ??
     null
 
-  // Land playhead on a sensible event when day changes and clock is outside day.
+  // Land playhead on a sensible event when the civil *date* changes and the
+  // clock sits outside that day. Do NOT depend on lon: selecting a spot must
+  // keep the UTC instant (App syncs the civil date label instead).
   useEffect(() => {
     const start = civilDayStartUtcMs(date, lon)
     const end = start + 24 * 60 * 60_000
@@ -120,7 +136,7 @@ export function TimelineDock({
       return
     }
     onPlayheadChange(start + 12 * 3600_000)
-  }, [date, lon]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [date]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyClockDraft = (nextClock: string) => {
     setClockDraft(nextClock)
@@ -203,7 +219,9 @@ export function TimelineDock({
                   type="time"
                   step="1"
                   value={clockDraft}
-                  aria-label="Régler l’heure"
+                  aria-label={
+                    clockIsUtc ? 'Régler l’heure UTC' : 'Régler l’heure locale'
+                  }
                   onChange={(event) => applyClockDraft(event.currentTarget.value)}
                   onBlur={() => setEditingClock(false)}
                   onKeyDown={(event) => {
@@ -217,7 +235,11 @@ export function TimelineDock({
                 <button
                   type="button"
                   className="moon-timeline-dock__time-main"
-                  title="Régler l’heure exacte"
+                  title={
+                    clockIsUtc
+                      ? 'Heure UTC — régler l’heure exacte'
+                      : 'Heure locale du spot — régler l’heure exacte'
+                  }
                   onClick={() => {
                     setClockDraft(playheadClock)
                     setEditingClock(true)
@@ -226,6 +248,16 @@ export function TimelineDock({
                   {playheadClock.slice(0, 5)}
                 </button>
               )}
+              <span
+                className="moon-timeline-dock__time-shot"
+                title={
+                  clockIsUtc
+                    ? 'Pas de spot : heure mondiale UTC'
+                    : 'Heure civile approximative au spot'
+                }
+              >
+                {clockIsUtc ? 'UTC' : 'locale'}
+              </span>
             </span>
           </div>
 

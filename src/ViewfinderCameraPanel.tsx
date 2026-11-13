@@ -5,12 +5,12 @@ import {
   FOCAL_LENGTH_MIN_MM,
   FOCAL_LENGTH_PRESETS_MM,
   isFocalLengthPreset,
-  SENSOR_CROP_FACTOR,
   SENSOR_FORMAT_LABEL,
   SENSOR_FORMATS,
   type SensorFormat,
   type ViewfinderOrientation,
 } from './lensFov'
+import { CameraLensIcon, ChevronDownIcon } from './psIcons'
 
 type ViewfinderCameraPanelProps = {
   focalMm: number
@@ -19,11 +19,16 @@ type ViewfinderCameraPanelProps = {
   onFocalMmChange: (mm: number) => void
   onOrientationChange: (orientation: ViewfinderOrientation) => void
   onSensorFormatChange: (format: SensorFormat) => void
+  /** Controlled open state (capsule / parent owns the trigger). */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Hide the built-in summary toggle — parent provides the trigger. */
+  hideToggle?: boolean
 }
 
 /**
- * Collapsible camera framing panel — Photo Sightline focal dock +
- * orientation + sensor format.
+ * Camera framing settings — capsule popup matches the validated prototype
+ * (« Appareil photo »), dock toggle kept for non-capsule hosts.
  */
 export function ViewfinderCameraPanel({
   focalMm,
@@ -32,41 +37,63 @@ export function ViewfinderCameraPanel({
   onFocalMmChange,
   onOrientationChange,
   onSensorFormatChange,
+  open: openProp,
+  onOpenChange,
+  hideToggle = false,
 }: ViewfinderCameraPanelProps) {
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = openProp ?? uncontrolledOpen
+  const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next
+    onOpenChange?.(value)
+    if (openProp === undefined) setUncontrolledOpen(value)
+  }
   const [sensorMenuOpen, setSensorMenuOpen] = useState(false)
-  const [focalDraft, setFocalDraft] = useState<string | null>(null)
+  const [focalDraft, setFocalDraft] = useState(
+    () => String(Math.round(focalMm)),
+  )
   const rootRef = useRef<HTMLDivElement | null>(null)
   const sensorMenuRef = useRef<HTMLDivElement | null>(null)
   const panelId = useId()
   const sensorLabelId = useId()
-  const cropFactor = SENSOR_CROP_FACTOR[sensorFormat]
+  const customFocalId = useId()
+
+  useEffect(() => {
+    setFocalDraft(String(Math.round(focalMm)))
+  }, [focalMm])
 
   useEffect(() => {
     if (!open) {
       setSensorMenuOpen(false)
       return
     }
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      if (!target) return
-      if (rootRef.current?.contains(target)) return
-      setOpen(false)
-      setSensorMenuOpen(false)
-    }
+    // Capsule owns outside-click when hideToggle — avoid fighting the trigger.
+    const onPointerDown = hideToggle
+      ? null
+      : (event: PointerEvent) => {
+          const target = event.target as Node | null
+          if (!target) return
+          if (rootRef.current?.contains(target)) return
+          setOpen(false)
+          setSensorMenuOpen(false)
+        }
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setSensorMenuOpen(false)
         setOpen(false)
       }
     }
-    window.addEventListener('pointerdown', onPointerDown, true)
+    if (onPointerDown) {
+      window.addEventListener('pointerdown', onPointerDown, true)
+    }
     window.addEventListener('keydown', onKey)
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown, true)
+      if (onPointerDown) {
+        window.removeEventListener('pointerdown', onPointerDown, true)
+      }
       window.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, hideToggle])
 
   useEffect(() => {
     if (!sensorMenuOpen) return
@@ -79,270 +106,272 @@ export function ViewfinderCameraPanel({
     return () => window.removeEventListener('pointerdown', onPointerDown, true)
   }, [sensorMenuOpen])
 
+  const commitFocalDraft = () => {
+    const parsed = Number(focalDraft)
+    if (!Number.isFinite(parsed)) {
+      setFocalDraft(String(Math.round(focalMm)))
+      return
+    }
+    const next = clampFocalLengthMm(parsed)
+    onFocalMmChange(next)
+    setFocalDraft(String(next))
+  }
+
   const summary = `${Math.round(focalMm)} mm · ${SENSOR_FORMAT_LABEL[sensorFormat]}`
+
+  if (hideToggle && !open) return null
+
+  const sensorBlock = (
+    <div className="vf-camera-pop__field">
+      <span className="vf-camera-pop__label" id={sensorLabelId}>
+        Capteur
+      </span>
+      <div className="moon-preview-select-wrap" ref={sensorMenuRef}>
+        <button
+          type="button"
+          className="moon-preview-select-trigger"
+          aria-labelledby={sensorLabelId}
+          aria-label="Format de capteur"
+          aria-haspopup="listbox"
+          aria-expanded={sensorMenuOpen}
+          onClick={() => setSensorMenuOpen((value) => !value)}
+        >
+          <span>{SENSOR_FORMAT_LABEL[sensorFormat]}</span>
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+            <path
+              d="M4 6l4 4 4-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        {sensorMenuOpen ? (
+          <ul
+            className="moon-preview-select-menu moon-preview-select-menu--down"
+            role="listbox"
+            aria-labelledby={sensorLabelId}
+          >
+            {SENSOR_FORMATS.map((format) => {
+              const active = format === sensorFormat
+              return (
+                <li key={format} role="none">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    className={
+                      active
+                        ? 'moon-preview-select-option moon-preview-select-option--active'
+                        : 'moon-preview-select-option'
+                    }
+                    onClick={() => {
+                      onSensorFormatChange(format)
+                      setSensorMenuOpen(false)
+                    }}
+                  >
+                    {SENSOR_FORMAT_LABEL[format]}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
+      </div>
+    </div>
+  )
+
+  const orientationBlock = (
+    <div className="vf-camera-pop__field">
+      <span className="vf-camera-pop__label">Orientation</span>
+      <button
+        type="button"
+        className="moon-preview-orient-btn vf-camera-pop__orient"
+        title={
+          orientation === 'portrait'
+            ? 'Portrait actif. Passer en paysage'
+            : 'Paysage actif. Passer en portrait'
+        }
+        aria-label={
+          orientation === 'portrait' ? 'Passer en paysage' : 'Passer en portrait'
+        }
+        onClick={() =>
+          onOrientationChange(
+            orientation === 'portrait' ? 'landscape' : 'portrait',
+          )
+        }
+      >
+        {orientation === 'portrait' ? (
+          <svg
+            width="12"
+            height="14"
+            viewBox="0 0 12 14"
+            fill="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="2.25"
+              y="0.75"
+              width="7.5"
+              height="12.5"
+              rx="1.2"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+          </svg>
+        ) : (
+          <svg
+            width="14"
+            height="12"
+            viewBox="0 0 14 12"
+            fill="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="0.75"
+              y="2.25"
+              width="12.5"
+              height="7.5"
+              rx="1.2"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+          </svg>
+        )}
+        {orientation === 'portrait' ? 'Portrait' : 'Paysage'}
+      </button>
+    </div>
+  )
+
+  const popupBody = (
+    <div
+      id={panelId}
+      className="vf-camera-pop"
+      role="dialog"
+      aria-label="Appareil photo"
+    >
+      <header className="vf-camera-pop__head">
+        <h2 className="vf-camera-pop__title">Appareil photo</h2>
+        <button
+          type="button"
+          className="vf-camera-pop__close"
+          aria-label="Fermer les réglages"
+          onClick={() => setOpen(false)}
+        >
+          ✕
+        </button>
+      </header>
+
+      <div className="vf-camera-pop__focal-row">
+        <span className="vf-camera-pop__label">Distance focale</span>
+        <span className="vf-camera-pop__big">
+          {Math.round(focalMm)}
+          <span className="vf-camera-pop__unit"> mm</span>
+        </span>
+      </div>
+
+      <div
+        className="moon-preview-focal-pills vf-camera-pop__presets"
+        role="group"
+        aria-label="Focales prédéfinies"
+      >
+        {FOCAL_LENGTH_PRESETS_MM.map((mm) => (
+          <button
+            key={mm}
+            type="button"
+            className={
+              mm === focalMm
+                ? 'moon-preview-focal-pill is-active'
+                : 'moon-preview-focal-pill'
+            }
+            aria-pressed={mm === focalMm}
+            onClick={() => onFocalMmChange(mm)}
+          >
+            {mm}
+          </button>
+        ))}
+      </div>
+
+      <div className="vf-camera-pop__field vf-camera-pop__custom">
+        <label className="vf-camera-pop__label" htmlFor={customFocalId}>
+          Focale personnalisée · mm
+        </label>
+        <input
+          id={customFocalId}
+          type="number"
+          inputMode="numeric"
+          min={FOCAL_LENGTH_MIN_MM}
+          max={FOCAL_LENGTH_MAX_MM}
+          step={1}
+          className={
+            !isFocalLengthPreset(focalMm)
+              ? 'vf-camera-pop__number is-active'
+              : 'vf-camera-pop__number'
+          }
+          value={focalDraft}
+          onChange={(event) => setFocalDraft(event.target.value)}
+          onBlur={commitFocalDraft}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            event.currentTarget.blur()
+          }}
+        />
+      </div>
+
+      <div className="vf-camera-pop__twocol">
+        {sensorBlock}
+        {orientationBlock}
+      </div>
+
+      <p className="vf-camera-pop__hint">
+        Réglages communs au cadre photo et aux tuiles du panorama.
+      </p>
+    </div>
+  )
 
   return (
     <div
       ref={rootRef}
       className={
         open
-          ? 'vf-camera-panel is-open'
-          : 'vf-camera-panel'
+          ? hideToggle
+            ? 'vf-camera-panel vf-camera-panel--pop is-open'
+            : 'vf-camera-panel immersive-dock__item is-open'
+          : hideToggle
+            ? 'vf-camera-panel vf-camera-panel--pop'
+            : 'vf-camera-panel immersive-dock__item'
       }
     >
-      <button
-        type="button"
-        className="vf-camera-panel__toggle"
-        aria-expanded={open}
-        aria-controls={panelId}
-        title="Réglages cadrage"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className="vf-camera-panel__toggle-main">{summary}</span>
-        <span className="vf-camera-panel__toggle-meta">
-          {orientation === 'landscape' ? 'Paysage' : 'Portrait'}
-        </span>
-        <svg
-          className="vf-camera-panel__chevron"
-          viewBox="0 0 16 16"
-          width="12"
-          height="12"
-          aria-hidden="true"
+      {hideToggle ? null : (
+        <button
+          type="button"
+          className="vf-camera-panel__toggle immersive-dock__row"
+          aria-expanded={open}
+          aria-controls={panelId}
+          title="Réglages cadrage"
+          onClick={() => setOpen((value) => !value)}
         >
-          <path
-            d="M4 6l4 4 4-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+          <span className="immersive-dock__row-icon" aria-hidden="true">
+            <CameraLensIcon size={14} />
+          </span>
+          <span className="vf-camera-panel__toggle-main">{summary}</span>
+          <span className="vf-camera-panel__toggle-meta">
+            {orientation === 'landscape' ? 'Paysage' : 'Portrait'}
+          </span>
+          <ChevronDownIcon className="vf-camera-panel__chevron" size={12} />
+        </button>
+      )}
 
       {open ? (
-        <div id={panelId} className="vf-camera-panel__body">
-          <section
-            className="moon-preview-focal-dock"
-            aria-label="Distance focale"
-          >
-            <div className="moon-preview-focal-dock__info">
-              <div className="moon-preview-focal-dock__head">
-                <span className="moon-preview-quick-label">Focale</span>
-                <span className="moon-preview-focal-dock__note">mm</span>
-              </div>
-              <p className="moon-preview-focal-dock__value">
-                <strong>
-                  {Math.round(focalMm)}
-                  <span> mm</span>
-                </strong>
-                <span className="moon-preview-focal-dock__hint">
-                  {cropFactor > 1
-                    ? `≈ ${Math.round(focalMm * cropFactor)} mm FF`
-                    : 'Personnalisez le cadrage'}
-                </span>
-              </p>
-            </div>
-            <div
-              className="moon-preview-focal-pills"
-              role="group"
-              aria-label="Focales prédéfinies"
-            >
-              {FOCAL_LENGTH_PRESETS_MM.map((mm) => (
-                <button
-                  key={mm}
-                  type="button"
-                  className={
-                    mm === focalMm
-                      ? 'moon-preview-focal-pill is-active'
-                      : 'moon-preview-focal-pill'
-                  }
-                  aria-pressed={mm === focalMm}
-                  onClick={() => {
-                    setFocalDraft(null)
-                    onFocalMmChange(mm)
-                  }}
-                >
-                  {mm}
-                </button>
-              ))}
-              <label className="moon-preview-focal-custom">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={FOCAL_LENGTH_MIN_MM}
-                  max={FOCAL_LENGTH_MAX_MM}
-                  step={1}
-                  placeholder="mm"
-                  title={`Focale libre ${FOCAL_LENGTH_MIN_MM}–${FOCAL_LENGTH_MAX_MM} mm`}
-                  aria-label={`Focale libre, ${FOCAL_LENGTH_MIN_MM} à ${FOCAL_LENGTH_MAX_MM} mm`}
-                  className={
-                    !isFocalLengthPreset(focalMm)
-                      ? 'moon-preview-focal-custom__input is-active'
-                      : 'moon-preview-focal-custom__input'
-                  }
-                  value={
-                    focalDraft ??
-                    (isFocalLengthPreset(focalMm) ? '' : String(focalMm))
-                  }
-                  onChange={(event) => setFocalDraft(event.target.value)}
-                  onBlur={() => {
-                    if (focalDraft == null || focalDraft.trim() === '') {
-                      setFocalDraft(null)
-                      return
-                    }
-                    const parsed = Number(focalDraft)
-                    if (!Number.isFinite(parsed)) {
-                      setFocalDraft(null)
-                      return
-                    }
-                    const next = clampFocalLengthMm(parsed)
-                    onFocalMmChange(next)
-                    setFocalDraft(
-                      isFocalLengthPreset(next) ? null : String(next),
-                    )
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return
-                    event.currentTarget.blur()
-                  }}
-                />
-              </label>
-            </div>
-          </section>
-
-          <div className="vf-camera-panel__row">
-            <div className="moon-preview-quick-group moon-preview-quick-group--orient">
-              <span className="moon-preview-quick-label">Orient.</span>
-              <button
-                type="button"
-                className="moon-preview-orient-btn"
-                title={
-                  orientation === 'portrait'
-                    ? 'Portrait actif. Passer en paysage'
-                    : 'Paysage actif. Passer en portrait'
-                }
-                aria-label={
-                  orientation === 'portrait'
-                    ? 'Passer en paysage'
-                    : 'Passer en portrait'
-                }
-                onClick={() =>
-                  onOrientationChange(
-                    orientation === 'portrait' ? 'landscape' : 'portrait',
-                  )
-                }
-              >
-                {orientation === 'portrait' ? (
-                  <svg
-                    width="12"
-                    height="14"
-                    viewBox="0 0 12 14"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <rect
-                      x="2.25"
-                      y="0.75"
-                      width="7.5"
-                      height="12.5"
-                      rx="1.2"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    width="14"
-                    height="12"
-                    viewBox="0 0 14 12"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <rect
-                      x="0.75"
-                      y="2.25"
-                      width="12.5"
-                      height="7.5"
-                      rx="1.2"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                    />
-                  </svg>
-                )}
-                {orientation === 'portrait' ? 'Portrait' : 'Paysage'}
-              </button>
-            </div>
-
-            <div className="moon-preview-quick-group moon-preview-quick-group--sensor">
-              <span
-                className="moon-preview-quick-label"
-                id={sensorLabelId}
-              >
-                Capteur
-              </span>
-              <div className="moon-preview-select-wrap" ref={sensorMenuRef}>
-                <button
-                  type="button"
-                  className="moon-preview-select-trigger"
-                  aria-labelledby={sensorLabelId}
-                  aria-label="Format de capteur"
-                  aria-haspopup="listbox"
-                  aria-expanded={sensorMenuOpen}
-                  onClick={() => setSensorMenuOpen((value) => !value)}
-                >
-                  <span>{SENSOR_FORMAT_LABEL[sensorFormat]}</span>
-                  <svg
-                    viewBox="0 0 16 16"
-                    width="12"
-                    height="12"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M4 6l4 4 4-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                {sensorMenuOpen ? (
-                  <ul
-                    className="moon-preview-select-menu moon-preview-select-menu--down"
-                    role="listbox"
-                    aria-labelledby={sensorLabelId}
-                  >
-                    {SENSOR_FORMATS.map((format) => {
-                      const active = format === sensorFormat
-                      return (
-                        <li key={format} role="none">
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={active}
-                            className={
-                              active
-                                ? 'moon-preview-select-option moon-preview-select-option--active'
-                                : 'moon-preview-select-option'
-                            }
-                            onClick={() => {
-                              onSensorFormatChange(format)
-                              setSensorMenuOpen(false)
-                            }}
-                          >
-                            {SENSOR_FORMAT_LABEL[format]}
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                ) : null}
-              </div>
-            </div>
+        hideToggle ? (
+          popupBody
+        ) : (
+          <div id={panelId} className="vf-camera-panel__body">
+            {popupBody}
           </div>
-        </div>
+        )
       ) : null}
     </div>
   )

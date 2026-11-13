@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import * as THREE from 'three'
 import { loadAppSettings, patchAppSettings } from './appSettings'
 import { CelestialSearchPanel } from './CelestialSearchPanel'
@@ -13,6 +19,7 @@ import {
   SENSOR_CROP_FACTOR,
   verticalFovDegFromFocalMm,
   type SensorFormat,
+  type ViewfinderFrameMode,
   type ViewfinderOrientation,
 } from './lensFov'
 import {
@@ -48,8 +55,9 @@ import { PhotoFrameOverlay } from './PhotoFrameOverlay'
 import { clampEyeHeightM, EYE_HEIGHT_STEP_M } from './presets'
 import { ViewBearingHud } from './ViewBearingHud'
 import { type PanoramaPlan } from './panorama'
-import { ViewfinderCameraPanel } from './ViewfinderCameraPanel'
-import { ViewfinderPanoramaPanel } from './ViewfinderPanoramaPanel'
+import { ViewfinderCaptureCapsule } from './ViewfinderCaptureCapsule'
+import { ViewfinderLandscapeControl } from './ViewfinderLandscapeControl'
+import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
 import { ViewPitchHud } from './ViewPitchHud'
 import {
   AzimuthGridIcon,
@@ -66,11 +74,17 @@ import {
   applyStageProjection,
   getStageProjection,
   setStageProjection,
-  STAGE_PROJECTIONS,
   type StageProjection,
 } from './stelProjector'
 import { createStereoCubemapPass } from './stereoCubemapPass'
-import { skyPaletteFromSunAltitude } from './skyLighting'
+import {
+  clampGroundNightBrightness,
+  clampGroundNightContrast,
+  clampGroundNightTemperature,
+  groundAlbedoFromSky,
+  hexToRgb01,
+  skyPaletteFromSunAltitude,
+} from './skyLighting'
 import type { QaImmersiveApi } from './qaTestHooks'
 
 type MoveDir = 'up' | 'down' | 'left' | 'right'
@@ -159,6 +173,9 @@ export function ImmersiveView({
   const [sensorFormat, setSensorFormat] = useState<SensorFormat>(
     savedImmersive.sensorFormat,
   )
+  const [frameMode, setFrameMode] = useState<ViewfinderFrameMode>(
+    savedImmersive.frameMode,
+  )
   const [panorama, setPanorama] = useState<PanoramaPlan>(
     savedImmersive.panorama,
   )
@@ -202,6 +219,27 @@ export function ImmersiveView({
   eyeHeightRef.current = eyeHeightM
   /** Draft while typing in the elevation field (`null` = show committed value). */
   const [eyeHeightDraft, setEyeHeightDraft] = useState<string | null>(null)
+  const [groundNightBrightness, setGroundNightBrightness] = useState(() =>
+    clampGroundNightBrightness(savedImmersive.groundNightBrightness),
+  )
+  const groundNightBrightnessRef = useRef(
+    clampGroundNightBrightness(savedImmersive.groundNightBrightness),
+  )
+  groundNightBrightnessRef.current = groundNightBrightness
+  const [groundNightContrast, setGroundNightContrast] = useState(() =>
+    clampGroundNightContrast(savedImmersive.groundNightContrast),
+  )
+  const groundNightContrastRef = useRef(
+    clampGroundNightContrast(savedImmersive.groundNightContrast),
+  )
+  groundNightContrastRef.current = groundNightContrast
+  const [groundNightTemperature, setGroundNightTemperature] = useState(() =>
+    clampGroundNightTemperature(savedImmersive.groundNightTemperature),
+  )
+  const groundNightTemperatureRef = useRef(
+    clampGroundNightTemperature(savedImmersive.groundNightTemperature),
+  )
+  groundNightTemperatureRef.current = groundNightTemperature
   const [keyHeld, setKeyHeld] = useState(emptyMoveHeld)
   const [pointerHeld, setPointerHeld] = useState(emptyMoveHeld)
   const moveRepeatRef = useRef<Partial<Record<MoveDir, number>>>({})
@@ -243,10 +281,14 @@ export function ImmersiveView({
         focalMm,
         orientation,
         sensorFormat,
+        frameMode,
         panorama,
         projection,
         stageVfovDeg,
         eyeHeightM,
+        groundNightBrightness,
+        groundNightContrast,
+        groundNightTemperature,
         showMilkyWay,
         showHalpha,
         showAtmosphere,
@@ -259,10 +301,14 @@ export function ImmersiveView({
     focalMm,
     orientation,
     sensorFormat,
+    frameMode,
     panorama,
     projection,
     stageVfovDeg,
     eyeHeightM,
+    groundNightBrightness,
+    groundNightContrast,
+    groundNightTemperature,
     showMilkyWay,
     showHalpha,
     showAtmosphere,
@@ -301,6 +347,25 @@ export function ImmersiveView({
     const h = horizontalFovDegFromFocalMm(focalMm, orientation, cropFactor)
     return { v, h }
   }, [focalMm, orientation, cropFactor])
+
+  const applyFrameMode = (mode: ViewfinderFrameMode) => {
+    setFrameMode(mode)
+    setPanorama((plan) =>
+      plan.enabled === (mode === 'pano')
+        ? plan
+        : { ...plan, enabled: mode === 'pano' },
+    )
+    if (mode === 'off') setFramesLocked(false)
+  }
+
+  const applyPanorama = (next: PanoramaPlan) => {
+    setPanorama(next)
+    if (next.enabled) {
+      if (frameMode !== 'pano') setFrameMode('pano')
+      return
+    }
+    if (frameMode === 'pano') setFrameMode('dslr')
+  }
 
   useEffect(() => {
     const host = hostRef.current
@@ -489,20 +554,27 @@ export function ImmersiveView({
         sunFill.intensity = sunLight.intensity * 0.85
       }
 
+      const groundTint = groundAlbedoFromSky(palette, alt, {
+        atmosphereOn,
+        nightBrightness: groundNightBrightnessRef.current,
+        nightContrast: groundNightContrastRef.current,
+        nightTemperature: groundNightTemperatureRef.current,
+      })
+
       if (atmosphereOn) {
-        // Skylight follows the sun — warm at golden hour so far LOD isn't a
-        // cold blue slab while the near disc still catches the sun disc.
+        // Skylight follows sky palette so lit LODs match ortho ground tint.
+        const zen = hexToRgb01(palette.zenith)
+        const hor = hexToRgb01(palette.horizon)
         const warmSky = Math.max(0, 1 - Math.abs(alt - 2) / 10) // peaks ~sunset
-        const cool = Math.max(0, Math.min(1, (alt + 2) / 14)) // day blue
         hemi.color.setRGB(
-          0.55 + (1 - night) * 0.35 + warmSky * 0.35,
-          0.5 + (1 - night) * 0.25 + warmSky * 0.12,
-          0.45 + cool * 0.4 - warmSky * 0.25 - night * 0.2,
+          zen.r * 0.55 + hor.r * 0.45 + warmSky * 0.12,
+          zen.g * 0.55 + hor.g * 0.45 + warmSky * 0.05,
+          zen.b * 0.55 + hor.b * 0.45 - warmSky * 0.08,
         )
         hemi.groundColor.setRGB(
-          0.38 * (1 - night * 0.7) + warmSky * 0.12,
-          0.3 * (1 - night * 0.65) + warmSky * 0.06,
-          0.2 * (1 - night * 0.5) + night * 0.06,
+          groundTint.r * 0.55,
+          groundTint.g * 0.48,
+          groundTint.b * 0.4,
         )
         hemi.intensity =
           0.35 +
@@ -510,9 +582,9 @@ export function ImmersiveView({
           Math.max(0, Math.min(0.4, (alt + 4) / 36))
 
         ambient.color.setRGB(
-          0.6 + (1 - night) * 0.4 + warmSky * 0.2,
-          0.58 + (1 - night) * 0.32 + warmSky * 0.1,
-          0.55 + cool * 0.25 - warmSky * 0.12 - night * 0.15,
+          groundTint.r * 0.55 + zen.r * 0.45,
+          groundTint.g * 0.55 + zen.g * 0.45,
+          groundTint.b * 0.55 + zen.b * 0.45,
         )
         ambient.intensity = 0.22 + (1 - night) * 0.55
       } else {
@@ -524,30 +596,28 @@ export function ImmersiveView({
         ambient.intensity = 0.18 + (1 - night) * 0.32
       }
 
-      // Lighting carries golden-hour warmth. Do NOT multiply ortho albedo into
-      // mud, and never wipe emissiveMap — that made 4096 satellite look like
-      // flat brown polys, and turned the sea mesh cream.
+      // Ortho MeshBasic ignores lights — multiply albedo from sky tint.
+      // Keep strength moderate (see groundAlbedoFromSky) so 4096 satellite
+      // stays sharp, not mud / cream.
       if (landscapeMats.length > 0) {
-        let warm = 0
-        if (alt < 8 && alt > -4) {
-          warm = Math.max(0, 1 - Math.abs(alt - 1) / 7)
-        }
         for (const mat of landscapeMats) {
           if (mat.userData.isSea) {
-            const dim = atmosphereOn ? 1 - night * 0.55 : 1 - night * 0.35
-            mat.color.setRGB(0.29 * dim, 0.48 * dim, 0.59 * dim)
+            mat.color.setRGB(
+              0.29 * groundTint.r,
+              0.48 * groundTint.g,
+              0.59 * groundTint.b,
+            )
             continue
           }
           if (mat.userData.isOrthoTerrain || mat.map) {
-            // MeshBasic ortho: only night dimming — never warm-tint albedo.
-            const dim = atmosphereOn ? 1 - night * 0.45 : 1 - night * 0.28
-            mat.color.setRGB(dim, dim, dim)
+            mat.color.setRGB(groundTint.r, groundTint.g, groundTint.b)
           } else if (atmosphereOn) {
-            const dim = 1 - night * 0.72
+            // Untextured LODs: slightly stronger sky multiply + night emissive.
+            const boost = 0.85 + night * 0.08
             mat.color.setRGB(
-              dim,
-              dim * (1 - warm * 0.18),
-              dim * (1 - warm * 0.32) * (1 - night * 0.08) + night * 0.06,
+              groundTint.r * boost,
+              groundTint.g * boost * (0.96 + night * 0.02),
+              groundTint.b * boost * (0.94 + night * 0.06),
             )
             if ('emissive' in mat) {
               ;(mat as THREE.MeshStandardMaterial).emissive.setRGB(
@@ -559,8 +629,7 @@ export function ImmersiveView({
                 night * 0.35
             }
           } else {
-            const dim = 1 - night * 0.45
-            mat.color.setRGB(dim, dim * (1 - warm * 0.18), dim * (1 - warm * 0.32))
+            mat.color.setRGB(groundTint.r, groundTint.g, groundTint.b)
             if ('emissive' in mat) {
               ;(mat as THREE.MeshStandardMaterial).emissive.setRGB(
                 0.04 * night,
@@ -1050,7 +1119,13 @@ export function ImmersiveView({
 
   useEffect(() => {
     apiRef.current?.setSkyUtc(skyUtcMs)
-  }, [skyUtcMs, showAtmosphere])
+  }, [
+    skyUtcMs,
+    showAtmosphere,
+    groundNightBrightness,
+    groundNightContrast,
+    groundNightTemperature,
+  ])
 
   // Re-entering the parked same-spot view: restore ready flag for the timeline.
   useEffect(() => {
@@ -1176,6 +1251,7 @@ export function ImmersiveView({
         stageW={size.w}
         stageH={size.h}
         orientation={orientation}
+        frameMode={frameMode}
         stageVfovDeg={stageVfovDeg}
         opticalVfovDeg={optical.v}
         opticalHfovDeg={optical.h}
@@ -1248,7 +1324,13 @@ export function ImmersiveView({
           </div>
         </div>
       ) : null}
-      <ViewPitchHud pitchDeg={pitchDeg} />
+      <div className="moon-preview-pitch-stack">
+        <ViewPitchHud pitchDeg={pitchDeg} />
+        <RenderDiagnosticCard
+          liveRef={renderDiagLiveRef}
+          getContext={() => ({ ...diagContextRef.current })}
+        />
+      </div>
 
       <div
         className="moon-preview-hud-tools"
@@ -1376,43 +1458,19 @@ export function ImmersiveView({
       </div>
 
       <div className="immersive__chrome immersive__chrome--left">
-        <div className="proj-mode" role="radiogroup" aria-label="Projection">
-          {STAGE_PROJECTIONS.map((mode) => {
-            const selected = projection === mode.id
-            return (
-              <button
-                key={mode.id}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                title={mode.title}
-                className={
-                  selected ? 'proj-mode__btn is-active' : 'proj-mode__btn'
-                }
-                onClick={() => setProjection(mode.id)}
-              >
-                <span className="proj-mode__label">{mode.label}</span>
-              </button>
-            )
-          })}
-        </div>
-        <ViewfinderCameraPanel
+        <ViewfinderCaptureCapsule
           focalMm={focalMm}
           orientation={orientation}
           sensorFormat={sensorFormat}
+          frameMode={frameMode}
+          panorama={panorama}
+          opticalHFovDeg={optical.h}
+          opticalVFovDeg={optical.v}
           onFocalMmChange={setFocalMm}
           onOrientationChange={setOrientation}
           onSensorFormatChange={setSensorFormat}
-        />
-        <ViewfinderPanoramaPanel
-          plan={panorama}
-          opticalHFovDeg={optical.h}
-          opticalVFovDeg={optical.v}
-          onChange={setPanorama}
-        />
-        <RenderDiagnosticCard
-          liveRef={renderDiagLiveRef}
-          getContext={() => ({ ...diagContextRef.current })}
+          onFrameModeChange={applyFrameMode}
+          onPanoramaChange={applyPanorama}
         />
       </div>
 
@@ -1636,6 +1694,18 @@ export function ImmersiveView({
             />
           ) : null}
         </div>
+        <ViewfinderLandscapeControl
+          brightness={groundNightBrightness}
+          contrast={groundNightContrast}
+          temperature={groundNightTemperature}
+          onBrightnessChange={setGroundNightBrightness}
+          onContrastChange={setGroundNightContrast}
+          onTemperatureChange={setGroundNightTemperature}
+        />
+        <ViewfinderProjectionControl
+          projection={projection}
+          onProjectionChange={setProjection}
+        />
         <button
           type="button"
           className="hud-btn immersive__exit"

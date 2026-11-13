@@ -4,13 +4,16 @@ import { TIMELINE_VISIBLE_RADIUS_STEPS_MS } from './DayTimeline'
 import {
   clampFocalLengthMm,
   DEFAULT_FOCAL_LENGTH_MM,
+  DEFAULT_FRAME_MODE,
   DEFAULT_ORIENTATION,
   DEFAULT_SENSOR_FORMAT,
+  normalizeViewfinderFrameMode,
   SENSOR_FORMATS,
   STAGE_VFOV_DEFAULT_DEG,
   STAGE_VFOV_MAX_DEG,
   STAGE_VFOV_MIN_DEG,
   type SensorFormat,
+  type ViewfinderFrameMode,
   type ViewfinderOrientation,
 } from './lensFov'
 import {
@@ -20,6 +23,14 @@ import {
   normalizePanoramaProjectionMode,
   type PanoramaPlan,
 } from './panorama'
+import {
+  clampGroundNightBrightness,
+  clampGroundNightContrast,
+  clampGroundNightTemperature,
+  GROUND_NIGHT_BRIGHTNESS_DEFAULT,
+  GROUND_NIGHT_CONTRAST_DEFAULT,
+  GROUND_NIGHT_TEMPERATURE_DEFAULT,
+} from './skyLighting'
 import {
   normalizeStageProjection,
   type StageProjection,
@@ -31,11 +42,22 @@ export type ImmersiveSettings = {
   focalMm: number
   orientation: ViewfinderOrientation
   sensorFormat: SensorFormat
+  /** Which viewfinder overlay to draw: none / single shot / panorama grid. */
+  frameMode: ViewfinderFrameMode
   panorama: PanoramaPlan
   projection: StageProjection
   stageVfovDeg: number
   /** Camera height above the spot ground, metres. */
   eyeHeightM: number
+  /**
+   * Dusk/night ground brightness multiplier (1 = default curve).
+   * Daytime albedo is unchanged.
+   */
+  groundNightBrightness: number
+  /** Dusk/night ground contrast (1 = default). */
+  groundNightContrast: number
+  /** Dusk/night ground temperature −1…+1 (0 = neutral). */
+  groundNightTemperature: number
   showMilkyWay: boolean
   showHalpha: boolean
   showAtmosphere: boolean
@@ -69,10 +91,14 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   focalMm: DEFAULT_FOCAL_LENGTH_MM,
   orientation: DEFAULT_ORIENTATION,
   sensorFormat: DEFAULT_SENSOR_FORMAT,
+  frameMode: DEFAULT_FRAME_MODE,
   panorama: { ...DEFAULT_PANORAMA_PLAN },
   projection: 'stereographic',
   stageVfovDeg: STAGE_VFOV_DEFAULT_DEG,
   eyeHeightM: TRIPOD_HEIGHT_M,
+  groundNightBrightness: GROUND_NIGHT_BRIGHTNESS_DEFAULT,
+  groundNightContrast: GROUND_NIGHT_CONTRAST_DEFAULT,
+  groundNightTemperature: GROUND_NIGHT_TEMPERATURE_DEFAULT,
   showMilkyWay: true,
   showHalpha: false,
   showAtmosphere: true,
@@ -174,15 +200,42 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
       panorama: { ...DEFAULT_PANORAMA_PLAN },
     }
   }
+  const panorama = normalizePanorama(row.panorama)
+  // Migrate older saves that only had panorama.enabled.
+  const frameMode = normalizeViewfinderFrameMode(
+    row.frameMode ?? (panorama.enabled ? 'pano' : DEFAULT_FRAME_MODE),
+  )
   return {
     focalMm: clampFocalLengthMm(Number(row.focalMm)),
     orientation: normalizeOrientation(row.orientation),
     sensorFormat: normalizeSensorFormat(row.sensorFormat),
-    panorama: normalizePanorama(row.panorama),
+    frameMode,
+    panorama: {
+      ...panorama,
+      enabled: frameMode === 'pano',
+    },
     projection: normalizeStageProjection(row.projection),
     stageVfovDeg: normalizeStageVfov(row.stageVfovDeg),
     eyeHeightM: clampEyeHeightM(
       Number(row.eyeHeightM ?? DEFAULT_IMMERSIVE_SETTINGS.eyeHeightM),
+    ),
+    groundNightBrightness: clampGroundNightBrightness(
+      Number(
+        row.groundNightBrightness ??
+          DEFAULT_IMMERSIVE_SETTINGS.groundNightBrightness,
+      ),
+    ),
+    groundNightContrast: clampGroundNightContrast(
+      Number(
+        row.groundNightContrast ??
+          DEFAULT_IMMERSIVE_SETTINGS.groundNightContrast,
+      ),
+    ),
+    groundNightTemperature: clampGroundNightTemperature(
+      Number(
+        row.groundNightTemperature ??
+          DEFAULT_IMMERSIVE_SETTINGS.groundNightTemperature,
+      ),
     ),
     showMilkyWay: readBoolean(
       row.showMilkyWay,

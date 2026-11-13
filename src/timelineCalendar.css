@@ -234,9 +234,9 @@
 .moon-timeline-dock__time-main {
   padding: 3px 9px;
   border-radius: 999px;
-  border: 1px solid rgba(125, 222, 168, 0.28);
-  background: rgba(125, 222, 168, 0.12);
-  color: #d8fce8;
+  border: 1px solid rgba(var(--ui-accent-rgb), );
+  background: rgba(var(--ui-accent-rgb), );
+  color: var(--ui-action-primary-text);
   font: inherit;
   font-weight: 650;
   cursor: pointer;
@@ -247,11 +247,11 @@
   width: 7.5rem;
   min-height: 1.9rem;
   padding: 2px 7px;
-  border: 1px solid rgba(125, 222, 168, 0.7);
+  border: 1px solid rgba(var(--ui-accent-rgb), );
   border-radius: 999px;
   outline: none;
   background: rgba(16, 29, 23, 0.94);
-  color: #d8fce8;
+  color: var(--ui-action-primary-text);
   font: inherit;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -284,9 +284,9 @@
 }
 
 .moon-timeline-dock__icon-btn:hover:not(:disabled) {
-  border-color: rgba(125, 222, 168, 0.35);
-  color: #d8fce8;
-  background: rgba(125, 222, 168, 0.1);
+  border-color: rgba(var(--ui-accent-rgb), );
+  color: var(--ui-action-primary-text);
+  background: rgba(var(--ui-accent-rgb), );
 }
 
 .moon-timeline-dock__icon-btn:focus-visible {
@@ -299,9 +299,9 @@
 }
 
 .moon-timeline-dock__icon-btn.is-active {
-  border-color: rgba(125, 222, 168, 0.4);
-  background: rgba(125, 222, 168, 0.16);
-  color: #e8fff2;
+  border-color: rgba(var(--ui-accent-rgb), );
+  background: rgba(var(--ui-accent-rgb), );
+  color: var(--ui-action-primary-text);
 }
 
 .moon-timeline-dock__icon-btn:disabled {
@@ -484,8 +484,8 @@
 }
 
 .moon-calendar-popover .moon-cal__cell--selected {
-  border-color: rgba(125, 222, 168, 0.4);
-  background: rgba(125, 222, 168, 0.1);
+  border-color: rgba(var(--ui-accent-rgb), );
+  background: rgba(var(--ui-accent-rgb), );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -523,9 +523,9 @@
 
 .moon-preview-timeline--compact .moon-preview-timeline__chevron:hover,
 .moon-preview-timeline--compact .moon-preview-timeline__zoom-btn:hover:not(:disabled) {
-  border-color: rgba(125, 222, 168, 0.35);
-  background: rgba(125, 222, 168, 0.1);
-  color: #d8fce8;
+  border-color: rgba(var(--ui-accent-rgb), );
+  background: rgba(var(--ui-accent-rgb), );
+  color: var(--ui-action-primary-text);
 }
 
 .moon-timeline-dock--embedded .moon-preview-timeline__zoom {
@@ -539,19 +539,19 @@
 }
 
 .moon-preview-timeline--compact .moon-preview-timeline__caret--top {
-  border-top-color: var(--dock-teal, #7ddea8);
+  border-top-color: var(--dock-teal, var(--ui-accent));
 }
 
 .moon-preview-timeline--compact .moon-preview-timeline__caret--bottom {
-  border-bottom-color: var(--dock-teal, #7ddea8);
+  border-bottom-color: var(--dock-teal, var(--ui-accent));
 }
 
 .moon-timeline-dock .moon-preview-timeline__mark-label {
-  color: rgba(125, 222, 168, 0.85);
+  color: rgba(var(--ui-accent-rgb), );
 }
 
 .moon-timeline-dock .moon-preview-timeline__viewport:focus-visible {
-  outline-color: rgba(125, 222, 168, 0.45);
+  outline-color: rgba(var(--ui-accent-rgb), );
 }
 
 .moon-timeline-dock .moon-preview-timeline__mark--shot {
@@ -559,10 +559,10 @@
 }
 
 .moon-timeline-dock .moon-preview-timeline__mark--shot .moon-preview-timeline__mark-dot {
-  background: #d8fce8;
+  background: var(--ui-action-primary-text);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.35),
-    0 0 8px rgba(125, 222, 168, 0.5);
+    0 0 8px rgba(var(--ui-accent-rgb), );
 }
 
 .moon-timeline-dock .moon-preview-timeline__caret--top {
@@ -860,7 +860,7 @@ button.moon-preview-timeline__mark--button:hover .moon-preview-timeline__mark-do
   background: var(--ui-primary-muted);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.35),
-    0 0 8px rgba(125, 222, 168, 0.55);
+    0 0 8px rgba(var(--ui-accent-rgb), );
 }
 
 .moon-preview-timeline__caret {

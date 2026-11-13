@@ -1,10 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CelestialSearchPanel } from './CelestialSearchPanel'
-import { CelestialTargetCard } from './CelestialTargetCard'
-import {
-  objectHorizontalAt,
-  type CelestialObject,
-} from './celestialObjects'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CelestialObject } from './celestialObjects'
 import { ImmersiveView } from './ImmersiveView'
 import { MapCanvas, type CameraMode, type SpotState } from './MapCanvas'
 import { MySpotsRail } from './MySpotsCard'
@@ -87,19 +82,27 @@ export default function App() {
     }
   }, [spot])
 
-  const [date, setDate] = useState(() =>
-    civilDateFromUtc(Date.now(), DEFAULT_MAP_VIEW.lon),
-  )
+  /** No spot → UTC clock; with spot → civil clock at that lon (same UTC instant). */
+  const timelineLon = spot ? spot.lon : 0
+  const clockIsUtc = spot == null
+
+  const [date, setDate] = useState(() => civilDateFromUtc(Date.now(), 0))
   const [playheadUtcMs, setPlayheadUtcMs] = useState(() => {
-    const start = civilDayStartUtcMs(
-      civilDateFromUtc(Date.now(), DEFAULT_MAP_VIEW.lon),
-      DEFAULT_MAP_VIEW.lon,
-    )
+    const start = civilDayStartUtcMs(civilDateFromUtc(Date.now(), 0), 0)
     return start + 18 * 3600_000
   })
+  const playheadUtcMsRef = useRef(playheadUtcMs)
+  playheadUtcMsRef.current = playheadUtcMs
+  const prevTimelineLonRef = useRef(timelineLon)
+
+  // Spot (or clear): keep the UTC instant, only refresh the civil date label.
+  useEffect(() => {
+    if (prevTimelineLonRef.current === timelineLon) return
+    prevTimelineLonRef.current = timelineLon
+    setDate(civilDateFromUtc(playheadUtcMsRef.current, timelineLon))
+  }, [timelineLon])
   const [selectedCelestial, setSelectedCelestial] =
     useState<CelestialObject | null>(null)
-  const [celestialSearchOpen, setCelestialSearchOpen] = useState(false)
   const [immersiveLook, setImmersiveLook] = useState<{
     bearingDeg: number
     pitchDeg: number
@@ -153,10 +156,6 @@ export default function App() {
   }, [threeDimensional, basemapMode])
 
   useEffect(() => {
-    if (addressSearchOpen) setCelestialSearchOpen(false)
-  }, [addressSearchOpen])
-
-  useEffect(() => {
     const root = document.documentElement
     root.style.setProperty(
       '--map-rail-width',
@@ -174,15 +173,15 @@ export default function App() {
 
   const onDateChange = useCallback(
     (nextDate: string) => {
-      const prevStart = civilDayStartUtcMs(date, observer.lon)
+      const prevStart = civilDayStartUtcMs(date, timelineLon)
       const timeOfDay = playheadUtcMs - prevStart
       setDate(nextDate)
-      const nextStart = civilDayStartUtcMs(nextDate, observer.lon)
+      const nextStart = civilDayStartUtcMs(nextDate, timelineLon)
       setPlayheadUtcMs(
         nextStart + Math.min(Math.max(timeOfDay, 0), 24 * 3600_000 - 1),
       )
     },
-    [date, observer.lon, playheadUtcMs],
+    [date, timelineLon, playheadUtcMs],
   )
 
   const selectPersonalSpot = useCallback((saved: PersonalSpot) => {
@@ -368,19 +367,8 @@ export default function App() {
       {/* Keep the map mounted across immersive sessions — remounting it was
           rewriting spot.heightM via DEM and forcing a full Three.js rebuild. */}
       <div
-        className="map-host"
-        hidden={immersive}
+        className={immersive ? 'map-host is-covered' : 'map-host'}
         aria-hidden={immersive}
-        style={
-          immersive
-            ? {
-                position: 'fixed',
-                inset: 0,
-                visibility: 'hidden',
-                pointerEvents: 'none',
-              }
-            : undefined
-        }
       >
         <MapCanvas
           mode={mode}
@@ -477,91 +465,14 @@ export default function App() {
             <WeatherCard
               date={date}
               playheadUtcMs={playheadUtcMs}
-              location={{ lat: observer.lat, lon: observer.lon }}
+              location={
+                spot ? { lat: spot.lat, lon: spot.lon } : null
+              }
               onHourSelect={(utcMs, localDate) => {
                 if (localDate !== date) onDateChange(localDate)
                 setPlayheadUtcMs(utcMs)
               }}
             />
-            <div className="celestial-map-dock">
-              <button
-                type="button"
-                className={
-                  celestialSearchOpen || selectedCelestial
-                    ? 'celestial-map-dock__toggle is-active'
-                    : 'celestial-map-dock__toggle'
-                }
-                data-celestial-search-toggle=""
-                aria-pressed={celestialSearchOpen}
-                aria-expanded={celestialSearchOpen}
-                aria-label="Rechercher un objet céleste"
-                title="Rechercher un objet céleste"
-                onClick={() => {
-                  setAddressSearchOpen(false)
-                  setCelestialSearchOpen((v) => !v)
-                }}
-              >
-                <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
-                  <circle
-                    cx="11"
-                    cy="11"
-                    r="6.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                  />
-                  <path
-                    d="m16 16 4.5 4.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M11 8.2v5.6M8.2 11h5.6"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span>Ciel</span>
-              </button>
-              <CelestialSearchPanel
-                open={celestialSearchOpen}
-                onOpenChange={setCelestialSearchOpen}
-                selectedId={selectedCelestial?.id ?? null}
-                onSelect={setSelectedCelestial}
-              />
-              {selectedCelestial ? (
-                <CelestialTargetCard
-                  object={selectedCelestial}
-                  date={date}
-                  playheadUtcMs={playheadUtcMs}
-                  lat={observer.lat}
-                  lon={observer.lon}
-                  elevationM={observer.elevationM}
-                  canCenter={spot != null}
-                  onClose={() => setSelectedCelestial(null)}
-                  onCenter={() => {
-                    if (!spot || !selectedCelestial) return
-                    const pos = objectHorizontalAt(
-                      selectedCelestial,
-                      spot.lat,
-                      spot.lon,
-                      spot.heightM,
-                      playheadUtcMs,
-                    )
-                    if (!pos || Math.abs(pos.altitudeDeg) > 85) return
-                    setImmersiveLook({
-                      bearingDeg: ((pos.azimuthDeg % 360) + 360) % 360,
-                      pitchDeg: Math.max(-85, Math.min(85, pos.altitudeDeg)),
-                    })
-                    setMode('ground')
-                  }}
-                />
-              ) : null}
-            </div>
           </div>
         </div>
       ) : null}
@@ -624,10 +535,11 @@ export default function App() {
       {showTimeline ? (
         <TimelineDock
           lat={observer.lat}
-          lon={observer.lon}
+          lon={timelineLon}
           elevationM={observer.elevationM}
           date={date}
           playheadUtcMs={playheadUtcMs}
+          clockIsUtc={clockIsUtc}
           onDateChange={onDateChange}
           onPlayheadChange={setPlayheadUtcMs}
         />

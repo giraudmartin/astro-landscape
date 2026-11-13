@@ -2,6 +2,7 @@ import {
   viewfinderAspectRatio,
   viewfinderFrameSizeForProjection,
   viewfinderFrameSizeInStage,
+  type ViewfinderFrameMode,
   type ViewfinderOrientation,
 } from './lensFov'
 import { getStageProjection, stelProjectEye } from './stelProjector'
@@ -12,6 +13,9 @@ import {
   type PanoramaPlan,
   type PanoramaProjectionMode,
 } from './panorama'
+
+/** PS primary mint via CSS tokens — keep SVG strokes on the same green as UI chrome. */
+const accentRgba = (alpha: number) => `rgba(var(--ui-accent-rgb), ${alpha})`
 
 export type FrameWorldLock = {
   locked: boolean
@@ -27,6 +31,8 @@ type PhotoFrameOverlayProps = {
   stageW: number
   stageH: number
   orientation: ViewfinderOrientation
+  /** Which overlay to draw. `off` hides the whole viewfinder chrome. */
+  frameMode?: ViewfinderFrameMode
   label: string
   /** Three.js stage vertical FOV (deg). When set with opticalVfovDeg, frame scales with focal. */
   stageVfovDeg?: number
@@ -775,6 +781,7 @@ export function PhotoFrameOverlay({
   stageW,
   stageH,
   orientation,
+  frameMode = 'dslr',
   label,
   stageVfovDeg,
   opticalVfovDeg,
@@ -785,6 +792,7 @@ export function PhotoFrameOverlay({
   onRecenterWorldLock,
 }: PhotoFrameOverlayProps) {
   if (stageW < 2 || stageH < 2) return null
+  if (frameMode === 'off') return null
 
   const aspect = viewfinderAspectRatio(orientation)
   const derivedHfov =
@@ -817,10 +825,7 @@ export function PhotoFrameOverlay({
     opticalVfovDeg != null &&
     derivedHfov != null
 
-  const panoOn =
-    panorama != null &&
-    panorama.enabled &&
-    (panorama.columns > 1 || panorama.rows > 1)
+  const panoOn = frameMode === 'pano' && panorama != null
 
   // Unlocked: grid follows look. Locked: pinned on landscape.
   const framingYawDeg = locked
@@ -882,15 +887,9 @@ export function PhotoFrameOverlay({
   const showLockedFrame = !panoOn && lockedPoly != null
   const showProjectedPano = panoOn && canProjectAngles
   const showFollowFrame = !panoOn && !locked
-  // Wide stereographic stage ≫ optical frame: NEVER dump a 50% black veil
-  // over the landscape — that looked like “qualité cassée / devient noir”
-  // on dezoom. Keep the green outline only.
-  const wideLandscapeStage =
-    stageVfovDeg != null &&
-    opticalVfovDeg != null &&
-    stageVfovDeg > opticalVfovDeg * 1.2
-  const showDim =
-    (showProjectedPano || locked || showFollowFrame) && !wideLandscapeStage
+  // Soft outside matte for Photo / Pano — keep it very light so a wide stage
+  // (stage FOV ≫ optical) still reads as landscape, not a black letterbox.
+  const showDim = showProjectedPano || locked || showFollowFrame
 
   const left = (stageW - frameW) / 2
   const top = (stageH - frameH) / 2
@@ -990,7 +989,7 @@ export function PhotoFrameOverlay({
           <rect
             width={stageW}
             height={stageH}
-            fill="rgba(4, 8, 14, 0.48)"
+            fill="rgba(0, 0, 0, 0.28)"
             mask="url(#photo-frame-mask)"
           />
         ) : null}
@@ -1000,8 +999,8 @@ export function PhotoFrameOverlay({
               <polygon
                 key={`ov-${band.key}`}
                 points={pointsToSvg(band.polygon)}
-                fill="rgba(125, 222, 168, 0.18)"
-                stroke="rgba(125, 222, 168, 0.35)"
+                fill={accentRgba(0.18)}
+                stroke={accentRgba(0.35)}
                 strokeWidth={0.8}
               />
             ))
@@ -1032,7 +1031,7 @@ export function PhotoFrameOverlay({
                         cy={badge!.y}
                         r={badgeR}
                         fill="rgba(8, 12, 20, 0.82)"
-                        stroke="rgba(125, 222, 168, 0.8)"
+                        stroke={accentRgba(0.8)}
                         strokeWidth={0.9}
                       />
                       <text
@@ -1040,7 +1039,7 @@ export function PhotoFrameOverlay({
                         y={badge!.y + 0.4}
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        fill="#e8fff2"
+                        fill="var(--ui-action-primary-text)"
                         fontSize={Math.max(7, badgeR * 1.05)}
                         fontWeight={650}
                         fontFamily="system-ui, sans-serif"
@@ -1059,7 +1058,7 @@ export function PhotoFrameOverlay({
             <polygon
               points={quadPoints}
               fill="none"
-              stroke="rgba(125, 222, 168, 0.98)"
+              stroke={accentRgba(0.98)}
               strokeWidth={2.5}
               strokeLinejoin="round"
             />
@@ -1070,7 +1069,7 @@ export function PhotoFrameOverlay({
                   y1={lockedProj.midTop!.y}
                   x2={lockedProj.midBottom!.x}
                   y2={lockedProj.midBottom!.y}
-                  stroke="rgba(125, 222, 168, 0.22)"
+                  stroke={accentRgba(0.22)}
                   strokeWidth={1}
                 />
                 <line
@@ -1078,7 +1077,7 @@ export function PhotoFrameOverlay({
                   y1={lockedProj.midLeft!.y}
                   x2={lockedProj.midRight!.x}
                   y2={lockedProj.midRight!.y}
-                  stroke="rgba(125, 222, 168, 0.22)"
+                  stroke={accentRgba(0.22)}
                   strokeWidth={1}
                 />
               </>
@@ -1094,7 +1093,7 @@ export function PhotoFrameOverlay({
               width={frameW}
               height={frameH}
               fill="none"
-              stroke="rgba(125, 222, 168, 0.98)"
+              stroke={accentRgba(0.98)}
               strokeWidth={2.5}
               rx={2}
             />
@@ -1103,7 +1102,7 @@ export function PhotoFrameOverlay({
               y1={top}
               x2={left + frameW / 2}
               y2={top + frameH}
-              stroke="rgba(125, 222, 168, 0.22)"
+              stroke={accentRgba(0.22)}
               strokeWidth={1}
             />
             <line
@@ -1111,7 +1110,7 @@ export function PhotoFrameOverlay({
               y1={top + frameH / 2}
               x2={left + frameW}
               y2={top + frameH / 2}
-              stroke="rgba(125, 222, 168, 0.22)"
+              stroke={accentRgba(0.22)}
               strokeWidth={1}
             />
           </>

@@ -29,26 +29,31 @@ export type StageProjection =
 export const STAGE_PROJECTIONS: readonly {
   id: StageProjection
   label: string
+  shortLabel: string
   title: string
 }[] = [
   {
     id: 'stereographic',
     label: 'Stéréographique',
+    shortLabel: 'Stéréo',
     title: 'Champ large',
   },
   {
     id: 'equirectangular',
     label: 'Équirectangulaire',
+    shortLabel: 'Équi',
     title: 'Azimut et hauteur, horizon droit',
   },
   {
     id: 'rectilinear',
     label: 'Rectiligne',
+    shortLabel: 'Recti',
     title: "Ce que voit l'objectif. Les bords s'étirent, comme sur la photo",
   },
   {
     id: 'orthographic',
     label: 'Orthographique',
+    shortLabel: 'Ortho',
     title: "Tout le ciel au-dessus de l'horizon dans un disque",
   },
 ]

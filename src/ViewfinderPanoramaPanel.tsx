@@ -14,25 +14,53 @@ import {
   type PanoramaPlan,
   type PanoramaProjectionMode,
 } from './panorama'
+import type { ViewfinderOrientation } from './lensFov'
+import {
+  CameraBodyIcon,
+  ChevronDownIcon,
+  PanoramaGridIcon,
+} from './psIcons'
 
 type ViewfinderPanoramaPanelProps = {
   plan: PanoramaPlan
   opticalHFovDeg: number
   opticalVFovDeg: number
   onChange: (next: PanoramaPlan) => void
+  /** Controlled open state (capsule / parent owns the trigger). */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Hide the built-in summary toggle — parent provides the trigger. */
+  hideToggle?: boolean
+  /** Shown in the prototype pill next to the shot count. */
+  focalMm?: number
+  orientation?: ViewfinderOrientation
+  /** Opens camera settings (prototype « Modifier l’appareil photo »). */
+  onEditCamera?: () => void
 }
 
 /**
- * Collapsible panorama planner — columns × rows + overlap %, same chrome as
- * the camera panel.
+ * Panorama planner — capsule popup matches the validated prototype
+ * (« Panorama »), dock toggle kept for non-capsule hosts.
  */
 export function ViewfinderPanoramaPanel({
   plan,
   opticalHFovDeg,
   opticalVFovDeg,
   onChange,
+  open: openProp,
+  onOpenChange,
+  hideToggle = false,
+  focalMm,
+  orientation = 'landscape',
+  onEditCamera,
 }: ViewfinderPanoramaPanelProps) {
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = openProp ?? uncontrolledOpen
+  const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next
+    onOpenChange?.(value)
+    if (openProp === undefined) setUncontrolledOpen(value)
+  }
   const rootRef = useRef<HTMLDivElement | null>(null)
   const panelId = useId()
 
@@ -66,22 +94,29 @@ export function ViewfinderPanoramaPanel({
 
   useEffect(() => {
     if (!open) return
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      if (!target) return
-      if (rootRef.current?.contains(target)) return
-      setOpen(false)
-    }
+    // Capsule owns outside-click when hideToggle — avoid fighting the trigger.
+    const onPointerDown = hideToggle
+      ? null
+      : (event: PointerEvent) => {
+          const target = event.target as Node | null
+          if (!target) return
+          if (rootRef.current?.contains(target)) return
+          setOpen(false)
+        }
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
-    window.addEventListener('pointerdown', onPointerDown, true)
+    if (onPointerDown) {
+      window.addEventListener('pointerdown', onPointerDown, true)
+    }
     window.addEventListener('keydown', onKey)
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown, true)
+      if (onPointerDown) {
+        window.removeEventListener('pointerdown', onPointerDown, true)
+      }
       window.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, hideToggle])
 
   const patch = (partial: Partial<PanoramaPlan>) => {
     const next = { ...plan, ...partial }
@@ -107,220 +142,258 @@ export function ViewfinderPanoramaPanel({
     ? `${columns}×${rows} · ${plan.overlapPercent}%`
     : 'Panorama off'
 
+  if (hideToggle && !open) return null
+
+  const cameraPill =
+    focalMm != null
+      ? `${Math.round(focalMm)} mm · ${
+          orientation === 'landscape' ? 'Paysage' : 'Portrait'
+        }`
+      : null
+
+  const popupBody = (
+    <div
+      id={panelId}
+      className="vf-camera-pop vf-pano-pop"
+      role="dialog"
+      aria-label="Panorama"
+    >
+      <header className="vf-camera-pop__head">
+        <h2 className="vf-camera-pop__title">Panorama</h2>
+        <button
+          type="button"
+          className="vf-camera-pop__close"
+          aria-label="Fermer les réglages"
+          onClick={() => setOpen(false)}
+        >
+          ✕
+        </button>
+      </header>
+
+      <div className="vf-pano-pop__summary">
+        <span className="vf-camera-pop__big">
+          {shots}
+          <span className="vf-camera-pop__unit"> vues</span>
+        </span>
+        {cameraPill ? (
+          <span className="vf-pano-pop__pill">{cameraPill}</span>
+        ) : (
+          <span className="vf-camera-pop__hint vf-pano-pop__cover">
+            ≈ {coverH.toFixed(0)}° × {coverV.toFixed(0)}° ·{' '}
+            {plan.overlapPercent}%
+          </span>
+        )}
+      </div>
+
+      <div className="vf-camera-pop__twocol">
+        <div className="vf-camera-pop__field">
+          <span className="vf-camera-pop__label">Colonnes</span>
+          <div className="moon-preview-stepper">
+            <button
+              type="button"
+              aria-label="Moins de colonnes"
+              disabled={columns <= PANORAMA_COUNT_MIN}
+              onClick={() =>
+                patch({
+                  columns: columns - 1,
+                  enabled: true,
+                })
+              }
+            >
+              −
+            </button>
+            <output>{columns}</output>
+            <button
+              type="button"
+              aria-label="Plus de colonnes"
+              disabled={columns >= maxColumns}
+              title={
+                columns >= maxColumns
+                  ? 'Couverture horizontale limitée à 360°'
+                  : undefined
+              }
+              onClick={() =>
+                patch({
+                  columns: columns + 1,
+                  enabled: true,
+                })
+              }
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        <div className="vf-camera-pop__field">
+          <span className="vf-camera-pop__label">Lignes</span>
+          <div className="moon-preview-stepper">
+            <button
+              type="button"
+              aria-label="Moins de lignes"
+              disabled={rows <= PANORAMA_COUNT_MIN}
+              onClick={() =>
+                patch({
+                  rows: rows - 1,
+                  enabled: true,
+                })
+              }
+            >
+              −
+            </button>
+            <output>{rows}</output>
+            <button
+              type="button"
+              aria-label="Plus de lignes"
+              disabled={rows >= maxRows}
+              title={
+                rows >= maxRows
+                  ? 'Couverture verticale limitée à 180°'
+                  : undefined
+              }
+              onClick={() =>
+                patch({
+                  rows: rows + 1,
+                  enabled: true,
+                })
+              }
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="vf-camera-pop__field">
+        <div className="vf-pano-pop__overlap-head">
+          <span className="vf-camera-pop__label">Recouvrement</span>
+          <b className="vf-pano-pop__overlap-value">{plan.overlapPercent}%</b>
+        </div>
+        <input
+          className="vf-pano-pop__range"
+          type="range"
+          min={PANORAMA_OVERLAP_MIN}
+          max={PANORAMA_OVERLAP_MAX}
+          step={1}
+          value={plan.overlapPercent}
+          aria-label="Recouvrement entre vues"
+          onChange={(event) =>
+            patch({
+              overlapPercent: Number(event.target.value),
+              enabled: true,
+            })
+          }
+        />
+      </div>
+
+      <div className="vf-camera-pop__field">
+        <label className="vf-camera-pop__label" htmlFor={`${panelId}-assemblage`}>
+          Assemblage
+        </label>
+        <select
+          id={`${panelId}-assemblage`}
+          className="vf-pano-select"
+          aria-label="Mode d’assemblage panorama"
+          value={plan.projectionMode}
+          onChange={(event) =>
+            patch({
+              projectionMode: event.target.value as PanoramaProjectionMode,
+              enabled: true,
+            })
+          }
+        >
+          {PANORAMA_PROJECTION_MODES.map((mode) => (
+            <option key={mode} value={mode}>
+              {PANORAMA_PROJECTION_LABELS[mode]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="vf-camera-pop__field">
+        <span className="vf-camera-pop__label">Affichage</span>
+        <div className="vf-pano-viz">
+          <button
+            type="button"
+            className={
+              plan.showFrames ? 'vf-pano-switch is-active' : 'vf-pano-switch'
+            }
+            aria-pressed={plan.showFrames}
+            title="Afficher ou masquer les cadres des tuiles"
+            onClick={() => patch({ showFrames: !plan.showFrames })}
+          >
+            Cadres
+          </button>
+          <button
+            type="button"
+            className={
+              plan.showOverlap ? 'vf-pano-switch is-active' : 'vf-pano-switch'
+            }
+            aria-pressed={plan.showOverlap}
+            title="Afficher ou masquer les zones de recouvrement"
+            onClick={() => patch({ showOverlap: !plan.showOverlap })}
+          >
+            Overlap
+          </button>
+        </div>
+      </div>
+
+      {onEditCamera ? (
+        <button
+          type="button"
+          className="vf-pano-pop__camera"
+          onClick={onEditCamera}
+        >
+          <CameraBodyIcon size={16} />
+          Modifier l’appareil photo
+        </button>
+      ) : null}
+
+      <p className="vf-camera-pop__hint">
+        Cadres et overlap se contrôlent ici. Le mode Pano de la capsule active
+        le plan sans interrupteur ON/OFF.
+      </p>
+    </div>
+  )
+
   return (
     <div
       ref={rootRef}
-      className={open ? 'vf-camera-panel is-open' : 'vf-camera-panel'}
+      className={
+        open
+          ? hideToggle
+            ? 'vf-camera-panel vf-camera-panel--pop is-open'
+            : 'vf-camera-panel immersive-dock__item is-open'
+          : hideToggle
+            ? 'vf-camera-panel vf-camera-panel--pop'
+            : 'vf-camera-panel immersive-dock__item'
+      }
     >
-      <button
-        type="button"
-        className="vf-camera-panel__toggle"
-        aria-expanded={open}
-        aria-controls={panelId}
-        title="Panorama"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className="vf-camera-panel__toggle-main">{summary}</span>
-        <span className="vf-camera-panel__toggle-meta">Pano</span>
-        <svg
-          className="vf-camera-panel__chevron"
-          viewBox="0 0 16 16"
-          width="12"
-          height="12"
-          aria-hidden="true"
+      {hideToggle ? null : (
+        <button
+          type="button"
+          className="vf-camera-panel__toggle immersive-dock__row"
+          aria-expanded={open}
+          aria-controls={panelId}
+          title="Panorama"
+          onClick={() => setOpen((value) => !value)}
         >
-          <path
-            d="M4 6l4 4 4-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+          <span className="immersive-dock__row-icon" aria-hidden="true">
+            <PanoramaGridIcon size={14} />
+          </span>
+          <span className="vf-camera-panel__toggle-main">{summary}</span>
+          <span className="vf-camera-panel__toggle-meta">Pano</span>
+          <ChevronDownIcon className="vf-camera-panel__chevron" size={12} />
+        </button>
+      )}
 
       {open ? (
-        <div id={panelId} className="vf-camera-panel__body">
-          <section className="moon-preview-focal-dock" aria-label="Panorama">
-            <div className="moon-preview-focal-dock__info">
-              <div className="moon-preview-focal-dock__head">
-                <span className="moon-preview-quick-label">Panorama</span>
-                <button
-                  type="button"
-                  className={
-                    plan.enabled
-                      ? 'vf-pano-switch is-active'
-                      : 'vf-pano-switch'
-                  }
-                  aria-pressed={plan.enabled}
-                  onClick={() => patch({ enabled: !plan.enabled })}
-                >
-                  {plan.enabled ? 'On' : 'Off'}
-                </button>
-              </div>
-              <p className="moon-preview-focal-dock__value">
-                <strong>
-                  {shots}
-                  <span> vues</span>
-                </strong>
-                <span className="moon-preview-focal-dock__hint">
-                  ≈ {coverH.toFixed(0)}° × {coverV.toFixed(0)}° · overlap{' '}
-                  {plan.overlapPercent}%
-                </span>
-              </p>
-            </div>
-
-            <div className="vf-pano-controls">
-              <label className="vf-pano-field">
-                <span className="moon-preview-quick-label">Colonnes</span>
-                <div className="moon-preview-stepper">
-                  <button
-                    type="button"
-                    aria-label="Moins de colonnes"
-                    disabled={columns <= PANORAMA_COUNT_MIN}
-                    onClick={() =>
-                      patch({
-                        columns: columns - 1,
-                        enabled: true,
-                      })
-                    }
-                  >
-                    −
-                  </button>
-                  <output>{columns}</output>
-                  <button
-                    type="button"
-                    aria-label="Plus de colonnes"
-                    disabled={columns >= maxColumns}
-                    title={
-                      columns >= maxColumns
-                        ? 'Couverture horizontale limitée à 360°'
-                        : undefined
-                    }
-                    onClick={() =>
-                      patch({
-                        columns: columns + 1,
-                        enabled: true,
-                      })
-                    }
-                  >
-                    +
-                  </button>
-                </div>
-              </label>
-
-              <label className="vf-pano-field">
-                <span className="moon-preview-quick-label">Lignes</span>
-                <div className="moon-preview-stepper">
-                  <button
-                    type="button"
-                    aria-label="Moins de lignes"
-                    disabled={rows <= PANORAMA_COUNT_MIN}
-                    onClick={() =>
-                      patch({
-                        rows: rows - 1,
-                        enabled: true,
-                      })
-                    }
-                  >
-                    −
-                  </button>
-                  <output>{rows}</output>
-                  <button
-                    type="button"
-                    aria-label="Plus de lignes"
-                    disabled={rows >= maxRows}
-                    title={
-                      rows >= maxRows
-                        ? 'Couverture verticale limitée à 180°'
-                        : undefined
-                    }
-                    onClick={() =>
-                      patch({
-                        rows: rows + 1,
-                        enabled: true,
-                      })
-                    }
-                  >
-                    +
-                  </button>
-                </div>
-              </label>
-
-              <label className="vf-pano-field vf-pano-field--overlap">
-                <span className="moon-preview-quick-label">
-                  Overlap {plan.overlapPercent}%
-                </span>
-                <input
-                  type="range"
-                  min={PANORAMA_OVERLAP_MIN}
-                  max={PANORAMA_OVERLAP_MAX}
-                  step={1}
-                  value={plan.overlapPercent}
-                  aria-label="Recouvrement entre vues"
-                  onChange={(event) =>
-                    patch({
-                      overlapPercent: Number(event.target.value),
-                      enabled: true,
-                    })
-                  }
-                />
-              </label>
-
-              <label className="vf-pano-field vf-pano-field--overlap">
-                <span className="moon-preview-quick-label">Projection</span>
-                <select
-                  className="vf-pano-select"
-                  aria-label="Mode de projection panorama"
-                  value={plan.projectionMode}
-                  onChange={(event) =>
-                    patch({
-                      projectionMode: event.target
-                        .value as PanoramaProjectionMode,
-                      enabled: true,
-                    })
-                  }
-                >
-                  {PANORAMA_PROJECTION_MODES.map((mode) => (
-                    <option key={mode} value={mode}>
-                      {PANORAMA_PROJECTION_LABELS[mode]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {plan.enabled ? (
-              <div className="vf-pano-viz" aria-label="Affichage panorama">
-                <button
-                  type="button"
-                  className={
-                    plan.showFrames
-                      ? 'vf-pano-switch is-active'
-                      : 'vf-pano-switch'
-                  }
-                  aria-pressed={plan.showFrames}
-                  onClick={() => patch({ showFrames: !plan.showFrames })}
-                >
-                  Cadrage
-                </button>
-                <button
-                  type="button"
-                  className={
-                    plan.showOverlap
-                      ? 'vf-pano-switch is-active'
-                      : 'vf-pano-switch'
-                  }
-                  aria-pressed={plan.showOverlap}
-                  onClick={() => patch({ showOverlap: !plan.showOverlap })}
-                >
-                  Overlap
-                </button>
-              </div>
-            ) : null}
-          </section>
-        </div>
+        hideToggle ? (
+          popupBody
+        ) : (
+          <div id={panelId} className="vf-camera-panel__body">
+            {popupBody}
+          </div>
+        )
       ) : null}
     </div>
   )

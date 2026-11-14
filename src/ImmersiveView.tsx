@@ -85,6 +85,7 @@ import {
 } from './psIcons'
 import {
   createAstroSkyDome,
+  eclipticNorthPoleThreeLocal,
   sunDirectionFromAltAz,
   updateAstroSkyDome,
 } from './skyDome'
@@ -98,10 +99,12 @@ import { createStereoCubemapPass } from './stereoCubemapPass'
 import {
   clampAirglowAmount,
   clampAirglowHue,
+  clampAirglowWaves,
   clampAtmosphereAmount,
   clampGroundNightBrightness,
   clampGroundNightContrast,
   clampGroundNightTemperature,
+  clampZodiacalAmount,
   groundAlbedoFromSky,
   hexToRgb01,
   skyPaletteFromSunAltitude,
@@ -141,6 +144,8 @@ type ImmersiveViewProps = {
   /** Drive the shared timeline playhead (timelapse preview, etc.). */
   onSkyUtcChange?: (utcMs: number) => void
   date: string
+  /** Debug: jump the shared calendar/playhead to a civil date (YYYY-MM-DD). */
+  onDateChange?: (date: string) => void
   selectedCelestial: CelestialObject | null
   onSelectCelestial: (object: CelestialObject | null) => void
   onExit: () => void
@@ -176,6 +181,7 @@ export function ImmersiveView({
   skyUtcMs,
   onSkyUtcChange,
   date,
+  onDateChange,
   selectedCelestial,
   onSelectCelestial,
   onExit,
@@ -330,6 +336,12 @@ export function ImmersiveView({
   const [airglowHue, setAirglowHue] = useState(() =>
     clampAirglowHue(savedImmersive.airglowHue),
   )
+  const [airglowWaves, setAirglowWaves] = useState(() =>
+    clampAirglowWaves(savedImmersive.airglowWaves),
+  )
+  const [zodiacalAmount, setZodiacalAmount] = useState(() =>
+    clampZodiacalAmount(savedImmersive.zodiacalAmount),
+  )
   const [showConstellations, setShowConstellations] = useState(
     savedImmersive.showConstellations,
   )
@@ -346,6 +358,8 @@ export function ImmersiveView({
     atmosphereAmount: clampAtmosphereAmount(savedImmersive.atmosphereAmount),
     airglowAmount: clampAirglowAmount(savedImmersive.airglowAmount),
     airglowHue: clampAirglowHue(savedImmersive.airglowHue),
+    airglowWaves: clampAirglowWaves(savedImmersive.airglowWaves),
+    zodiacalAmount: clampZodiacalAmount(savedImmersive.zodiacalAmount),
     showConstellations: savedImmersive.showConstellations,
     showCelestialGrid: savedImmersive.showCelestialGrid,
     showAzimuthGrid: savedImmersive.showAzimuthGrid,
@@ -356,6 +370,8 @@ export function ImmersiveView({
     atmosphereAmount,
     airglowAmount,
     airglowHue,
+    airglowWaves,
+    zodiacalAmount,
     showConstellations,
     showCelestialGrid,
     showAzimuthGrid,
@@ -392,6 +408,8 @@ export function ImmersiveView({
         atmosphereAmount,
         airglowAmount,
         airglowHue,
+        airglowWaves,
+        zodiacalAmount,
         showConstellations,
         showCelestialGrid,
         showAzimuthGrid,
@@ -420,6 +438,8 @@ export function ImmersiveView({
     atmosphereAmount,
     airglowAmount,
     airglowHue,
+    airglowWaves,
+    zodiacalAmount,
     showConstellations,
     showCelestialGrid,
     showAzimuthGrid,
@@ -565,6 +585,7 @@ export function ImmersiveView({
 
     const sky = createAstroSkyDome()
     scene.add(sky.mesh)
+    const eclipticPoleLocal = new THREE.Vector3()
 
     const nightSky = createNightSky({ labelHost: host })
     nightSkyApiRef.current = nightSky
@@ -687,6 +708,19 @@ export function ImmersiveView({
         skyTogglesRef.current.airglowAmount,
       )
       const airglowHueLive = clampAirglowHue(skyTogglesRef.current.airglowHue)
+      const airglowWavesLive = clampAirglowWaves(
+        skyTogglesRef.current.airglowWaves,
+      )
+      const zodiacalAmountLive = clampZodiacalAmount(
+        skyTogglesRef.current.zodiacalAmount,
+      )
+      eclipticNorthPoleThreeLocal(
+        new Date(utcMs),
+        lat,
+        lon,
+        eyeGroundElevMsl + eyeHeightRef.current,
+        eclipticPoleLocal,
+      )
 
       updateAstroSkyDome(sky, {
         sunAltitudeDeg: alt,
@@ -695,6 +729,9 @@ export function ImmersiveView({
         atmosphereAmount: atmosphereAmountLive,
         airglowAmount: airglowAmountLive,
         airglowHue: airglowHueLive,
+        airglowWaves: airglowWavesLive,
+        zodiacalAmount: zodiacalAmountLive,
+        eclipticPole: eclipticPoleLocal,
       })
 
       sunLight.position.copy(dir).multiplyScalar(10_000)
@@ -1205,6 +1242,8 @@ export function ImmersiveView({
       }
 
       sky.mesh.position.copy(camera.position)
+      // Drift airglow gravity-wave phase each frame (slow band advection).
+      sky.material.uniforms.uAirglowTime.value = performance.now() * 0.001
       adaptTerrain?.(camera.position.x, camera.position.y, camera.position.z)
       const skyToggles = skyTogglesRef.current
       nightSky.update({
@@ -1327,6 +1366,8 @@ export function ImmersiveView({
     atmosphereAmount,
     airglowAmount,
     airglowHue,
+    airglowWaves,
+    zodiacalAmount,
     groundNightBrightness,
     groundNightContrast,
     groundNightTemperature,
@@ -2047,6 +2088,8 @@ export function ImmersiveView({
           atmosphereAmount={atmosphereAmount}
           airglowAmount={airglowAmount}
           airglowHue={airglowHue}
+          airglowWaves={airglowWaves}
+          zodiacalAmount={zodiacalAmount}
           starMagDepth={starMagDepth}
           starZoomSpan={starZoomSpan}
           starBrightness={starBrightness}
@@ -2054,6 +2097,8 @@ export function ImmersiveView({
           onAtmosphereAmountChange={setAtmosphereAmount}
           onAirglowAmountChange={setAirglowAmount}
           onAirglowHueChange={setAirglowHue}
+          onAirglowWavesChange={setAirglowWaves}
+          onZodiacalAmountChange={setZodiacalAmount}
           onStarMagDepthChange={setStarMagDepth}
           onStarZoomSpanChange={setStarZoomSpan}
           onStarBrightnessChange={setStarBrightness}
@@ -2063,6 +2108,17 @@ export function ImmersiveView({
           projection={projection}
           onProjectionChange={setProjection}
         />
+        {onDateChange ? (
+          <button
+            type="button"
+            className="hud-btn immersive__exit"
+            style={{ width: 'auto', minWidth: 40, padding: '0 10px', fontSize: '0.7rem' }}
+            onClick={() => onDateChange('2026-06-12')}
+            title="Debug: calendrier → 12 juin 2026"
+          >
+            12/06/26
+          </button>
+        ) : null}
         <button
           type="button"
           className="hud-btn immersive__exit"

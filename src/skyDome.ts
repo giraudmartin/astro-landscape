@@ -1,9 +1,17 @@
 import * as THREE from 'three'
+import {
+  Observer,
+  RotateVector,
+  Rotation_ECL_HOR,
+  Vector,
+} from 'astronomy-engine'
 import { EARTH_RADIUS_M } from './globeConstants'
 import {
   airglowColorFromHue,
   clampAirglowAmount,
   clampAirglowHue,
+  clampAirglowWaves,
+  clampZodiacalAmount,
   skyPaletteFromSunAltitude,
 } from './skyLighting'
 import {
@@ -53,7 +61,12 @@ export function createAstroSkyDome(): AstroSkyDome {
       uAtmosphere: { value: 1 },
       uAirglow: { value: 0 },
       uAirglowHue: { value: 0 },
-      uAirglowColor: { value: new THREE.Vector3(0.32, 1.0, 0.42) },
+      uAirglowWaves: { value: 0.55 },
+      uAirglowColor: { value: new THREE.Vector3(0.22, 1.15, 0.4) },
+      uAirglowTime: { value: 0 },
+      uZodiacal: { value: 0 },
+      // North ecliptic pole in local ENU (east, up, south).
+      uEclipticPole: { value: new THREE.Vector3(0, 0.4, 0.9) },
       uGroundColor: {
         value: new THREE.Vector3(GROUND_FILL.r, GROUND_FILL.g, GROUND_FILL.b),
       },
@@ -93,7 +106,11 @@ export function createAstroSkyDome(): AstroSkyDome {
       uniform float uAtmosphere;
       uniform float uAirglow;
       uniform float uAirglowHue;
+      uniform float uAirglowWaves;
       uniform vec3 uAirglowColor;
+      uniform float uAirglowTime;
+      uniform float uZodiacal;
+      uniform vec3 uEclipticPole;
       uniform vec3 uGroundColor;
       uniform vec3 uSeaColor;
       varying vec3 vDir;
@@ -261,33 +278,144 @@ export function createAstroSkyDome(): AstroSkyDome {
         distant = mix(distant, distant * vec3(0.22, 0.24, 0.32), nightDim);
         float below = smoothstep(horSin + 0.004, horSin - 0.03, v.y);
 
-        // OI airglow: additive display-space layer (independent of Rayleigh amount).
-        // Green ~95 km, red ~250 km — van Rhijn path through a thin shell.
+        // OI airglow.
+        // Dégradé = horizon→zenith falloff. Vagues = seamless sheets on the sphere
+        // (no atan seam / zenith pinch). Amount = intensity + how high it climbs.
         float agAmt = clamp(uAirglow, 0.0, 1.0);
         float nightAg = clamp((-alt - 10.0) / 8.0, 0.0, 1.0);
+        float agHue = clamp(uAirglowHue, 0.0, 1.0);
+        float agWaves = clamp(uAirglowWaves, 0.0, 1.0);
         vec3 airglowRgb = vec3(0.0);
         if (agAmt > 0.001 && nightAg > 0.001 && below < 0.5) {
-          float hLayer = mix(95e3, 250e3, clamp(uAirglowHue, 0.0, 1.0));
-          float cosZ = clamp(v.y, 0.0, 1.0);
-          float sin2Z = max(0.0, 1.0 - cosZ * cosZ);
-          float rr = EARTH_R / (EARTH_R + hLayer);
-          float vanRhijn = 1.0 / sqrt(max(1e-4, 1.0 - rr * rr * sin2Z));
-          vanRhijn = min(vanRhijn, 4.2);
-          // Peak mid-low elevation; fade at limb (extinction) and zenith.
-          float band = vanRhijn
-            * smoothstep(0.0, 0.07, elevN)
-            * mix(1.0, 0.42, smoothstep(0.45, 1.0, elevN));
-          airglowRgb = uAirglowColor * (agAmt * nightAg * band * 0.085);
+          // Horizon-bright gradient (soft, not a hard ring).
+          float horizonGlow = mix(1.2, 0.12, pow(elevN, 0.75));
+          float limb = smoothstep(0.0, 0.04, elevN);
+          // Low amount → only near horizon; high amount reaches zenith.
+          float reach = mix(0.18, 1.05, agAmt);
+          float heightMask = 1.0 - smoothstep(reach * 0.45, reach, elevN);
+          float env = limb * horizonGlow * heightMask;
+
+          float t = uAirglowTime;
+          // Seamless 3D noise — stretched in elevation → horizontal fibres.
+          vec3 p3 = vec3(v.x * 2.6, v.y * 9.5, v.z * 2.6)
+            + vec3(t * 0.018, t * 0.012, -t * 0.015);
+          float n = 0.0;
+          float a = 0.5;
+          vec3 q3 = p3;
+          for (int i = 0; i < 4; i++) {
+            vec3 ii = floor(q3);
+            vec3 f = fract(q3);
+            float n000 = fract(sin(dot(ii + vec3(0.0, 0.0, 0.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            float n100 = fract(sin(dot(ii + vec3(1.0, 0.0, 0.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            float n010 = fract(sin(dot(ii + vec3(0.0, 1.0, 0.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            float n110 = fract(sin(dot(ii + vec3(1.0, 1.0, 0.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            float n001 = fract(sin(dot(ii + vec3(0.0, 0.0, 1.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            float n101 = fract(sin(dot(ii + vec3(1.0, 0.0, 1.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            float n011 = fract(sin(dot(ii + vec3(0.0, 1.0, 1.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            float n111 = fract(sin(dot(ii + vec3(1.0, 1.0, 1.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            vec3 u = f * f * (3.0 - 2.0 * f);
+            float x00 = mix(n000, n100, u.x);
+            float x10 = mix(n010, n110, u.x);
+            float x01 = mix(n001, n101, u.x);
+            float x11 = mix(n011, n111, u.x);
+            float y0 = mix(x00, x10, u.y);
+            float y1 = mix(x01, x11, u.y);
+            n += a * mix(y0, y1, u.z);
+            q3 = q3 * 2.05 + vec3(1.7, 3.2, 2.4);
+            a *= 0.5;
+          }
+          // Horizontal-ish sheets (phase dominated by elevation + slight tilt).
+          float sheet =
+            0.5
+            + 0.5 * sin(elevN * 16.0 + v.x * 1.6 + v.z * 0.9 + n * 2.2 + t * 0.028);
+          float sheet2 =
+            0.5
+            + 0.5 * sin(elevN * 10.5 - v.x * 0.8 + v.z * 1.4 - n * 1.6 + t * 0.02);
+          float wave = clamp(n * 0.35 + sheet * 0.4 + sheet2 * 0.25, 0.0, 1.0);
+          float structure = mix(1.0, mix(0.06, 1.5, wave), agWaves);
+
+          // Teinte: hard solos at the ends (full rouge = zero green, period).
+          float greenW = 1.0 - smoothstep(0.28, 0.72, agHue);
+          float redW = smoothstep(0.28, 0.72, agHue);
+          if (agHue >= 0.82) greenW = 0.0;
+          if (agHue <= 0.18) redW = 0.0;
+          float overlap = min(greenW, redW);
+
+          vec3 greenC = vec3(0.22, 1.15, 0.4);
+          // Orange-red with low G — high G was reading as a green limb band.
+          vec3 redC = vec3(1.55, 0.26, 0.02);
+          float base = agAmt * nightAg * env * structure * 0.55;
+
+          if (overlap < 0.02) {
+            // Pure vert or pure rouge — no dual-mask leftovers.
+            airglowRgb =
+              greenC * (base * greenW)
+              + redC * (base * redW * 1.45);
+          } else {
+            // Mid only: soft organic patches of each.
+            float pat = mix(n, wave, clamp(agWaves * 1.2, 0.0, 1.0));
+            float split = smoothstep(0.12, 0.88, pat);
+            float midPunch = 1.0 + overlap * 0.15;
+            airglowRgb =
+              greenC * (base * greenW * (1.0 - split) * midPunch)
+              + redC * (base * redW * split * midPunch * 1.45);
+          }
+        }
+
+        // Zodiacal light — sunlight scattered by the interplanetary dust disk.
+        // Aligned on the ecliptic (not the horizon): bright false-dawn/dusk
+        // pyramid near the Sun, faint band around the sky, Gegenschein opposite.
+        float zlAmt = clamp(uZodiacal, 0.0, 1.0);
+        // Visible from deep twilight; washed out once the Sun is higher than ~−6°.
+        float nightZl = 1.0 - smoothstep(-18.0, -6.0, alt);
+        vec3 zodiacalRgb = vec3(0.0);
+        if (zlAmt > 0.001 && nightZl > 0.001 && below < 0.5) {
+          vec3 pole = normalize(uEclipticPole + vec3(1e-6));
+          float sinBeta = clamp(dot(v, pole), -1.0, 1.0);
+          float beta = abs(asin(sinBeta)); // ecliptic latitude (rad)
+          float cosElong = clamp(dot(v, s), -1.0, 1.0);
+          float elongDeg = acos(cosElong) * 57.2957795;
+
+          // Thin dust disk (~10–15° FWHM near the Sun, slightly wider far out).
+          float betaScale = mix(0.20, 0.32, smoothstep(25.0, 120.0, elongDeg));
+          float latFall = exp(-pow(beta / max(betaScale, 0.05), 1.55));
+
+          // Heliospheric brightness vs elongation (Leinert-ish empirical shape).
+          float cone =
+            exp(-pow(max(elongDeg - 6.0, 0.0) / 26.0, 1.28)); // false dawn/dusk
+          float band =
+            0.07 * exp(-pow(max(elongDeg - 35.0, 0.0) / 75.0, 1.15));
+          float gegen =
+            0.22 * exp(-pow((elongDeg - 180.0) / 16.0, 2.0)); // Gegenschein
+          // Soft shoulder so the pyramid base reads wider near the Sun.
+          float baseWiden =
+            0.35 * exp(-pow(max(elongDeg - 4.0, 0.0) / 14.0, 1.6))
+            * exp(-pow(beta / 0.42, 2.0));
+
+          float profile = (cone * 1.15 + band + gegen + baseWiden) * latFall;
+
+          // Atmospheric extinction near the geometric limb (pyramid softens).
+          float extinction = mix(0.28, 1.0, smoothstep(0.0, 0.18, elevN));
+          // Slight horizon lift — classic photographic false-dawn look.
+          float pyramidLift =
+            mix(1.15, 0.85, smoothstep(0.05, 0.55, elevN));
+
+          // Warm sunlight tint (slightly redder than airglow-neutral white).
+          vec3 zlColor = vec3(1.08, 0.90, 0.62);
+          float gain = zlAmt * nightZl * profile * extinction * pyramidLift * 0.2;
+          zodiacalRgb = zlColor * gain;
         }
 
         float atmo = clamp(uAtmosphere, 0.0, 1.0);
         if (atmo < 0.001) {
-          // Full Rayleigh off: keep ground fill; sky only if airglow needs the dome.
-          if (below < 0.01 && agAmt * nightAg < 0.001) discard;
+          // Full Rayleigh off: keep ground fill; sky only if glow layers need it.
+          if (below < 0.01 && agAmt * nightAg < 0.001 && zlAmt * nightZl < 0.001)
+            discard;
           mapped = below >= 0.01
             ? distant * (0.55 + 0.45 * (1.0 - nightDim))
             : vec3(0.0);
           mapped += airglowRgb;
+          mapped += zodiacalRgb;
           gl_FragColor = vec4(mapped, 1.0);
           return;
         }
@@ -297,8 +425,9 @@ export function createAstroSkyDome(): AstroSkyDome {
         if (below < 0.5) {
           mapped *= atmo;
         }
-        // Airglow on top of atmosphere — never scaled by uAtmosphere.
+        // Airglow + zodiacal on top of atmosphere — never scaled by uAtmosphere.
         mapped += airglowRgb;
+        mapped += zodiacalRgb;
 
         gl_FragColor = vec4(mapped, 1.0);
       }
@@ -328,6 +457,17 @@ export function updateAstroSkyDome(
     airglowAmount?: number
     /** 0 = green 557 nm, 1 = red 630 nm. */
     airglowHue?: number
+    /** 0 = van Rhijn gradient, 1 = gravity waves. */
+    airglowWaves?: number
+    /** Seconds — drifts gravity-wave phase. */
+    airglowTimeSec?: number
+    /** Additive zodiacal light 0…1 (ecliptic dust glow). */
+    zodiacalAmount?: number
+    /**
+     * North ecliptic pole in local ENU (east, up, south).
+     * Required for a correctly oriented zodiacal band.
+     */
+    eclipticPole?: THREE.Vector3
   },
 ): void {
   const palette = skyPaletteFromSunAltitude(input.sunAltitudeDeg)
@@ -347,14 +487,30 @@ export function updateAstroSkyDome(
   sky.material.uniforms.uAtmosphere.value = amount
   const agAmt = clampAirglowAmount(input.airglowAmount ?? 0)
   const agHue = clampAirglowHue(input.airglowHue ?? 0)
+  const agWaves = clampAirglowWaves(input.airglowWaves ?? 0.55)
   const agCol = airglowColorFromHue(agHue)
   sky.material.uniforms.uAirglow.value = agAmt
   sky.material.uniforms.uAirglowHue.value = agHue
+  sky.material.uniforms.uAirglowWaves.value = agWaves
   ;(sky.material.uniforms.uAirglowColor.value as THREE.Vector3).set(
     agCol.r,
     agCol.g,
     agCol.b,
   )
+  if (
+    typeof input.airglowTimeSec === 'number' &&
+    Number.isFinite(input.airglowTimeSec)
+  ) {
+    sky.material.uniforms.uAirglowTime.value = input.airglowTimeSec
+  }
+  sky.material.uniforms.uZodiacal.value = clampZodiacalAmount(
+    input.zodiacalAmount ?? 0,
+  )
+  if (input.eclipticPole) {
+    ;(sky.material.uniforms.uEclipticPole.value as THREE.Vector3)
+      .copy(input.eclipticPole)
+      .normalize()
+  }
   // Always keep the dome: it paints sea/ground under the geometric horizon
   // even when Rayleigh atmosphere is toggled off (avoids a black void).
   sky.mesh.visible = true
@@ -372,4 +528,21 @@ export function sunDirectionFromAltAz(
     Math.sin(alt),
     -Math.cos(az) * Math.cos(alt),
   ).normalize()
+}
+
+/**
+ * North ecliptic pole → Three local ENU (east, up, south).
+ * Astronomy Engine HOR is (north, west, zenith).
+ */
+export function eclipticNorthPoleThreeLocal(
+  when: Date,
+  latitudeDeg: number,
+  longitudeDeg: number,
+  elevationM = 0,
+  target = new THREE.Vector3(),
+): THREE.Vector3 {
+  const observer = new Observer(latitudeDeg, longitudeDeg, elevationM / 1000)
+  const poleEcl = new Vector(0, 0, 1, when)
+  const hor = RotateVector(Rotation_ECL_HOR(when, observer), poleEcl)
+  return target.set(-hor.y, hor.z, -hor.x).normalize()
 }

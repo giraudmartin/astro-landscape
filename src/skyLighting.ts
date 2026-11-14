@@ -151,6 +151,14 @@ export const AIRGLOW_HUE_MIN = 0
 export const AIRGLOW_HUE_MAX = 1
 export const AIRGLOW_HUE_DEFAULT = 0
 
+/**
+ * 0 = van Rhijn gradient only; 1 = full gravity-wave bands.
+ * Mid values = quiet nights with a hint of structure.
+ */
+export const AIRGLOW_WAVES_MIN = 0
+export const AIRGLOW_WAVES_MAX = 1
+export const AIRGLOW_WAVES_DEFAULT = 0.55
+
 export function clampAirglowAmount(value: number): number {
   if (!Number.isFinite(value)) return AIRGLOW_AMOUNT_DEFAULT
   return Math.min(AIRGLOW_AMOUNT_MAX, Math.max(AIRGLOW_AMOUNT_MIN, value))
@@ -161,6 +169,24 @@ export function clampAirglowHue(value: number): number {
   return Math.min(AIRGLOW_HUE_MAX, Math.max(AIRGLOW_HUE_MIN, value))
 }
 
+export function clampAirglowWaves(value: number): number {
+  if (!Number.isFinite(value)) return AIRGLOW_WAVES_DEFAULT
+  return Math.min(AIRGLOW_WAVES_MAX, Math.max(AIRGLOW_WAVES_MIN, value))
+}
+
+/**
+ * Additive zodiacal light (interplanetary dust along the ecliptic).
+ * 0 = off; 1 = strong false-dawn / false-dusk pyramid + Gegenschein.
+ */
+export const ZODIACAL_AMOUNT_MIN = 0
+export const ZODIACAL_AMOUNT_MAX = 1
+export const ZODIACAL_AMOUNT_DEFAULT = 0
+
+export function clampZodiacalAmount(value: number): number {
+  if (!Number.isFinite(value)) return ZODIACAL_AMOUNT_DEFAULT
+  return Math.min(ZODIACAL_AMOUNT_MAX, Math.max(ZODIACAL_AMOUNT_MIN, value))
+}
+
 /** Display RGB for airglow hue slider (green → red atomic oxygen). */
 export function airglowColorFromHue(hue: number): {
   r: number
@@ -168,10 +194,13 @@ export function airglowColorFromHue(hue: number): {
   b: number
 } {
   const t = clampAirglowHue(hue)
+  // Same punch as green; red is warm orange-red (not violet).
+  const green = { r: 0.22, g: 1.15, b: 0.4 }
+  const red = { r: 1.55, g: 0.26, b: 0.02 }
   return {
-    r: 0.32 + t * 0.68,
-    g: 1.0 - t * 0.82,
-    b: 0.42 - t * 0.3,
+    r: green.r + (red.r - green.r) * t,
+    g: green.g + (red.g - green.g) * t,
+    b: green.b + (red.b - green.b) * t,
   }
 }
 

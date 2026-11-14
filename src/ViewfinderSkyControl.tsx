@@ -18,11 +18,17 @@ import {
   AIRGLOW_AMOUNT_MIN,
   AIRGLOW_HUE_MAX,
   AIRGLOW_HUE_MIN,
+  AIRGLOW_WAVES_MAX,
+  AIRGLOW_WAVES_MIN,
   ATMOSPHERE_AMOUNT_MAX,
   ATMOSPHERE_AMOUNT_MIN,
+  ZODIACAL_AMOUNT_MAX,
+  ZODIACAL_AMOUNT_MIN,
   clampAirglowAmount,
   clampAirglowHue,
+  clampAirglowWaves,
   clampAtmosphereAmount,
+  clampZodiacalAmount,
 } from './skyLighting'
 import { ChevronDownIcon, SettingsSlidersIcon } from './psIcons'
 
@@ -30,6 +36,8 @@ type ViewfinderSkyControlProps = {
   atmosphereAmount: number
   airglowAmount: number
   airglowHue: number
+  airglowWaves: number
+  zodiacalAmount: number
   starMagDepth: number
   starZoomSpan: number
   starBrightness: number
@@ -37,6 +45,8 @@ type ViewfinderSkyControlProps = {
   onAtmosphereAmountChange: (value: number) => void
   onAirglowAmountChange: (value: number) => void
   onAirglowHueChange: (value: number) => void
+  onAirglowWavesChange: (value: number) => void
+  onZodiacalAmountChange: (value: number) => void
   onStarMagDepthChange: (value: number) => void
   onStarZoomSpanChange: (value: number) => void
   onStarBrightnessChange: (value: number) => void
@@ -44,12 +54,14 @@ type ViewfinderSkyControlProps = {
 }
 
 /**
- * Compact top-right sky settings — atmosphere, airglow, stars.
+ * Compact top-right sky settings — atmosphere, airglow, zodiacal, stars.
  */
 export function ViewfinderSkyControl({
   atmosphereAmount,
   airglowAmount,
   airglowHue,
+  airglowWaves,
+  zodiacalAmount,
   starMagDepth,
   starZoomSpan,
   starBrightness,
@@ -57,6 +69,8 @@ export function ViewfinderSkyControl({
   onAtmosphereAmountChange,
   onAirglowAmountChange,
   onAirglowHueChange,
+  onAirglowWavesChange,
+  onZodiacalAmountChange,
   onStarMagDepthChange,
   onStarZoomSpanChange,
   onStarBrightnessChange,
@@ -123,204 +137,286 @@ export function ViewfinderSkyControl({
           role="dialog"
           aria-label="Réglages du ciel"
         >
-          <label className="vf-landscape-menu__field">
-            <span className="vf-landscape-menu__label">
-              <span>Atmosphère</span>
-              <span className="vf-landscape-menu__value">
-                {atmosphereAmount.toFixed(2)}
+          <div className="vf-landscape-menu__group">
+            <div className="vf-landscape-menu__group-title">Atmosphère</div>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Quantité</span>
+                <span className="vf-landscape-menu__value">
+                  {atmosphereAmount.toFixed(2)}
+                </span>
               </span>
-            </span>
-            <input
-              type="range"
-              className="vf-landscape-menu__range"
-              min={ATMOSPHERE_AMOUNT_MIN}
-              max={ATMOSPHERE_AMOUNT_MAX}
-              step={0.05}
-              value={atmosphereAmount}
-              style={rangeProgressStyle(
-                atmosphereAmount,
-                ATMOSPHERE_AMOUNT_MIN,
-                ATMOSPHERE_AMOUNT_MAX,
-              )}
-              aria-label="Quantité d’atmosphère"
-              title="0 = espace / étoiles seules ; 1 = ciel Rayleigh complet"
-              onChange={(event) =>
-                onAtmosphereAmountChange(
-                  clampAtmosphereAmount(Number(event.target.value)),
-                )
-              }
-            />
-          </label>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={ATMOSPHERE_AMOUNT_MIN}
+                max={ATMOSPHERE_AMOUNT_MAX}
+                step={0.05}
+                value={atmosphereAmount}
+                style={rangeProgressStyle(
+                  atmosphereAmount,
+                  ATMOSPHERE_AMOUNT_MIN,
+                  ATMOSPHERE_AMOUNT_MAX,
+                )}
+                aria-label="Quantité d’atmosphère"
+                title="0 = espace / étoiles seules ; 1 = ciel Rayleigh complet"
+                onChange={(event) =>
+                  onAtmosphereAmountChange(
+                    clampAtmosphereAmount(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
+          </div>
 
-          <label className="vf-landscape-menu__field">
-            <span className="vf-landscape-menu__label">
-              <span>Airglow</span>
-              <span className="vf-landscape-menu__value">
-                {airglowAmount.toFixed(2)}
+          <div className="vf-landscape-menu__group">
+            <div className="vf-landscape-menu__group-title">Airglow</div>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Quantité</span>
+                <span className="vf-landscape-menu__value">
+                  {airglowAmount.toFixed(2)}
+                </span>
               </span>
-            </span>
-            <input
-              type="range"
-              className="vf-landscape-menu__range"
-              min={AIRGLOW_AMOUNT_MIN}
-              max={AIRGLOW_AMOUNT_MAX}
-              step={0.05}
-              value={airglowAmount}
-              style={rangeProgressStyle(
-                airglowAmount,
-                AIRGLOW_AMOUNT_MIN,
-                AIRGLOW_AMOUNT_MAX,
-              )}
-              aria-label="Quantité d’airglow"
-              title="Lueur OI nocturne (en plus de l’atmosphère). Visible la nuit."
-              onChange={(event) =>
-                onAirglowAmountChange(
-                  clampAirglowAmount(Number(event.target.value)),
-                )
-              }
-            />
-          </label>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={AIRGLOW_AMOUNT_MIN}
+                max={AIRGLOW_AMOUNT_MAX}
+                step={0.05}
+                value={airglowAmount}
+                style={rangeProgressStyle(
+                  airglowAmount,
+                  AIRGLOW_AMOUNT_MIN,
+                  AIRGLOW_AMOUNT_MAX,
+                )}
+                aria-label="Quantité d’airglow"
+                title="Lueur OI nocturne (en plus de l’atmosphère). Visible la nuit."
+                onChange={(event) =>
+                  onAirglowAmountChange(
+                    clampAirglowAmount(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
 
-          <label className="vf-landscape-menu__field">
-            <span className="vf-landscape-menu__label">
-              <span>Teinte airglow</span>
-              <span className="vf-landscape-menu__value">
-                {airglowHue < 0.5 ? 'Vert' : 'Rouge'}
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Teinte</span>
+                <span className="vf-landscape-menu__value">
+                  {airglowHue < 0.28
+                    ? 'Vert'
+                    : airglowHue > 0.82
+                      ? 'Rouge'
+                      : 'Vert + Rouge'}
+                </span>
               </span>
-            </span>
-            <input
-              type="range"
-              className="vf-landscape-menu__range vf-landscape-menu__range--airglow-hue"
-              min={AIRGLOW_HUE_MIN}
-              max={AIRGLOW_HUE_MAX}
-              step={0.05}
-              value={airglowHue}
-              style={rangeProgressStyle(
-                airglowHue,
-                AIRGLOW_HUE_MIN,
-                AIRGLOW_HUE_MAX,
-              )}
-              aria-label="Teinte airglow vert à rouge"
-              title="0 = OI 557 nm vert (~95 km) ; 1 = OI 630 nm rouge (~250 km)"
-              onChange={(event) =>
-                onAirglowHueChange(clampAirglowHue(Number(event.target.value)))
-              }
-            />
-          </label>
+              <input
+                type="range"
+                className="vf-landscape-menu__range vf-landscape-menu__range--airglow-hue"
+                min={AIRGLOW_HUE_MIN}
+                max={AIRGLOW_HUE_MAX}
+                step={0.05}
+                value={airglowHue}
+                style={rangeProgressStyle(
+                  airglowHue,
+                  AIRGLOW_HUE_MIN,
+                  AIRGLOW_HUE_MAX,
+                )}
+                aria-label="Teinte airglow vert, les deux, ou rouge"
+                title="Gauche = vert ; milieu = vert et rouge visibles ; droite = rouge"
+                onChange={(event) =>
+                  onAirglowHueChange(
+                    clampAirglowHue(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
 
-          <label className="vf-landscape-menu__field">
-            <span className="vf-landscape-menu__label">
-              <span>Luminosité étoiles</span>
-              <span className="vf-landscape-menu__value">
-                {starBrightness.toFixed(2)}
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Structure</span>
+                <span className="vf-landscape-menu__value">
+                  {airglowWaves < 0.35
+                    ? 'Dégradé'
+                    : airglowWaves > 0.7
+                      ? 'Vagues'
+                      : 'Mix'}
+                </span>
               </span>
-            </span>
-            <input
-              type="range"
-              className="vf-landscape-menu__range"
-              min={STAR_BRIGHTNESS_MIN}
-              max={STAR_BRIGHTNESS_MAX}
-              step={0.05}
-              value={starBrightness}
-              style={rangeProgressStyle(
-                starBrightness,
-                STAR_BRIGHTNESS_MIN,
-                STAR_BRIGHTNESS_MAX,
-              )}
-              aria-label="Luminosité des étoiles"
-              title="Multiplicateur de luminosité (1 = défaut)"
-              onChange={(event) =>
-                onStarBrightnessChange(
-                  clampStarBrightness(Number(event.target.value)),
-                )
-              }
-            />
-          </label>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={AIRGLOW_WAVES_MIN}
+                max={AIRGLOW_WAVES_MAX}
+                step={0.05}
+                value={airglowWaves}
+                style={rangeProgressStyle(
+                  airglowWaves,
+                  AIRGLOW_WAVES_MIN,
+                  AIRGLOW_WAVES_MAX,
+                )}
+                aria-label="Structure airglow dégradé à vagues"
+                title="0 = dégradé van Rhijn (nuit calme) ; 1 = bandes de vagues de gravité"
+                onChange={(event) =>
+                  onAirglowWavesChange(
+                    clampAirglowWaves(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
+          </div>
 
-          <label className="vf-landscape-menu__field">
-            <span className="vf-landscape-menu__label">
-              <span>Glow étoiles</span>
-              <span className="vf-landscape-menu__value">
-                {starGlow.toFixed(2)}
+          <div className="vf-landscape-menu__group">
+            <div className="vf-landscape-menu__group-title">
+              Lumière zodiacale
+            </div>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Intensité</span>
+                <span className="vf-landscape-menu__value">
+                  {zodiacalAmount.toFixed(2)}
+                </span>
               </span>
-            </span>
-            <input
-              type="range"
-              className="vf-landscape-menu__range"
-              min={STAR_GLOW_MIN}
-              max={STAR_GLOW_MAX}
-              step={0.05}
-              value={starGlow}
-              style={rangeProgressStyle(
-                starGlow,
-                STAR_GLOW_MIN,
-                STAR_GLOW_MAX,
-              )}
-              aria-label="Glow des étoiles brillantes"
-              title="Halo des grosses étoiles (0 = points secs, 1 = max soft)"
-              onChange={(event) =>
-                onStarGlowChange(clampStarGlow(Number(event.target.value)))
-              }
-            />
-          </label>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={ZODIACAL_AMOUNT_MIN}
+                max={ZODIACAL_AMOUNT_MAX}
+                step={0.05}
+                value={zodiacalAmount}
+                style={rangeProgressStyle(
+                  zodiacalAmount,
+                  ZODIACAL_AMOUNT_MIN,
+                  ZODIACAL_AMOUNT_MAX,
+                )}
+                aria-label="Intensité de la lumière zodiacale"
+                title="Poussière interplanétaire sur l’écliptique : cône crépusculaire, bande, Gegenschein. Visible la nuit."
+                onChange={(event) =>
+                  onZodiacalAmountChange(
+                    clampZodiacalAmount(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
+          </div>
 
-          <label className="vf-landscape-menu__field">
-            <span className="vf-landscape-menu__label">
-              <span>Densité étoiles</span>
-              <span className="vf-landscape-menu__value">
-                {starMagDepth.toFixed(2)}
+          <div className="vf-landscape-menu__group">
+            <div className="vf-landscape-menu__group-title">Étoiles</div>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Luminosité</span>
+                <span className="vf-landscape-menu__value">
+                  {starBrightness.toFixed(2)}
+                </span>
               </span>
-            </span>
-            <input
-              type="range"
-              className="vf-landscape-menu__range"
-              min={STAR_MAG_DEPTH_MIN}
-              max={STAR_MAG_DEPTH_MAX}
-              step={0.05}
-              value={starMagDepth}
-              style={rangeProgressStyle(
-                starMagDepth,
-                STAR_MAG_DEPTH_MIN,
-                STAR_MAG_DEPTH_MAX,
-              )}
-              aria-label="Densité d’étoiles du ciel nocturne"
-              title="Profondeur magnitude (0 = défaut). Décale grand-angle et zoom ensemble."
-              onChange={(event) =>
-                onStarMagDepthChange(
-                  clampStarMagDepth(Number(event.target.value)),
-                )
-              }
-            />
-          </label>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={STAR_BRIGHTNESS_MIN}
+                max={STAR_BRIGHTNESS_MAX}
+                step={0.05}
+                value={starBrightness}
+                style={rangeProgressStyle(
+                  starBrightness,
+                  STAR_BRIGHTNESS_MIN,
+                  STAR_BRIGHTNESS_MAX,
+                )}
+                aria-label="Luminosité des étoiles"
+                title="Multiplicateur de luminosité (1 = défaut)"
+                onChange={(event) =>
+                  onStarBrightnessChange(
+                    clampStarBrightness(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
 
-          <label className="vf-landscape-menu__field">
-            <span className="vf-landscape-menu__label">
-              <span>Gain zoom étoiles</span>
-              <span className="vf-landscape-menu__value">
-                {starZoomSpan.toFixed(2)}
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Glow</span>
+                <span className="vf-landscape-menu__value">
+                  {starGlow.toFixed(2)}
+                </span>
               </span>
-            </span>
-            <input
-              type="range"
-              className="vf-landscape-menu__range"
-              min={STAR_ZOOM_SPAN_MIN}
-              max={STAR_ZOOM_SPAN_MAX}
-              step={0.05}
-              value={starZoomSpan}
-              style={rangeProgressStyle(
-                starZoomSpan,
-                STAR_ZOOM_SPAN_MIN,
-                STAR_ZOOM_SPAN_MAX,
-              )}
-              aria-label="Gain d’étoiles au zoom"
-              title="0 = même densité à tout FOV ; 1 = proportion défaut ; plus de 1 = plus d’étoiles en télé"
-              onChange={(event) =>
-                onStarZoomSpanChange(
-                  clampStarZoomSpan(Number(event.target.value)),
-                )
-              }
-            />
-          </label>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={STAR_GLOW_MIN}
+                max={STAR_GLOW_MAX}
+                step={0.05}
+                value={starGlow}
+                style={rangeProgressStyle(
+                  starGlow,
+                  STAR_GLOW_MIN,
+                  STAR_GLOW_MAX,
+                )}
+                aria-label="Glow des étoiles brillantes"
+                title="Halo des grosses étoiles (0 = points secs, 1 = max soft)"
+                onChange={(event) =>
+                  onStarGlowChange(clampStarGlow(Number(event.target.value)))
+                }
+              />
+            </label>
+
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Densité</span>
+                <span className="vf-landscape-menu__value">
+                  {starMagDepth.toFixed(2)}
+                </span>
+              </span>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={STAR_MAG_DEPTH_MIN}
+                max={STAR_MAG_DEPTH_MAX}
+                step={0.05}
+                value={starMagDepth}
+                style={rangeProgressStyle(
+                  starMagDepth,
+                  STAR_MAG_DEPTH_MIN,
+                  STAR_MAG_DEPTH_MAX,
+                )}
+                aria-label="Densité d’étoiles du ciel nocturne"
+                title="Profondeur magnitude (0 = défaut). Décale grand-angle et zoom ensemble."
+                onChange={(event) =>
+                  onStarMagDepthChange(
+                    clampStarMagDepth(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
+
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Gain zoom</span>
+                <span className="vf-landscape-menu__value">
+                  {starZoomSpan.toFixed(2)}
+                </span>
+              </span>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={STAR_ZOOM_SPAN_MIN}
+                max={STAR_ZOOM_SPAN_MAX}
+                step={0.05}
+                value={starZoomSpan}
+                style={rangeProgressStyle(
+                  starZoomSpan,
+                  STAR_ZOOM_SPAN_MIN,
+                  STAR_ZOOM_SPAN_MAX,
+                )}
+                aria-label="Gain d’étoiles au zoom"
+                title="0 = même densité à tout FOV ; 1 = proportion défaut ; plus de 1 = plus d’étoiles en télé"
+                onChange={(event) =>
+                  onStarZoomSpanChange(
+                    clampStarZoomSpan(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
+          </div>
         </div>
       ) : null}
     </div>

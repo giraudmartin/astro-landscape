@@ -43,16 +43,20 @@ import {
 import {
   AIRGLOW_AMOUNT_DEFAULT,
   AIRGLOW_HUE_DEFAULT,
+  AIRGLOW_WAVES_DEFAULT,
   ATMOSPHERE_AMOUNT_DEFAULT,
   clampAirglowAmount,
   clampAirglowHue,
+  clampAirglowWaves,
   clampAtmosphereAmount,
   clampGroundNightBrightness,
   clampGroundNightContrast,
   clampGroundNightTemperature,
+  clampZodiacalAmount,
   GROUND_NIGHT_BRIGHTNESS_DEFAULT,
   GROUND_NIGHT_CONTRAST_DEFAULT,
   GROUND_NIGHT_TEMPERATURE_DEFAULT,
+  ZODIACAL_AMOUNT_DEFAULT,
 } from './skyLighting'
 import {
   normalizeStageProjection,
@@ -106,6 +110,10 @@ export type ImmersiveSettings = {
   airglowAmount: number
   /** Airglow hue 0…1 (green 557 nm → red 630 nm). */
   airglowHue: number
+  /** Airglow structure 0…1 (van Rhijn gradient → gravity waves). */
+  airglowWaves: number
+  /** Additive zodiacal light 0…1 (ecliptic dust glow). */
+  zodiacalAmount: number
   showConstellations: boolean
   showCelestialGrid: boolean
   showAzimuthGrid: boolean
@@ -155,6 +163,8 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   atmosphereAmount: ATMOSPHERE_AMOUNT_DEFAULT,
   airglowAmount: AIRGLOW_AMOUNT_DEFAULT,
   airglowHue: AIRGLOW_HUE_DEFAULT,
+  airglowWaves: AIRGLOW_WAVES_DEFAULT,
+  zodiacalAmount: ZODIACAL_AMOUNT_DEFAULT,
   showConstellations: true,
   showCelestialGrid: false,
   showAzimuthGrid: false,
@@ -330,6 +340,12 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
     ),
     airglowHue: clampAirglowHue(
       Number(row.airglowHue ?? DEFAULT_IMMERSIVE_SETTINGS.airglowHue),
+    ),
+    airglowWaves: clampAirglowWaves(
+      Number(row.airglowWaves ?? DEFAULT_IMMERSIVE_SETTINGS.airglowWaves),
+    ),
+    zodiacalAmount: clampZodiacalAmount(
+      Number(row.zodiacalAmount ?? DEFAULT_IMMERSIVE_SETTINGS.zodiacalAmount),
     ),
     showConstellations: readBoolean(
       row.showConstellations,

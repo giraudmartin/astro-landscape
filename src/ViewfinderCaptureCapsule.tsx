@@ -92,6 +92,8 @@ export function ViewfinderCaptureCapsule({
 
   useEffect(() => {
     if (!settingsPanel) return
+    // Timelapse stays open while framing — dismiss via X, Escape, or mode switch.
+    if (settingsPanel === 'timelapse') return
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null
       if (!target) return

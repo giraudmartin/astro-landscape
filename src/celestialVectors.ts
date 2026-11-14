@@ -150,6 +150,23 @@ function starColorFromBv(ci: number | null | undefined): [number, number, number
   return [red, green, blue]
 }
 
+/**
+ * B−V → display RGB for cores + glow. Saturates chroma so spectral types
+ * (B blue / K–M orange-red) read clearly — no white wash that pastels them.
+ */
+export function starDisplayColorFromBv(
+  ci: number | null | undefined,
+): [number, number, number] {
+  const [r, g, b] = starColorFromBv(ci)
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  const sat = 2.2
+  return [
+    THREE.MathUtils.clamp(lum + (r - lum) * sat, 0, 1),
+    THREE.MathUtils.clamp(lum + (g - lum) * sat, 0, 1),
+    THREE.MathUtils.clamp(lum + (b - lum) * sat, 0, 1),
+  ]
+}
+
 function createHygStarPoints(
   catalog: readonly HygBrightStar[],
   radius: number,
@@ -172,10 +189,10 @@ function createHygStarPoints(
     brightness[i] = celestialStarBrightness(star.mag)
     halos[i] = celestialStarHalo(star.mag)
     mags[i] = star.mag
-    const [r, g, b] = starColorFromBv(star.ci)
-    colors[i * 3] = Math.min(1, r * 1.1 + 0.08)
-    colors[i * 3 + 1] = Math.min(1, g * 1.1 + 0.08)
-    colors[i * 3 + 2] = Math.min(1, b * 1.1 + 0.1)
+    const [r, g, b] = starDisplayColorFromBv(star.ci)
+    colors[i * 3] = r
+    colors[i * 3 + 1] = g
+    colors[i * 3 + 2] = b
   }
 
   const geometry = new THREE.BufferGeometry()
@@ -343,10 +360,7 @@ function createHygStarTrails(
       radius,
     )
     const bright = celestialStarBrightness(star.mag)
-    const [r, g, b] = starColorFromBv(star.ci)
-    const cr = Math.min(1, r * 1.1 + 0.08)
-    const cg = Math.min(1, g * 1.1 + 0.08)
-    const cb = Math.min(1, b * 1.1 + 0.1)
+    const [cr, cg, cb] = starDisplayColorFromBv(star.ci)
     for (let e = 0; e < 2; e += 1) {
       const idx = i * 2 + e
       positions[idx * 3] = dir.x

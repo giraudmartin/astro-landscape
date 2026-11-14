@@ -14,6 +14,7 @@ import {
   celestialStarHalo,
   celestialStarSizePx,
   j2000ToNasaMapDirection,
+  starDisplayColorFromBv,
 } from './celestialVectors'
 import {
   DEFAULT_GLOBE_SPACE_SETTINGS,
@@ -28,44 +29,6 @@ export const GLOBE_MILKY_WAY_URL = '/sky/milkyway_globe.webp'
 type GlobeMilkyWayLayer = CustomLayerInterface
 
 let activeLayer: GlobeMilkyWayLayer | null = null
-
-function starColorFromBv(ci: number | null | undefined): [number, number, number] {
-  if (ci == null || !Number.isFinite(ci)) return [0.9, 0.94, 1]
-  const bv = THREE.MathUtils.clamp(ci, -0.4, 2)
-  const kelvin = 4600 * (1 / (0.92 * bv + 1.7) + 1 / (0.92 * bv + 0.62))
-  const temperature = THREE.MathUtils.clamp(kelvin / 100, 10, 400)
-  const red =
-    temperature <= 66
-      ? 1
-      : THREE.MathUtils.clamp(
-          1.292936186 * (temperature - 60) ** -0.1332047592,
-          0,
-          1,
-        )
-  const green =
-    temperature <= 66
-      ? THREE.MathUtils.clamp(
-          0.3900815788 * Math.log(temperature) - 0.6318414438,
-          0,
-          1,
-        )
-      : THREE.MathUtils.clamp(
-          1.129890861 * (temperature - 60) ** -0.0755148492,
-          0,
-          1,
-        )
-  const blue =
-    temperature >= 66
-      ? 1
-      : temperature <= 19
-        ? 0
-        : THREE.MathUtils.clamp(
-            0.5432067891 * Math.log(temperature - 10) - 1.1962540891,
-            0,
-            1,
-          )
-  return [red, green, blue]
-}
 
 /** Brightest N HYG stars in the NASA map frame (aligned with the VL bake). */
 function buildStarGeometry(count: number): THREE.BufferGeometry {
@@ -90,10 +53,10 @@ function buildStarGeometry(count: number): THREE.BufferGeometry {
     sizes[i] = celestialStarSizePx(star.mag)
     brightness[i] = celestialStarBrightness(star.mag)
     halos[i] = celestialStarHalo(star.mag)
-    const [r, g, b] = starColorFromBv(star.ci)
-    colors[i3] = Math.min(1, r * 1.1 + 0.08)
-    colors[i3 + 1] = Math.min(1, g * 1.1 + 0.08)
-    colors[i3 + 2] = Math.min(1, b * 1.1 + 0.1)
+    const [r, g, b] = starDisplayColorFromBv(star.ci)
+    colors[i3] = r
+    colors[i3 + 1] = g
+    colors[i3 + 2] = b
   }
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))

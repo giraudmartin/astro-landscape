@@ -24,9 +24,15 @@ export { EARTH_RADIUS_M }
 
 export type AstroSkyDome = {
   mesh: THREE.Mesh
+  /** Additive ecliptic glow — drawn after Milky Way (renderOrder 22). */
+  zodiacalMesh: THREE.Mesh
   geometry: THREE.SphereGeometry
   material: THREE.ShaderMaterial
+  zodiacalMaterial: THREE.ShaderMaterial
 }
+
+/** MW tiles are renderOrder 20+z (maxZ=1 → 21); stars/figures sit above. */
+const ZODIACAL_RENDER_ORDER = 22
 
 /** Warm inland fill when the eye is near sea level. */
 const GROUND_FILL = new THREE.Color(0x8a7349)
@@ -64,9 +70,6 @@ export function createAstroSkyDome(): AstroSkyDome {
       uAirglowWaves: { value: 0.55 },
       uAirglowColor: { value: new THREE.Vector3(0.22, 1.15, 0.4) },
       uAirglowTime: { value: 0 },
-      uZodiacal: { value: 0 },
-      // North ecliptic pole in local ENU (east, up, south).
-      uEclipticPole: { value: new THREE.Vector3(0, 0.4, 0.9) },
       uGroundColor: {
         value: new THREE.Vector3(GROUND_FILL.r, GROUND_FILL.g, GROUND_FILL.b),
       },
@@ -109,8 +112,6 @@ export function createAstroSkyDome(): AstroSkyDome {
       uniform float uAirglowWaves;
       uniform vec3 uAirglowColor;
       uniform float uAirglowTime;
-      uniform float uZodiacal;
-      uniform vec3 uEclipticPole;
       uniform vec3 uGroundColor;
       uniform vec3 uSeaColor;
       varying vec3 vDir;
@@ -362,60 +363,15 @@ export function createAstroSkyDome(): AstroSkyDome {
           }
         }
 
-        // Zodiacal light — sunlight scattered by the interplanetary dust disk.
-        // Aligned on the ecliptic (not the horizon): bright false-dawn/dusk
-        // pyramid near the Sun, faint band around the sky, Gegenschein opposite.
-        float zlAmt = clamp(uZodiacal, 0.0, 1.0);
-        // Visible from deep twilight; washed out once the Sun is higher than ~−6°.
-        float nightZl = 1.0 - smoothstep(-18.0, -6.0, alt);
-        vec3 zodiacalRgb = vec3(0.0);
-        if (zlAmt > 0.001 && nightZl > 0.001 && below < 0.5) {
-          vec3 pole = normalize(uEclipticPole + vec3(1e-6));
-          float sinBeta = clamp(dot(v, pole), -1.0, 1.0);
-          float beta = abs(asin(sinBeta)); // ecliptic latitude (rad)
-          float cosElong = clamp(dot(v, s), -1.0, 1.0);
-          float elongDeg = acos(cosElong) * 57.2957795;
-
-          // Thin dust disk (~10–15° FWHM near the Sun, slightly wider far out).
-          float betaScale = mix(0.20, 0.32, smoothstep(25.0, 120.0, elongDeg));
-          float latFall = exp(-pow(beta / max(betaScale, 0.05), 1.55));
-
-          // Heliospheric brightness vs elongation (Leinert-ish empirical shape).
-          float cone =
-            exp(-pow(max(elongDeg - 6.0, 0.0) / 26.0, 1.28)); // false dawn/dusk
-          float band =
-            0.07 * exp(-pow(max(elongDeg - 35.0, 0.0) / 75.0, 1.15));
-          float gegen =
-            0.22 * exp(-pow((elongDeg - 180.0) / 16.0, 2.0)); // Gegenschein
-          // Soft shoulder so the pyramid base reads wider near the Sun.
-          float baseWiden =
-            0.35 * exp(-pow(max(elongDeg - 4.0, 0.0) / 14.0, 1.6))
-            * exp(-pow(beta / 0.42, 2.0));
-
-          float profile = (cone * 1.15 + band + gegen + baseWiden) * latFall;
-
-          // Atmospheric extinction near the geometric limb (pyramid softens).
-          float extinction = mix(0.28, 1.0, smoothstep(0.0, 0.18, elevN));
-          // Slight horizon lift — classic photographic false-dawn look.
-          float pyramidLift =
-            mix(1.15, 0.85, smoothstep(0.05, 0.55, elevN));
-
-          // Warm sunlight tint (slightly redder than airglow-neutral white).
-          vec3 zlColor = vec3(1.08, 0.90, 0.62);
-          float gain = zlAmt * nightZl * profile * extinction * pyramidLift * 0.2;
-          zodiacalRgb = zlColor * gain;
-        }
-
         float atmo = clamp(uAtmosphere, 0.0, 1.0);
         if (atmo < 0.001) {
-          // Full Rayleigh off: keep ground fill; sky only if glow layers need it.
-          if (below < 0.01 && agAmt * nightAg < 0.001 && zlAmt * nightZl < 0.001)
-            discard;
+          // Full Rayleigh off: keep ground fill; sky only if airglow needs it.
+          // Zodiacal is a separate additive mesh (above Milky Way).
+          if (below < 0.01 && agAmt * nightAg < 0.001) discard;
           mapped = below >= 0.01
             ? distant * (0.55 + 0.45 * (1.0 - nightDim))
             : vec3(0.0);
           mapped += airglowRgb;
-          mapped += zodiacalRgb;
           gl_FragColor = vec4(mapped, 1.0);
           return;
         }
@@ -425,9 +381,8 @@ export function createAstroSkyDome(): AstroSkyDome {
         if (below < 0.5) {
           mapped *= atmo;
         }
-        // Airglow + zodiacal on top of atmosphere — never scaled by uAtmosphere.
+        // Airglow on top of atmosphere — never scaled by uAtmosphere.
         mapped += airglowRgb;
-        mapped += zodiacalRgb;
 
         gl_FragColor = vec4(mapped, 1.0);
       }
@@ -437,7 +392,121 @@ export function createAstroSkyDome(): AstroSkyDome {
   mesh.frustumCulled = false
   // Draw after terrain so depth-test keeps mountains in front of the sky.
   mesh.renderOrder = 10
-  return { mesh, geometry, material }
+
+  // Separate additive pass so zodiacal glows *over* NASA Milky Way tiles
+  // (those sit at renderOrder 20+z; atmosphere alone was painted underneath).
+  const zodiacalMaterial = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    fog: false,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uStelMode: stelModeUniform,
+      uSunDir: { value: new THREE.Vector3(0.2, 0.6, 0.8) },
+      uSunAltitude: { value: -20 },
+      uEyeElevM: { value: 0 },
+      uZodiacal: { value: 0 },
+      uEclipticPole: { value: new THREE.Vector3(0, 0.4, 0.9) },
+    },
+    vertexShader: /* glsl */ `
+      ${STEL_PROJECT_GLSL}
+      varying vec3 vDir;
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        varying float vFragDepth;
+        varying float vIsPerspective;
+        bool isPerspectiveMatrix(mat4 m) { return m[2][3] == -1.0; }
+      #endif
+      void main() {
+        vDir = normalize(position);
+        gl_Position = stelProject(modelViewMatrix * vec4(position, 1.0));
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          vFragDepth = 1.0 + gl_Position.w;
+          vIsPerspective = float(isPerspectiveMatrix(projectionMatrix));
+        #endif
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      ${STEL_FRAGMENT_GLSL}
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        uniform float logDepthBufFC;
+        varying float vFragDepth;
+        varying float vIsPerspective;
+      #endif
+      uniform vec3 uSunDir;
+      uniform float uSunAltitude;
+      uniform float uEyeElevM;
+      uniform float uZodiacal;
+      uniform vec3 uEclipticPole;
+      varying vec3 vDir;
+      const float EARTH_R = 6371000.0;
+
+      void main() {
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          gl_FragDepth = vIsPerspective == 0.0 ? gl_FragCoord.z : log2(vFragDepth) * logDepthBufFC * 0.5;
+        #endif
+        stelDiscardBow();
+        float zlAmt = clamp(uZodiacal, 0.0, 1.0);
+        float alt = uSunAltitude;
+        float nightZl = 1.0 - smoothstep(-18.0, -6.0, alt);
+        if (zlAmt < 0.001 || nightZl < 0.001) discard;
+
+        vec3 v = normalize(vDir);
+        vec3 s = normalize(uSunDir);
+        float hEye = max(uEyeElevM, 0.0);
+        float horSin = hEye > 0.5
+          ? -sqrt(hEye * (2.0 * EARTH_R + hEye)) / (EARTH_R + hEye)
+          : 0.0;
+        float aboveHor = max(0.0, v.y - horSin);
+        float elevN = clamp(aboveHor / max(1.0 - horSin, 1e-3), 0.0, 1.0);
+        float below = smoothstep(horSin + 0.004, horSin - 0.03, v.y);
+        if (below >= 0.5) discard;
+
+        // Soft sparse false-dawn haze — no hard ribbon / clipped white plate.
+        vec3 pole = normalize(uEclipticPole + vec3(1e-6));
+        float sinBeta = clamp(dot(v, pole), -1.0, 1.0);
+        float betaDeg = abs(asin(sinBeta)) * 57.2957795;
+        float cosElong = clamp(dot(v, s), -1.0, 1.0);
+        float elongDeg = acos(cosElong) * 57.2957795;
+
+        // Wider, slower taper — diffuse triangle, not a thin tube.
+        float halfW = mix(14.0, 4.0, pow(clamp(elevN, 0.0, 1.0), 0.55));
+        float s2 = halfW * halfW;
+        float core = exp(-0.5 * betaDeg * betaDeg / max(s2 * 0.7, 1.2));
+        float mid = exp(-0.5 * betaDeg * betaDeg / max(s2 * 2.4, 3.0)) * 0.7;
+        float outer = exp(-0.5 * betaDeg * betaDeg / max(s2 * 6.0, 6.0)) * 0.32;
+        float latGlow = core + mid + outer;
+        // Very soft kill far off-plane (no contour step).
+        latGlow *= 1.0 - smoothstep(22.0, 48.0, betaDeg);
+
+        float cone = exp(-0.5 * pow(max(elongDeg - 2.5, 0.0) / 50.0, 1.75));
+        float gegen = 0.03 * exp(-0.5 * pow((elongDeg - 180.0) / 18.0, 2.0));
+        float along = cone + gegen;
+
+        float limb = smoothstep(0.0, 0.05, elevN);
+        float elevShape = exp(-pow(max(elevN - 0.02, 0.0) / 0.78, 1.05));
+        float energy = along * latGlow * elevShape * limb;
+        // Gentle curve — keeps falloff readable, avoids white plateau edges.
+        float punch = pow(max(energy, 0.0), 0.95);
+
+        float edgeT = smoothstep(0.0, halfW * 3.2, betaDeg);
+        vec3 zlCore = vec3(0.92, 0.96, 1.08);
+        vec3 zlEdge = vec3(0.62, 0.78, 1.15);
+        vec3 zlColor = mix(zlCore, zlEdge, edgeT);
+        float gain = zlAmt * nightZl * punch * 0.38;
+        if (gain < 0.0015) discard;
+        gl_FragColor = vec4(zlColor * gain, 1.0);
+      }
+    `,
+  })
+  const zodiacalMesh = new THREE.Mesh(geometry, zodiacalMaterial)
+  zodiacalMesh.frustumCulled = false
+  zodiacalMesh.renderOrder = ZODIACAL_RENDER_ORDER
+  zodiacalMesh.name = 'zodiacalGlow'
+
+  return { mesh, zodiacalMesh, geometry, material, zodiacalMaterial }
 }
 
 export function updateAstroSkyDome(
@@ -503,16 +572,20 @@ export function updateAstroSkyDome(
   ) {
     sky.material.uniforms.uAirglowTime.value = input.airglowTimeSec
   }
-  sky.material.uniforms.uZodiacal.value = clampZodiacalAmount(
-    input.zodiacalAmount ?? 0,
-  )
+  const zlAmt = clampZodiacalAmount(input.zodiacalAmount ?? 0)
+  const zlMat = sky.zodiacalMaterial
+  ;(zlMat.uniforms.uSunDir.value as THREE.Vector3).copy(input.sunDirection)
+  zlMat.uniforms.uSunAltitude.value = input.sunAltitudeDeg
+  zlMat.uniforms.uEyeElevM.value = Math.max(0, input.eyeElevationMslM)
+  zlMat.uniforms.uZodiacal.value = zlAmt
   if (input.eclipticPole) {
-    ;(sky.material.uniforms.uEclipticPole.value as THREE.Vector3)
+    ;(zlMat.uniforms.uEclipticPole.value as THREE.Vector3)
       .copy(input.eclipticPole)
       .normalize()
   }
   // Always keep the dome: it paints sea/ground under the geometric horizon
   // even when Rayleigh atmosphere is toggled off (avoids a black void).
+  // ImmersiveView may still hide both meshes via render-diag showSky.
   sky.mesh.visible = true
 }
 

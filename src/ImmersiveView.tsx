@@ -13,7 +13,7 @@ import {
   objectHorizontalAt,
   type CelestialObject,
 } from './celestialObjects'
-import { sunPositionAt } from './celestial'
+import { civilDayStartUtcMs, sunPositionAt } from './celestial'
 import {
   clampFrameRollDeg,
   horizontalFovDegFromFocalMm,
@@ -585,6 +585,7 @@ export function ImmersiveView({
 
     const sky = createAstroSkyDome()
     scene.add(sky.mesh)
+    scene.add(sky.zodiacalMesh)
     const eclipticPoleLocal = new THREE.Vector3()
 
     const nightSky = createNightSky({ labelHost: host })
@@ -664,10 +665,9 @@ export function ImmersiveView({
       camera.position.y = groundY + eyeH
       eyeGroundElevMsl =
         groundElevMslAt?.(east, north) ?? sceneGroundElevM
-      sky.material.uniforms.uEyeElevM.value = Math.max(
-        0,
-        eyeGroundElevMsl + eyeH,
-      )
+      const eyeMsl = Math.max(0, eyeGroundElevMsl + eyeH)
+      sky.material.uniforms.uEyeElevM.value = eyeMsl
+      sky.zodiacalMaterial.uniforms.uEyeElevM.value = eyeMsl
     }
 
     let roll = 0
@@ -1228,6 +1228,7 @@ export function ImmersiveView({
         camera.updateProjectionMatrix()
       }
       sky.mesh.visible = diag.showSky
+      sky.zodiacalMesh.visible = diag.showSky
       nightSky.root.visible = diag.showNightSky
       if (terrainNearObj) terrainNearObj.visible = diag.showTerrainNear
       if (terrainFarObj) terrainFarObj.visible = diag.showTerrainFar
@@ -1242,6 +1243,7 @@ export function ImmersiveView({
       }
 
       sky.mesh.position.copy(camera.position)
+      sky.zodiacalMesh.position.copy(camera.position)
       // Drift airglow gravity-wave phase each frame (slow band advection).
       sky.material.uniforms.uAirglowTime.value = performance.now() * 0.001
       adaptTerrain?.(camera.position.x, camera.position.y, camera.position.z)
@@ -1360,6 +1362,7 @@ export function ImmersiveView({
       nightSkyApiRef.current = null
       sky.geometry.dispose()
       sky.material.dispose()
+      sky.zodiacalMaterial.dispose()
       nightSky.dispose()
       skyBodies.dispose()
       terrainDispose?.()
@@ -2126,8 +2129,13 @@ export function ImmersiveView({
             type="button"
             className="hud-btn immersive__exit"
             style={{ width: 'auto', minWidth: 40, padding: '0 10px', fontSize: '0.7rem' }}
-            onClick={() => onDateChange('2026-06-12')}
-            title="Debug: calendrier → 12 juin 2026"
+            onClick={() => {
+              onDateChange('2026-06-12')
+              onSkyUtcChange?.(
+                civilDayStartUtcMs('2026-06-12', lon) + 21 * 3600_000,
+              )
+            }}
+            title="Debug: calendrier → 12 juin 2026, 21h locale"
           >
             12/06/26
           </button>

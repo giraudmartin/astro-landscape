@@ -255,18 +255,7 @@ export function ViewfinderCameraPanel({
 
   const rotationBlock = (
     <div className="vf-camera-pop__field">
-      <div className="vf-camera-pop__roll-head">
-        <span className="vf-camera-pop__label">Rotation</span>
-        {roll !== 0 ? (
-          <button
-            type="button"
-            className="vf-camera-pop__roll-reset"
-            onClick={() => onFrameRollChange(0)}
-          >
-            Remettre à 0
-          </button>
-        ) : null}
-      </div>
+      <span className="vf-camera-pop__label">Rotation</span>
       <div className="moon-preview-stepper">
         <button
           type="button"
@@ -285,6 +274,17 @@ export function ViewfinderCameraPanel({
         >
           +
         </button>
+        {roll !== 0 ? (
+          <button
+            type="button"
+            className="vf-camera-pop__roll-reset"
+            aria-label="Remettre la rotation à 0"
+            title="Remettre à 0"
+            onClick={() => onFrameRollChange(0)}
+          >
+            0°
+          </button>
+        ) : null}
       </div>
       <p className="vf-camera-pop__hint">
         Incline le cadre photo (antihoraire).

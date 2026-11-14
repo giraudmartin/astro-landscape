@@ -1,0 +1,29 @@
+---
+description: Never Mesh-raycast the immersive DEM for constellation / sky labels
+alwaysApply: true
+---
+
+# Constellation labels — zero Mesh raycasts on terrain
+
+Burned on 2026-11-14 (`d1699d4`): night immersive froze (~1 frame / tens of seconds)
+because HTML constellation names called `Raycaster.intersectObjects` on the full
+near/far DEM every frame (~86 labels × millions of tris). Day was fine; night died.
+
+## Forbidden
+
+| Hack | Symptom |
+|---|---|
+| `Raycaster.intersectObjects(terrainRoot, true)` (near/far/LOD meshes) | Night-only freeze / multi-second frames |
+| Any per-frame Mesh raycast / BVH query against immersive terrain for sky labels | Same — feature is secondary, app must stay interactive |
+| “Just for labels behind ridges” framing that reintroduces mesh picks | Already burned — do not restore |
+
+## Allowed (locked baseline)
+
+- Height-field samples along the sightline (`groundYAt` / DEM elev), O(1) steps
+- Horizon cut (`dir.y` threshold) without touching meshes
+- If occlusion is too wrong or still costly: **hide the feature** (turn labels off) — never trade frame time for ridge hiding
+
+## Rule of landing
+
+A constellation / night-sky “fix” that makes night pan worse than HEAD is a failed
+change — revert immediately. Do not reintroduce mesh picking for this secondary UI.

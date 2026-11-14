@@ -561,7 +561,10 @@ async function fetchEsriBytes(
   if (hit) return hit
   const pending = (async () => {
     try {
-      const res = await fetch(`${ESRI}/${z}/${y}/${x}`)
+      const res = await fetch(`${ESRI}/${z}/${y}/${x}`, {
+        // A never-settling fetch cached in esriCache freezes later builds.
+        signal: AbortSignal.timeout(20_000),
+      })
       if (!res.ok) return null
       return res.arrayBuffer()
     } catch {
@@ -2826,22 +2829,16 @@ export async function createLocalTerrainMesh(input: {
     material.needsUpdate = true
   }
 
-  // Near ortho first (sharp 8 km core) ? never block on far LOD tile storms.
+  // Near ortho first (sharp 8 km core) — never block on far LOD tile storms.
+  // Sequential (not Promise.all): waiting on full+near+ultra together left the
+  // loader frozen at 40% for minutes while ~6k Esri tiles downloaded.
   notifyProgress('ortho', 0.4)
-  const [fullMap, nearMap, ultraMap] = await Promise.all([
-    buildImageryTexture(input.lat, input.lon, radiusM),
-    buildNearImageryTexture(input.lat, input.lon),
-    buildUltraNearImageryTexture(input.lat, input.lon),
-  ])
-
+  const fullMap = await buildImageryTexture(input.lat, input.lon, radiusM)
   if (disposed) {
     fullMap?.dispose()
-    nearMap?.dispose()
-    ultraMap?.dispose()
     commitTerrainTileSession(sessionGen)
     return handle
   }
-
   if (fullMap) {
     const prev = material.map
     material.map = fullMap
@@ -2850,7 +2847,24 @@ export async function createLocalTerrainMesh(input: {
     material.needsUpdate = true
     if (prev && prev !== fullMap && prev !== previewTexture) prev.dispose()
   }
+  notifyProgress('ortho', 0.48)
+  input.onUpgrade?.(handle)
+
+  const nearMap = await buildNearImageryTexture(input.lat, input.lon)
+  if (disposed) {
+    nearMap?.dispose()
+    commitTerrainTileSession(sessionGen)
+    return handle
+  }
   enableAtlas('near', nearMap)
+  notifyProgress('ortho', 0.53)
+
+  const ultraMap = await buildUltraNearImageryTexture(input.lat, input.lon)
+  if (disposed) {
+    ultraMap?.dispose()
+    commitTerrainTileSession(sessionGen)
+    return handle
+  }
   enableAtlas('ultra', ultraMap)
   handle.stats.tiles = [...cache.values()].filter(Boolean).length
   notifyProgress('ortho', 0.58)

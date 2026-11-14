@@ -1268,7 +1268,20 @@ export function ImmersiveView({
           width: host.clientWidth,
           height: host.clientHeight,
         },
-        occlusionRoots: [terrainNearObj, terrainFarObj],
+        // Height-field samples only — Mesh raycasts on the DEM (d1699d4) made
+        // night frames take tens of seconds with constellations on.
+        terrainOccluded: (origin, dir, maxDist) => {
+          if (!groundYAt) return false
+          const sample = groundYAt
+          const lim = Math.min(Math.max(2, maxDist - 100), 80_000)
+          for (let d = 80; d < lim; d += 280) {
+            const x = origin.x + dir.x * d
+            const y = origin.y + dir.y * d
+            const z = origin.z + dir.z * d
+            if (sample(x, -z) > y + 3) return true
+          }
+          return false
+        },
       })
       skyBodies.update({
         utcMs: latestSkyUtc,

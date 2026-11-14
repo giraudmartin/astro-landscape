@@ -119,8 +119,15 @@ export type NightSkyHandle = {
     starTrailArcRad?: number
     /** CSS px size of the viewfinder canvas (for HTML constellation names). */
     viewSize?: { width: number; height: number }
-    /** Terrain meshes used to occlude constellation names behind ridges. */
-    occlusionRoots?: readonly (THREE.Object3D | null | undefined)[]
+    /**
+     * Cheap ridge occlusion for constellation HTML names (height samples).
+     * Do NOT pass full terrain meshes — Mesh raycasts froze night frames.
+     */
+    terrainOccluded?: (
+      origin: THREE.Vector3,
+      dir: THREE.Vector3,
+      maxDist: number,
+    ) => boolean
   }) => void
   /** Lazy-load the Hα equirect on first enable. */
   ensureHalphaLoaded: () => Promise<void>
@@ -337,7 +344,7 @@ export function createNightSky(opts?: {
       starGlow = 1,
       starTrailArcRad = 0,
       viewSize,
-      occlusionRoots,
+      terrainOccluded,
     }) => {
       if (disposed) return
       root.position.copy(camera.position)
@@ -401,7 +408,7 @@ export function createNightSky(opts?: {
             stageVfovDeg: stageFov,
             canvasWidth: w,
             canvasHeight: h,
-            occlusionRoots,
+            terrainOccluded,
           })
         }
       }

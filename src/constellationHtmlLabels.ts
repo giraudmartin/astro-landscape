@@ -22,8 +22,15 @@ export type ConstellationHtmlLabelsHandle = {
     stageVfovDeg: number
     canvasWidth: number
     canvasHeight: number
-    /** Terrain (near/far) — hide names whose line of sight hits a ridge. */
-    occlusionRoots?: readonly (THREE.Object3D | null | undefined)[]
+    /**
+     * Cheap ridge test (height samples). NEVER Mesh raycasts — intersectObjects
+     * on the immersive DEM froze night frames for tens of seconds (d1699d4).
+     */
+    terrainOccluded?: (
+      origin: THREE.Vector3,
+      dir: THREE.Vector3,
+      maxDist: number,
+    ) => boolean
   }) => void
   dispose: () => void
 }
@@ -39,7 +46,6 @@ const _right = new THREE.Vector3()
 const _up = new THREE.Vector3()
 const _forward = new THREE.Vector3()
 const _camPos = new THREE.Vector3()
-const _raycaster = new THREE.Raycaster()
 /** ~35° elev — above this, DEM ridges almost never occlude the sky. */
 const OCCLUSION_MAX_DIR_Y = Math.sin((35 * Math.PI) / 180)
 
@@ -128,7 +134,7 @@ export function createConstellationHtmlLabels(
       stageVfovDeg,
       canvasWidth,
       canvasHeight,
-      occlusionRoots,
+      terrainOccluded,
     }) => {
       if (!visibleWanted || canvasWidth < 2 || canvasHeight < 2) {
         for (const a of anchors) a.el.style.display = 'none'
@@ -143,12 +149,6 @@ export function createConstellationHtmlLabels(
 
       const aspect = canvasWidth / canvasHeight
       const margin = 0.08
-      const occluders: THREE.Object3D[] = []
-      if (occlusionRoots) {
-        for (const root of occlusionRoots) {
-          if (root) occluders.push(root)
-        }
-      }
 
       for (const a of anchors) {
         _world.copy(a.local).applyMatrix4(celestialRoot.matrixWorld)
@@ -166,13 +166,9 @@ export function createConstellationHtmlLabels(
           continue
         }
 
-        // Hide names whose sightline hits a terrain ridge before the sky shell.
-        if (occluders.length > 0 && _dir.y < OCCLUSION_MAX_DIR_Y) {
-          _raycaster.set(_camPos, _dir)
-          _raycaster.near = 1
-          _raycaster.far = Math.max(2, dist - 100)
-          const hits = _raycaster.intersectObjects(occluders, true)
-          if (hits.length > 0) {
+        // Hide names whose sightline hits a ridge before the sky shell.
+        if (terrainOccluded && _dir.y < OCCLUSION_MAX_DIR_Y) {
+          if (terrainOccluded(_camPos, _dir, dist)) {
             a.el.style.display = 'none'
             continue
           }

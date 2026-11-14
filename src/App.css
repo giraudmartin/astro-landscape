@@ -3371,6 +3371,12 @@ html[data-qa-hide-chrome='1'] .render-diag {
   background: rgba(16, 16, 20, 0.52);
 }
 
+.immersive__loader-stack {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
 .immersive__loader-card {
   box-sizing: border-box;
   width: 100%;
@@ -3489,6 +3495,11 @@ html[data-qa-hide-chrome='1'] .render-diag {
   font-size: 0.74rem;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.55);
+}
+
+.immersive__loader-tip-card {
+  padding: 14px 20px;
+  gap: 0;
   animation: immersive-loader-tip-in 420ms var(--motion-ease-out) both;
 }
 
@@ -3543,7 +3554,7 @@ html[data-qa-hide-chrome='1'] .render-diag {
     background-size: 100% 100%;
   }
 
-  .immersive__loader-tip {
+  .immersive__loader-tip-card {
     animation: none;
   }
 }

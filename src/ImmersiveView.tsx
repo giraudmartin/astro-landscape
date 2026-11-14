@@ -1572,53 +1572,57 @@ export function ImmersiveView({
           aria-live="polite"
           aria-busy={!terrainReady}
         >
-          <div className="immersive__loader-card">
-            <div className="immersive__loader-header">
-              <div className="immersive__loader-heading">
-                <p className="immersive__loader-eyebrow">Terrain</p>
-                <p className="immersive__loader-phase">
-                  {terrainReady
-                    ? 'Vue prête'
-                    : terrainPhase === 'dem' && terrainDemFromCache
-                      ? 'Relief (cache)\u2026'
-                      : TERRAIN_PHASE_LABEL[terrainPhase]}
-                </p>
-                <p className="immersive__loader-detail">
-                  {terrainReady
-                    ? 'Relief et ortho disponibles'
-                    : terrainUnlocked
-                      ? 'Affinage en arrière-plan'
-                      : 'Construction de la scène immersive'}
+          <div className="immersive__loader-stack">
+            <div className="immersive__loader-card">
+              <div className="immersive__loader-header">
+                <div className="immersive__loader-heading">
+                  <p className="immersive__loader-eyebrow">Terrain</p>
+                  <p className="immersive__loader-phase">
+                    {terrainReady
+                      ? 'Vue prête'
+                      : terrainPhase === 'dem' && terrainDemFromCache
+                        ? 'Relief (cache)\u2026'
+                        : TERRAIN_PHASE_LABEL[terrainPhase]}
+                  </p>
+                  <p className="immersive__loader-detail">
+                    {terrainReady
+                      ? 'Relief et ortho disponibles'
+                      : terrainUnlocked
+                        ? 'Affinage en arrière-plan'
+                        : 'Construction de la scène immersive'}
+                  </p>
+                </div>
+                <p className="immersive__loader-pct">
+                  {Math.round(terrainProgress * 100)}
+                  <span className="immersive__loader-pct-unit">%</span>
                 </p>
               </div>
-              <p className="immersive__loader-pct">
-                {Math.round(terrainProgress * 100)}
-                <span className="immersive__loader-pct-unit">%</span>
-              </p>
-            </div>
-            <div
-              className="immersive__loader-track"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(terrainProgress * 100)}
-              role="progressbar"
-            >
               <div
-                className={`immersive__loader-fill${terrainReady ? '' : ' immersive__loader-fill--active'}`}
-                style={{ width: `${Math.round(terrainProgress * 100)}%` }}
-              />
+                className="immersive__loader-track"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(terrainProgress * 100)}
+                role="progressbar"
+              >
+                <div
+                  className={`immersive__loader-fill${terrainReady ? '' : ' immersive__loader-fill--active'}`}
+                  style={{ width: `${Math.round(terrainProgress * 100)}%` }}
+                />
+              </div>
             </div>
             {loaderTip ? (
-              <p
+              <div
                 key={loaderTipKey}
-                className="immersive__loader-tip"
+                className="immersive__loader-card immersive__loader-tip-card"
                 aria-hidden="true"
               >
-                <span className="immersive__loader-tip-label">
-                  Le saviez-vous ?
-                </span>
-                {loaderTip}
-              </p>
+                <p className="immersive__loader-tip">
+                  <span className="immersive__loader-tip-label">
+                    Le saviez-vous ?
+                  </span>
+                  {loaderTip}
+                </p>
+              </div>
             ) : null}
           </div>
         </div>

@@ -238,7 +238,7 @@ export function ViewfinderTimelapsePanel({
 
       <div className="vf-camera-pop__twocol">
         <TimelapseNumberStepper
-          label="Pose — s"
+          label="Pose (s)"
           ariaLabel="Pose en secondes"
           value={poseS}
           min={TIMELAPSE_POSE_MIN_S}
@@ -248,7 +248,7 @@ export function ViewfinderTimelapsePanel({
           onChange={(next) => patch({ poseS: next })}
         />
         <TimelapseNumberStepper
-          label="Intervalle — s"
+          label="Intervalle (s)"
           ariaLabel="Intervalle en secondes"
           value={intervalS}
           min={poseS}
@@ -258,7 +258,7 @@ export function ViewfinderTimelapsePanel({
           onChange={(next) => patch({ intervalS: next })}
         />
         <TimelapseNumberStepper
-          label="Durée — min"
+          label="Durée (min)"
           ariaLabel="Durée en minutes"
           value={durationMin}
           min={TIMELAPSE_DURATION_MIN_MIN}
@@ -268,7 +268,7 @@ export function ViewfinderTimelapsePanel({
           onChange={(next) => patch({ durationMin: next })}
         />
         <TimelapseNumberStepper
-          label="Lecture — i/s"
+          label="Lecture (i/s)"
           ariaLabel="Cadence de lecture en images par seconde"
           value={playbackFps}
           min={TIMELAPSE_FPS_MIN}

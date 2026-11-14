@@ -53,7 +53,7 @@ const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
   ready: 'Pr\u00eat',
 }
 
-const LOADER_TIP_ROTATE_MS = 6500
+const LOADER_TIP_ROTATE_MS = 15000
 import {
   clampStarBrightness,
   clampStarGlow,

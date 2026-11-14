@@ -89,9 +89,11 @@ import {
 import {
   createAstroSkyDome,
   eclipticNorthPoleThreeLocal,
+  setLightPollutionProfile,
   sunDirectionFromAltAz,
   updateAstroSkyDome,
 } from './skyDome'
+import { buildHorizonGlowProfile } from './lightPollution/horizonGlowProfile'
 import {
   applyStageProjection,
   getStageProjection,
@@ -107,11 +109,14 @@ import {
   clampGroundNightBrightness,
   clampGroundNightContrast,
   clampGroundNightTemperature,
+  clampLightPollutionAmount,
   clampZodiacalAmount,
   groundAlbedoFromSky,
   hexToRgb01,
   skyPaletteFromSunAltitude,
 } from './skyLighting'
+import { bortlePollutionFactor } from './lightPollution/bortleFromRadiance'
+import { sampleLightPollution } from './lightPollution/sampleLightPollution'
 import type { QaImmersiveApi } from './qaTestHooks'
 
 type MoveDir = 'up' | 'down' | 'left' | 'right'
@@ -345,6 +350,9 @@ export function ImmersiveView({
   const [zodiacalAmount, setZodiacalAmount] = useState(() =>
     clampZodiacalAmount(savedImmersive.zodiacalAmount),
   )
+  const [lightPollutionAmount, setLightPollutionAmount] = useState(() =>
+    clampLightPollutionAmount(savedImmersive.lightPollutionAmount),
+  )
   const [showConstellations, setShowConstellations] = useState(
     savedImmersive.showConstellations,
   )
@@ -363,6 +371,9 @@ export function ImmersiveView({
     airglowHue: clampAirglowHue(savedImmersive.airglowHue),
     airglowWaves: clampAirglowWaves(savedImmersive.airglowWaves),
     zodiacalAmount: clampZodiacalAmount(savedImmersive.zodiacalAmount),
+    lightPollutionAmount: clampLightPollutionAmount(
+      savedImmersive.lightPollutionAmount,
+    ),
     showConstellations: savedImmersive.showConstellations,
     showCelestialGrid: savedImmersive.showCelestialGrid,
     showAzimuthGrid: savedImmersive.showAzimuthGrid,
@@ -375,10 +386,13 @@ export function ImmersiveView({
     airglowHue,
     airglowWaves,
     zodiacalAmount,
+    lightPollutionAmount,
     showConstellations,
     showCelestialGrid,
     showAzimuthGrid,
   }
+  const lightPollutionBortleFactorRef = useRef(0)
+  const lightPollutionMeanRef = useRef(0)
   /** Live fixed-tripod star-trail arc — only while the Timelapse planner is active. */
   const starTrailArcRadRef = useRef(0)
   starTrailArcRadRef.current =
@@ -393,7 +407,8 @@ export function ImmersiveView({
         orientation,
         frameRollDeg,
         sensorFormat,
-        frameMode,
+        // Persist Photo/Pano only — Libre must not become the next launch mode.
+        frameMode: frameMode === 'off' ? 'dslr' : frameMode,
         panorama,
         timelapse,
         projection,
@@ -413,6 +428,7 @@ export function ImmersiveView({
         airglowHue,
         airglowWaves,
         zodiacalAmount,
+        lightPollutionAmount,
         showConstellations,
         showCelestialGrid,
         showAzimuthGrid,
@@ -443,10 +459,12 @@ export function ImmersiveView({
     airglowHue,
     airglowWaves,
     zodiacalAmount,
+    lightPollutionAmount,
     showConstellations,
     showCelestialGrid,
     showAzimuthGrid,
   ])
+
   const nightSkyApiRef = useRef<ReturnType<typeof createNightSky> | null>(null)
   const renderDiagLiveRef = useRef<RenderDiagLive>(createRenderDiagLive())
   const diagContextRef = useRef({
@@ -622,6 +640,21 @@ export function ImmersiveView({
     let lastY = 0
     let raf = 0
     let disposed = false
+
+    // Bortle + directional PL dome (sample rings → azimuth texture).
+    void sampleLightPollution(lat, lon).then((sample) => {
+      if (disposed || !sample) return
+      lightPollutionBortleFactorRef.current = bortlePollutionFactor(
+        sample.bortle,
+      )
+    })
+    void buildHorizonGlowProfile(lat, lon, {
+      observerElevM: sceneGroundElevM,
+    }).then((profile) => {
+      if (disposed) return
+      setLightPollutionProfile(sky, profile.azimuth, profile.mean)
+      lightPollutionMeanRef.current = profile.mean
+    })
     /** False on WebGL context loss — parked GPU objects would be invalid. */
     let parkOnRelease = true
     let terrainDispose: (() => void) | null = null
@@ -717,6 +750,9 @@ export function ImmersiveView({
       const zodiacalAmountLive = clampZodiacalAmount(
         skyTogglesRef.current.zodiacalAmount,
       )
+      const lightPollutionAmountLive = clampLightPollutionAmount(
+        skyTogglesRef.current.lightPollutionAmount,
+      )
       eclipticNorthPoleThreeLocal(
         new Date(utcMs),
         lat,
@@ -734,6 +770,9 @@ export function ImmersiveView({
         airglowHue: airglowHueLive,
         airglowWaves: airglowWavesLive,
         zodiacalAmount: zodiacalAmountLive,
+        lightPollutionAmount: lightPollutionAmountLive,
+        lightPollutionBortleFactor: lightPollutionBortleFactorRef.current,
+        lightPollutionMean: lightPollutionMeanRef.current,
         eclipticPole: eclipticPoleLocal,
       })
 
@@ -1366,6 +1405,7 @@ export function ImmersiveView({
       sky.geometry.dispose()
       sky.material.dispose()
       sky.zodiacalMaterial.dispose()
+      sky.lightPollutionProfile.dispose()
       nightSky.dispose()
       skyBodies.dispose()
       terrainDispose?.()
@@ -1387,6 +1427,7 @@ export function ImmersiveView({
     airglowHue,
     airglowWaves,
     zodiacalAmount,
+    lightPollutionAmount,
     groundNightBrightness,
     groundNightContrast,
     groundNightTemperature,
@@ -2112,6 +2153,7 @@ export function ImmersiveView({
           airglowHue={airglowHue}
           airglowWaves={airglowWaves}
           zodiacalAmount={zodiacalAmount}
+          lightPollutionAmount={lightPollutionAmount}
           starMagDepth={starMagDepth}
           starZoomSpan={starZoomSpan}
           starBrightness={starBrightness}
@@ -2121,6 +2163,7 @@ export function ImmersiveView({
           onAirglowHueChange={setAirglowHue}
           onAirglowWavesChange={setAirglowWaves}
           onZodiacalAmountChange={setZodiacalAmount}
+          onLightPollutionAmountChange={setLightPollutionAmount}
           onStarMagDepthChange={setStarMagDepth}
           onStarZoomSpanChange={setStarZoomSpan}
           onStarBrightnessChange={setStarBrightness}

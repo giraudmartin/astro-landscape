@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker, StyleSpecification } from 'maplibre-gl'
@@ -21,6 +21,7 @@ import { sunPositionAt } from './celestial'
 import { ensureCelestialBodyLayers, ensureNightShadeLayer } from './globeSun'
 import { ensureGlobeMilkyWayLayer } from './globeMilkyWay'
 import { ensureNightShadeProtocol } from './nightShadeProtocol'
+import { ensureLightPollutionProtocol } from './lightPollution/lightPollutionProtocol'
 import { MapControlsStack } from './MapControlsStack'
 import {
   fitPersonalSpots,
@@ -31,6 +32,19 @@ import { DEFAULT_MAP_VIEW } from './presets'
 import { skyPaletteFromSunAltitude } from './skyLighting'
 import type { BasemapMode } from './basemapMode'
 import { applyBasemapMode } from './satelliteHybrid'
+import {
+  LIGHT_POLLUTION_ATTRIBUTION,
+  LIGHT_POLLUTION_LAYER_ID,
+  LIGHT_POLLUTION_MAX_ZOOM,
+  LIGHT_POLLUTION_SOURCE_ID,
+  LIGHT_POLLUTION_TILE_URL,
+} from './lightPollution/tiles'
+import {
+  sampleLightPollution,
+  type LightPollutionSample,
+} from './lightPollution/sampleLightPollution'
+import { SpotBortleCard } from './SpotBortleCard'
+import { SkyBrightnessPanel } from './SkyBrightnessPanel'
 import {
   createSpotActionMarkerElement,
   type SpotActionMarkerController,
@@ -121,6 +135,13 @@ function buildStyle(): StyleSpecification {
         attribution:
           'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community',
       },
+      [LIGHT_POLLUTION_SOURCE_ID]: {
+        type: 'raster',
+        tiles: [LIGHT_POLLUTION_TILE_URL],
+        tileSize: 256,
+        maxzoom: LIGHT_POLLUTION_MAX_ZOOM,
+        attribution: LIGHT_POLLUTION_ATTRIBUTION,
+      },
       terrain: demSource(),
       hillshadeDem: demSource(),
     },
@@ -152,6 +173,17 @@ function buildStyle(): StyleSpecification {
           'hillshade-accent-color': '#5a4630',
           'hillshade-illumination-direction': 315,
           'hillshade-illumination-anchor': 'map',
+        },
+      },
+      {
+        id: LIGHT_POLLUTION_LAYER_ID,
+        type: 'raster',
+        source: LIGHT_POLLUTION_SOURCE_ID,
+        paint: {
+          // Night-only — applyMapSky drives opacity from nightAmount.
+          'raster-opacity': 0,
+          'raster-fade-duration': 0,
+          'raster-resampling': 'linear',
         },
       },
     ],
@@ -278,6 +310,7 @@ export function MapCanvas({
     ensureEsriSafeImageryProtocol()
     ensureMapterhornSafeDemProtocol()
     ensureNightShadeProtocol()
+    ensureLightPollutionProtocol()
 
     const map = new maplibregl.Map({
       container,
@@ -825,6 +858,28 @@ export function MapCanvas({
     }
   }, [skyUtcMs, spot?.lat, spot?.lon, spot?.heightM])
 
+  const [bortleSample, setBortleSample] = useState<LightPollutionSample | null>(
+    null,
+  )
+  const [skyBrightnessOpen, setSkyBrightnessOpen] = useState(false)
+
+  useEffect(() => {
+    if (!spot) {
+      setBortleSample(null)
+      setSkyBrightnessOpen(false)
+      return
+    }
+    let cancelled = false
+    const { lat, lon } = spot
+    void sampleLightPollution(lat, lon).then((sample) => {
+      if (cancelled) return
+      setBortleSample(sample)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [spot])
+
   return (
     <div className="globe-shell">
       <div ref={containerRef} className="globe-canvas" />
@@ -841,10 +896,34 @@ export function MapCanvas({
         mySpotsOpen={mySpotsOpen}
         onMySpotsOpenChange={onMySpotsOpenChange}
       />
-      {spot ? (
+      {spot && bortleSample ? (
+        <SpotBortleCard
+          bortle={bortleSample.bortle}
+          label={bortleSample.bortleLabel}
+          lat={spot.lat}
+          lon={spot.lon}
+          elevM={spot.heightM}
+          sourceHint={
+            bortleSample.source === 'viirs-cog'
+              ? 'VIIRS COG · Indice estimé'
+              : 'Black Marble · Indice estimé'
+          }
+          onOpenSkyBrightness={() => setSkyBrightnessOpen(true)}
+        />
+      ) : spot ? (
         <p className="spot-readout">
           {formatCoord(spot.lat, spot.lon)} · {Math.round(spot.heightM)} m
         </p>
+      ) : null}
+      {spot && bortleSample ? (
+        <SkyBrightnessPanel
+          open={skyBrightnessOpen}
+          onClose={() => setSkyBrightnessOpen(false)}
+          lat={spot.lat}
+          lon={spot.lon}
+          elevM={spot.heightM}
+          sample={bortleSample}
+        />
       ) : null}
     </div>
   )

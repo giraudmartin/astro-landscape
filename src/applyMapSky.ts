@@ -1,9 +1,17 @@
-import type { Map } from 'maplibre-gl'
+import type { Map, RasterTileSource } from 'maplibre-gl'
 import {
   applyGlobeSunLighting,
   updateCelestialBodyMarkers,
 } from './globeSun'
+import {
+  LIGHT_POLLUTION_LAYER_ID,
+  LIGHT_POLLUTION_SOURCE_ID,
+  lightPollutionOpacity,
+  lightPollutionProtocolTileUrl,
+} from './lightPollution/tiles'
 import { hexToRgb, type SkyPalette } from './skyLighting'
+
+const lastLightPollutionUrlByMap = new WeakMap<Map, string>()
 
 function rgbTuple(hex: string): [number, number, number] {
   const { r, g, b } = hexToRgb(hex)
@@ -155,6 +163,28 @@ export function applyMapSky(
       dim * 22 + twilight * 8,
     )
     map.setPaintProperty('imagery', 'raster-opacity', 1 - dim * 0.28)
+  }
+
+  // City lights: terminator-masked tiles (protocol). Globe always visible;
+  // ground framing follows local nightAmount.
+  if (map.getLayer(LIGHT_POLLUTION_LAYER_ID)) {
+    map.setPaintProperty(
+      LIGHT_POLLUTION_LAYER_ID,
+      'raster-opacity',
+      lightPollutionOpacity(localNight, ground),
+    )
+  }
+  if (options && map.getSource(LIGHT_POLLUTION_SOURCE_ID)) {
+    const nextUrl = lightPollutionProtocolTileUrl(options.utcMs)
+    if (lastLightPollutionUrlByMap.get(map) !== nextUrl) {
+      const source = map.getSource(LIGHT_POLLUTION_SOURCE_ID) as
+        | RasterTileSource
+        | undefined
+      if (source && typeof source.setTiles === 'function') {
+        source.setTiles([nextUrl])
+      }
+      lastLightPollutionUrlByMap.set(map, nextUrl)
+    }
   }
 
   if (map.getLayer('background')) {

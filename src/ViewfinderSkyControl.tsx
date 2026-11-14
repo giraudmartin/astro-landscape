@@ -22,12 +22,15 @@ import {
   AIRGLOW_WAVES_MIN,
   ATMOSPHERE_AMOUNT_MAX,
   ATMOSPHERE_AMOUNT_MIN,
+  LIGHT_POLLUTION_AMOUNT_MAX,
+  LIGHT_POLLUTION_AMOUNT_MIN,
   ZODIACAL_AMOUNT_MAX,
   ZODIACAL_AMOUNT_MIN,
   clampAirglowAmount,
   clampAirglowHue,
   clampAirglowWaves,
   clampAtmosphereAmount,
+  clampLightPollutionAmount,
   clampZodiacalAmount,
 } from './skyLighting'
 import { ChevronDownIcon, SettingsSlidersIcon } from './psIcons'
@@ -38,6 +41,7 @@ type ViewfinderSkyControlProps = {
   airglowHue: number
   airglowWaves: number
   zodiacalAmount: number
+  lightPollutionAmount: number
   starMagDepth: number
   starZoomSpan: number
   starBrightness: number
@@ -47,6 +51,7 @@ type ViewfinderSkyControlProps = {
   onAirglowHueChange: (value: number) => void
   onAirglowWavesChange: (value: number) => void
   onZodiacalAmountChange: (value: number) => void
+  onLightPollutionAmountChange: (value: number) => void
   onStarMagDepthChange: (value: number) => void
   onStarZoomSpanChange: (value: number) => void
   onStarBrightnessChange: (value: number) => void
@@ -62,6 +67,7 @@ export function ViewfinderSkyControl({
   airglowHue,
   airglowWaves,
   zodiacalAmount,
+  lightPollutionAmount,
   starMagDepth,
   starZoomSpan,
   starBrightness,
@@ -71,6 +77,7 @@ export function ViewfinderSkyControl({
   onAirglowHueChange,
   onAirglowWavesChange,
   onZodiacalAmountChange,
+  onLightPollutionAmountChange,
   onStarMagDepthChange,
   onStarZoomSpanChange,
   onStarBrightnessChange,
@@ -295,6 +302,40 @@ export function ViewfinderSkyControl({
                 onChange={(event) =>
                   onZodiacalAmountChange(
                     clampZodiacalAmount(Number(event.target.value)),
+                  )
+                }
+              />
+            </label>
+          </div>
+
+          <div className="vf-landscape-menu__group">
+            <div className="vf-landscape-menu__group-title">
+              Pollution lumineuse
+            </div>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Intensité</span>
+                <span className="vf-landscape-menu__value">
+                  {lightPollutionAmount.toFixed(2)}
+                </span>
+              </span>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={LIGHT_POLLUTION_AMOUNT_MIN}
+                max={LIGHT_POLLUTION_AMOUNT_MAX}
+                step={0.05}
+                value={lightPollutionAmount}
+                style={rangeProgressStyle(
+                  lightPollutionAmount,
+                  LIGHT_POLLUTION_AMOUNT_MIN,
+                  LIGHT_POLLUTION_AMOUNT_MAX,
+                )}
+                aria-label="Intensité de la pollution lumineuse"
+                title="Dôme de pollution directionnel (plus clair vers les villes à l’horizon). 0 = ciel propre ; 1 = effet max. Visible la nuit."
+                onChange={(event) =>
+                  onLightPollutionAmountChange(
+                    clampLightPollutionAmount(Number(event.target.value)),
                   )
                 }
               />

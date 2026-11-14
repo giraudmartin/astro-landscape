@@ -187,6 +187,22 @@ export function clampZodiacalAmount(value: number): number {
   return Math.min(ZODIACAL_AMOUNT_MAX, Math.max(ZODIACAL_AMOUNT_MIN, value))
 }
 
+/**
+ * Immersive light-pollution display intensity (horizon glow + sky wash).
+ * 0 = ignore local Bortle; 1 = full effect for the spot’s estimated class.
+ */
+export const LIGHT_POLLUTION_AMOUNT_MIN = 0
+export const LIGHT_POLLUTION_AMOUNT_MAX = 1
+export const LIGHT_POLLUTION_AMOUNT_DEFAULT = 0.85
+
+export function clampLightPollutionAmount(value: number): number {
+  if (!Number.isFinite(value)) return LIGHT_POLLUTION_AMOUNT_DEFAULT
+  return Math.min(
+    LIGHT_POLLUTION_AMOUNT_MAX,
+    Math.max(LIGHT_POLLUTION_AMOUNT_MIN, value),
+  )
+}
+
 /** Display RGB for airglow hue slider (green → red atomic oxygen). */
 export function airglowColorFromHue(hue: number): {
   r: number

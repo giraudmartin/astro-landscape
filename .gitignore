@@ -21,6 +21,11 @@ artifacts/
 # Offline Hα source (53 MB TIFF) — rebuild with scripts/build_halpha_texture.py
 raw-sky/
 
+# EOG VIIRS Bortle COG — bake with npm run build:viirs-bortle
+public/light-pollution/*.tif
+public/light-pollution/*.tiff
+!public/light-pollution/.gitkeep
+
 # Raw OpenNGC CSV — rebuild catalogs with scripts/build-celestial-catalogs.mjs
 scripts/_openngc_NGC.csv
 scripts/_openngc_addendum.csv

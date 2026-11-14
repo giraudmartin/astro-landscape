@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "build:halpha": "python scripts/build_halpha_texture.py",
     "build:milkyway-globe": "python scripts/build_milkyway_globe.py",
+    "build:viirs-bortle": "python scripts/build-viirs-bortle-cog-rasterio.py --from-gibs",
+    "build:viirs-bortle:eog": "python scripts/build-viirs-bortle-cog-rasterio.py",
     "build:catalogs": "node scripts/build-celestial-catalogs.mjs",
     "test": "vitest run",
     "test:nonregression": "vitest run src/stelProjector.nonregression.test.ts src/stelProjector.fov.test.ts src/stelStereoChord.test.ts",
@@ -19,6 +21,7 @@
   "dependencies": {
     "@versatiles/style": "^7.1.0",
     "astronomy-engine": "^2.1.19",
+    "geotiff": "^3.0.5",
     "maplibre-gl": "^6.16.0",
     "pmtiles": "^4.5.0",
     "react": "^19.3.1",

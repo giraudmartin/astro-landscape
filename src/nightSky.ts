@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { Observer, Rotation_EQJ_HOR } from 'astronomy-engine'
 import { CELESTIAL_SKY_DISTANCE_M } from './celestialRender'
 import { createCelestialVectorLayers } from './celestialVectors'
+import { createConstellationHtmlLabels } from './constellationHtmlLabels'
 import { createHorizonAzimuthGrid } from './horizonAzimuthGrid'
 import {
   createNasaSkyTileLayer,
@@ -116,6 +117,10 @@ export type NightSkyHandle = {
     starGlow?: number
     /** Fixed-tripod exposure trail (rad of sky arc); 0 = pinpricks. */
     starTrailArcRad?: number
+    /** CSS px size of the viewfinder canvas (for HTML constellation names). */
+    viewSize?: { width: number; height: number }
+    /** Terrain meshes used to occlude constellation names behind ridges. */
+    occlusionRoots?: readonly (THREE.Object3D | null | undefined)[]
   }) => void
   /** Lazy-load the Hα equirect on first enable. */
   ensureHalphaLoaded: () => Promise<void>
@@ -133,7 +138,10 @@ function createBlackDataTexture(): THREE.DataTexture {
  * HYG stars + NASA milky-way tiles (Photo Sightline VF night sky),
  * oriented with Astronomy Engine for the observer.
  */
-export function createNightSky(): NightSkyHandle {
+export function createNightSky(opts?: {
+  /** Host for crisp HTML constellation names (same font as Paysage / Ciel). */
+  labelHost?: HTMLElement | null
+}): NightSkyHandle {
   const root = new THREE.Group()
   root.name = 'nightSky'
 
@@ -159,6 +167,11 @@ export function createNightSky(): NightSkyHandle {
     }
   })
   celestialLayers.add(vectorLayers.root)
+
+  const htmlLabels = opts?.labelHost
+    ? createConstellationHtmlLabels(opts.labelHost)
+    : null
+  htmlLabels?.setVisible(false)
 
   let milkyWayTiles: NasaSkyTileLayerHandle | null = null
   let milkyReady = false
@@ -323,6 +336,8 @@ export function createNightSky(): NightSkyHandle {
       starBrightness = 1,
       starGlow = 1,
       starTrailArcRad = 0,
+      viewSize,
+      occlusionRoots,
     }) => {
       if (disposed) return
       root.position.copy(camera.position)
@@ -351,24 +366,45 @@ export function createNightSky(): NightSkyHandle {
             : 0
 
       // Never let the field collapse to invisible under residual twilight.
-      vectorLayers.setOpacity(Math.max(deepNight, nightOn ? 0.75 : 0))
+      const layerOpacity = Math.max(deepNight, nightOn ? 0.75 : 0)
+      vectorLayers.setOpacity(layerOpacity)
       vectorLayers.setStarBrightness(starBrightness)
       vectorLayers.setStarGlow(starGlow)
       // Punch through Rayleigh without depending on night-crush hacks.
       vectorLayers.setSkyComp(1.6 + atmoAmt * 0.5)
-      const stageFov = camera.userData.stageVfovDeg
-      vectorLayers.setView(
-        typeof stageFov === 'number' && Number.isFinite(stageFov)
-          ? stageFov
-          : camera.fov,
-        { depth: starMagDepth, zoomSpan: starZoomSpan },
-      )
+      const stageFov =
+        typeof camera.userData.stageVfovDeg === 'number' &&
+        Number.isFinite(camera.userData.stageVfovDeg)
+          ? (camera.userData.stageVfovDeg as number)
+          : camera.fov
+      vectorLayers.setView(stageFov, {
+        depth: starMagDepth,
+        zoomSpan: starZoomSpan,
+      })
       vectorLayers.setStarTrailArcRad(
         nightOn && Number.isFinite(starTrailArcRad) ? starTrailArcRad : 0,
       )
       vectorLayers.setStarsVisible(nightOn)
-      vectorLayers.setConstellationsVisible(nightOn && showConstellations)
+      const constellationsOn = nightOn && showConstellations
+      vectorLayers.setConstellationsVisible(constellationsOn)
       vectorLayers.setGridVisible(nightOn && showCelestialGrid)
+
+      if (htmlLabels) {
+        htmlLabels.setVisible(constellationsOn)
+        htmlLabels.setOpacity(layerOpacity)
+        if (constellationsOn) {
+          const w = viewSize?.width ?? 0
+          const h = viewSize?.height ?? 0
+          htmlLabels.update({
+            camera,
+            celestialRoot: celestialLayers,
+            stageVfovDeg: stageFov,
+            canvasWidth: w,
+            canvasHeight: h,
+            occlusionRoots,
+          })
+        }
+      }
 
       // Local alt/az grid: useful day & night; dim a bit under bright sky.
       const azOn = showAzimuthGrid
@@ -403,6 +439,7 @@ export function createNightSky(): NightSkyHandle {
     },
     dispose: () => {
       disposed = true
+      htmlLabels?.dispose()
       vectorLayers.dispose()
       azimuthGrid.dispose()
       milkyWayTiles?.dispose()

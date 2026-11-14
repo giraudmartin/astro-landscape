@@ -2812,6 +2812,36 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   font-weight: 600;
 }
 
+/* Constellation names — same stack/weight/color as Paysage / Ciel chrome. */
+.constellation-label-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Above WebGL canvas, under photo-frame / chrome. */
+  z-index: 1;
+}
+
+.constellation-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #e8f5ee;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  user-select: none;
+  text-shadow: none;
+  will-change: transform;
+}
+
 .vf-proj-control__trigger.is-active .vf-proj-control__muted {
   color: #e8f5ee;
 }

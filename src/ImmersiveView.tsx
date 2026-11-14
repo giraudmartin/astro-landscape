@@ -566,7 +566,7 @@ export function ImmersiveView({
     const sky = createAstroSkyDome()
     scene.add(sky.mesh)
 
-    const nightSky = createNightSky()
+    const nightSky = createNightSky({ labelHost: host })
     nightSkyApiRef.current = nightSky
     scene.add(nightSky.root)
     if (skyTogglesRef.current.showHalpha) {
@@ -1225,6 +1225,11 @@ export function ImmersiveView({
         starBrightness: starBrightnessRef.current,
         starGlow: starGlowRef.current,
         starTrailArcRad: starTrailArcRadRef.current,
+        viewSize: {
+          width: host.clientWidth,
+          height: host.clientHeight,
+        },
+        occlusionRoots: [terrainNearObj, terrainFarObj],
       })
       skyBodies.update({
         utcMs: latestSkyUtc,

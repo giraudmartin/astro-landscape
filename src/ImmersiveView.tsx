@@ -42,6 +42,7 @@ import {
   type RenderDiagLive,
 } from './renderDiagnostic'
 import { RenderDiagnosticCard } from './RenderDiagnosticCard'
+import { shuffleAstroLoaderTips } from './astroLoaderTips'
 
 const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
   dem: 'Relief DEM\u2026',
@@ -51,6 +52,8 @@ const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
   far: 'Horizon 300 km\u2026',
   ready: 'Pr\u00eat',
 }
+
+const LOADER_TIP_ROTATE_MS = 6500
 import {
   clampStarBrightness,
   clampStarGlow,
@@ -249,6 +252,10 @@ export function ImmersiveView({
   const [terrainUnlocked, setTerrainUnlocked] = useState(false)
   const terrainUnlockedRef = useRef(false)
   const [loaderVisible, setLoaderVisible] = useState(true)
+  const [loaderTip, setLoaderTip] = useState('')
+  const [loaderTipKey, setLoaderTipKey] = useState(0)
+  const loaderTipDeckRef = useRef<string[]>([])
+  const loaderTipRef = useRef('')
   const [projection, setProjection] = useState<StageProjection>(
     savedImmersive.projection,
   )
@@ -1360,6 +1367,34 @@ export function ImmersiveView({
     if (terrainReady) onTerrainReadyChangeRef.current?.(true)
   }, [active, terrainReady])
 
+  // Astro tips under the loader bar: random deck, no repeats until exhausted.
+  useEffect(() => {
+    if (!loaderVisible) return
+
+    const drawNext = () => {
+      if (loaderTipDeckRef.current.length === 0) {
+        const shuffled = shuffleAstroLoaderTips()
+        if (
+          shuffled.length > 1 &&
+          shuffled[0] === loaderTipRef.current
+        ) {
+          const first = shuffled.shift()!
+          shuffled.push(first)
+        }
+        loaderTipDeckRef.current = shuffled
+      }
+      const tip = loaderTipDeckRef.current.shift() ?? ''
+      loaderTipRef.current = tip
+      setLoaderTip(tip)
+      setLoaderTipKey((k) => k + 1)
+    }
+
+    loaderTipDeckRef.current = []
+    drawNext()
+    const id = window.setInterval(drawNext, LOADER_TIP_ROTATE_MS)
+    return () => window.clearInterval(id)
+  }, [loaderVisible])
+
   useEffect(() => {
     const api: QaImmersiveApi = {
       setLook: (yaw, pitch) => apiRef.current?.setLook(yaw, pitch),
@@ -1568,6 +1603,18 @@ export function ImmersiveView({
                 style={{ width: `${Math.round(terrainProgress * 100)}%` }}
               />
             </div>
+            {loaderTip ? (
+              <p
+                key={loaderTipKey}
+                className="immersive__loader-tip"
+                aria-hidden="true"
+              >
+                <span className="immersive__loader-tip-label">
+                  Le saviez-vous ?
+                </span>
+                {loaderTip}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}

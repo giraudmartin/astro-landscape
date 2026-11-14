@@ -3453,6 +3453,25 @@ html[data-qa-hide-chrome='1'] .render-diag {
   color: rgba(var(--ui-accent-rgb), 0.78);
 }
 
+.immersive__loader-tip {
+  margin: 0;
+  min-height: 2.6em;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.55);
+  animation: immersive-loader-tip-in 420ms var(--motion-ease-out) both;
+}
+
+.immersive__loader-tip-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--ui-accent-rgb), 0.72);
+}
+
 @keyframes immersive-loader-shimmer {
   0% {
     background-position: 100% 0;
@@ -3473,6 +3492,17 @@ html[data-qa-hide-chrome='1'] .render-diag {
   }
 }
 
+@keyframes immersive-loader-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .immersive__loader {
     animation: none;
@@ -3481,6 +3511,10 @@ html[data-qa-hide-chrome='1'] .render-diag {
   .immersive__loader-fill--active {
     animation: none;
     background-size: 100% 100%;
+  }
+
+  .immersive__loader-tip {
+    animation: none;
   }
 }
 

@@ -434,10 +434,7 @@ export function SkyBrightnessPanel({
 
         <div className="sky-brightness-panel__workspace">
           <div className="sky-brightness-panel__chart-col">
-            <div className="sky-brightness-panel__chart-toolbar">
-              <span className="sky-brightness-panel__chart-title">
-                Luminosité du ciel
-              </span>
+            <div className="sky-brightness-panel__chart">
               <div
                 className="sky-brightness-panel__modes"
                 role="radiogroup"
@@ -470,9 +467,6 @@ export function SkyBrightnessPanel({
                   Panoramique
                 </button>
               </div>
-            </div>
-
-            <div className="sky-brightness-panel__chart">
               {loading ? (
                 <p className="sky-brightness-panel__status">Calcul du dôme…</p>
               ) : error ? (

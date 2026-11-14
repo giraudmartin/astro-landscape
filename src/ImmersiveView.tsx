@@ -72,7 +72,10 @@ import {
 } from './timelapse'
 import { TimelapsePreviewHud } from './TimelapsePreviewHud'
 import { useTimelapsePreview } from './useTimelapsePreview'
-import { ViewfinderCaptureCapsule } from './ViewfinderCaptureCapsule'
+import {
+  OPEN_TIMELAPSE_SETTINGS_EVENT,
+  ViewfinderCaptureCapsule,
+} from './ViewfinderCaptureCapsule'
 import { ViewfinderLandscapeControl } from './ViewfinderLandscapeControl'
 import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
 import { ViewfinderSkyControl } from './ViewfinderSkyControl'
@@ -1825,7 +1828,6 @@ export function ImmersiveView({
             if (frameMode !== 'dslr') applyFrameMode('dslr')
             timelapsePreview.start(timelapse)
           }}
-          onStopTimelapsePreview={timelapsePreview.exit}
           timelapsePreviewPlaying={timelapsePreviewActive}
           selectedCelestial={selectedCelestial}
         />
@@ -1838,9 +1840,13 @@ export function ImmersiveView({
           shotCount={timelapsePreview.status.shotCount}
           onPause={timelapsePreview.pause}
           onResume={timelapsePreview.resume}
-          onStopToEnded={timelapsePreview.stopToEnded}
+          onStop={timelapsePreview.stop}
           onReplay={timelapsePreview.replay}
           onExit={timelapsePreview.exit}
+          onSeek={timelapsePreview.seek}
+          onOpenSettings={() => {
+            window.dispatchEvent(new Event(OPEN_TIMELAPSE_SETTINGS_EVENT))
+          }}
         />
       ) : null}
 

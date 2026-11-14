@@ -2272,17 +2272,6 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   color: var(--ui-accent);
 }
 
-.vf-capture-capsule__timelapse.is-stop {
-  border-color: rgba(248, 113, 113, 0.45);
-  background: rgba(248, 113, 113, 0.16);
-  color: #fecaca;
-}
-
-.vf-capture-capsule__timelapse.is-stop:hover {
-  border-color: rgba(248, 113, 113, 0.7);
-  background: rgba(248, 113, 113, 0.28);
-  color: #fff;
-}
 
 .vf-capture-capsule .vf-camera-panel {
   position: absolute;
@@ -2626,7 +2615,7 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   border-top: 1px solid var(--ui-stroke-soft);
 }
 
-/* Timelapse preview strip — outside the settings card */
+/* Timelapse preview — pill capsule (same glass chrome as capture bar) */
 .tlapse-hud {
   /* Timeline slot, but raised — timeline is hidden in playback mode. */
   position: absolute;
@@ -2634,36 +2623,19 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   top: auto;
   bottom: max(72px, calc(env(safe-area-inset-bottom, 0px) + 56px));
   z-index: 40;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(520px, calc(100vw - 24px));
-  padding: 12px 14px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 18px;
-  background: rgba(16, 16, 20, 0.78);
-  box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(22px) saturate(1.08);
-  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  width: min(640px, calc(100vw - 24px));
+  max-width: 640px;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid var(--ov-stroke);
+  border-radius: 999px;
+  background: var(--vf-chrome-bg);
+  box-shadow: var(--vf-chrome-inset);
+  backdrop-filter: var(--vf-chrome-blur);
+  -webkit-backdrop-filter: var(--vf-chrome-blur);
   transform: translateX(-50%);
   color: #e8f5ee;
   pointer-events: auto;
-}
-
-.tlapse-hud__bar {
-  height: 3px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.tlapse-hud__bar-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--ui-accent);
 }
 
 .tlapse-hud__row {
@@ -2671,21 +2643,26 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  min-height: 36px;
 }
 
 .tlapse-hud__btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   flex: 0 0 auto;
-  min-height: 32px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
   margin: 0;
-  padding: 5px 12px;
-  border-radius: 8px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ui-text-muted);
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 750;
   cursor: pointer;
+  box-shadow: none;
 }
 
 .tlapse-hud__btn:focus-visible {
@@ -2693,74 +2670,141 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   outline-offset: var(--ui-focus-ring-offset);
 }
 
+.tlapse-hud__btn:hover {
+  color: #e8f5ee;
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .tlapse-hud__btn--primary {
-  border: 1px solid var(--ui-accent-border);
-  background: var(--ui-accent-soft);
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border-color: transparent;
+  background: var(--ui-accent-active-fill);
   color: var(--ui-accent);
 }
 
 .tlapse-hud__btn--primary:hover {
-  background: color-mix(in srgb, var(--ui-accent-soft) 65%, var(--ui-accent) 35%);
-}
-
-.tlapse-hud__btn--stop {
-  border: 1px solid rgba(248, 113, 113, 0.55);
-  background: rgba(248, 113, 113, 0.18);
-  color: #fecaca;
-}
-
-.tlapse-hud__btn--stop:hover {
-  border-color: rgba(248, 113, 113, 0.85);
-  background: rgba(248, 113, 113, 0.32);
-  color: #fff;
-}
-
-.tlapse-hud__btn--ghost {
-  border: 1px solid var(--ui-border-strong);
-  background: var(--surface-glass);
-  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-accent-active-fill) 70%, var(--ui-accent) 30%);
+  color: var(--ui-accent-hover);
 }
 
 .tlapse-hud__btn--ghost:hover {
-  border-color: var(--ui-accent-border);
-  background: var(--ui-accent-soft);
   color: var(--ui-accent);
+  background: var(--ui-accent-soft);
 }
 
-.tlapse-hud__badge {
-  margin-left: 8px;
-  padding: 2px 7px;
+.tlapse-hud__btn--stop {
+  color: #d6a2a2;
+  background: rgba(207, 119, 119, 0.06);
+}
+
+.tlapse-hud__btn--stop:hover {
+  color: #fecaca;
+  background: rgba(248, 113, 113, 0.14);
+}
+
+.tlapse-hud__btn--exit:hover {
+  color: #e8f5ee;
+  background: var(--surface-glass);
+}
+
+.tlapse-hud__track {
+  flex: 1 1 auto;
+  align-self: center;
+  min-width: 120px;
+  height: 28px;
+  margin: 0 6px;
+  display: flex;
+  align-items: center;
+}
+
+.tlapse-hud__range {
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  height: 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--ui-text-muted);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  background: linear-gradient(
+    to right,
+    var(--ui-accent) 0 var(--progress, 0%),
+    rgba(255, 255, 255, 0.12) var(--progress, 0%) 100%
+  );
+  cursor: pointer;
+}
+
+.tlapse-hud__range:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: 3px;
+}
+
+.tlapse-hud__range::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.tlapse-hud__range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.tlapse-hud__range::-moz-range-track {
+  height: 7px;
+  border: 0;
+  background: transparent;
+}
+
+.tlapse-hud__divider {
+  flex: 0 0 auto;
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 2px;
+  background: var(--ui-stroke-soft);
 }
 
 .tlapse-hud__count {
   flex: 0 0 auto;
-  font-size: 0.82rem;
-  font-weight: 750;
+  font-size: 0.88rem;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  color: #e8f5ee;
 }
 
-.tlapse-hud__slash {
-  margin: 0 2px;
+.tlapse-hud__count em {
   color: var(--ui-text-muted);
+  font-style: normal;
+  font-size: 0.82rem;
   font-weight: 500;
 }
 
-.tlapse-hud__meta {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ui-text-muted);
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+@media (max-width: 720px) {
+  .tlapse-hud {
+    width: min(640px, calc(100vw - 16px));
+    padding: 8px 10px;
+    min-height: 48px;
+  }
+
+  .tlapse-hud__row {
+    gap: 7px;
+  }
+
+  .tlapse-hud__count em {
+    display: none;
+  }
 }
 
 /* Compact projection control (top-right) */

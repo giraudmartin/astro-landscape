@@ -319,20 +319,22 @@ export function useTimelapsePreview({
     scheduleFrom(shotIndexRef.current)
   }, [scheduleFrom])
 
-  /** Stop early → ended screen (keep last shown frame, no timeline). */
-  const stopToEnded = useCallback(() => {
-    clearTimer()
+  /** Classic stop: freeze on the first frame (stay in playback mode). */
+  const stop = useCallback(() => {
     const session = sessionRef.current
-    if (!session) return
+    if (!session || phaseRef.current === 'idle') return
+    clearTimer()
+    shotIndexRef.current = 0
+    applyShot(session, 0)
     setStatus({
-      phase: 'ended',
+      phase: 'paused',
       active: true,
-      shotIndex: shotIndexRef.current,
+      shotIndex: 0,
       shotCount: session.shotCount,
       support: session.support,
       eqRotation: session.eqRotation,
     })
-  }, [])
+  }, [applyShot])
 
   const startPlayback = useCallback(
     (session: PreviewSession, fromIndex = 0) => {
@@ -368,6 +370,49 @@ export function useTimelapsePreview({
     startPlayback(session, 0)
   }, [startPlayback])
 
+  /** Jump to a 0-based shot while staying in playback mode. */
+  const seek = useCallback(
+    (index: number) => {
+      const session = sessionRef.current
+      if (!session || phaseRef.current === 'idle') return
+      const last = Math.max(0, session.shotCount - 1)
+      const next = Math.max(0, Math.min(last, Math.floor(index)))
+      shotIndexRef.current = next
+      applyShot(session, next)
+
+      if (next >= last) {
+        clearTimer()
+        setStatus({
+          phase: 'ended',
+          active: true,
+          shotIndex: next,
+          shotCount: session.shotCount,
+          support: session.support,
+          eqRotation: session.eqRotation,
+        })
+        return
+      }
+
+      const phase =
+        phaseRef.current === 'ended' ? 'paused' : phaseRef.current
+      setStatus({
+        phase,
+        active: true,
+        shotIndex: next,
+        shotCount: session.shotCount,
+        support: session.support,
+        eqRotation: session.eqRotation,
+      })
+
+      if (phase === 'playing') {
+        scheduleFrom(next)
+      } else {
+        clearTimer()
+      }
+    },
+    [applyShot, scheduleFrom],
+  )
+
   useEffect(() => () => clearTimer(), [])
 
   return {
@@ -375,10 +420,9 @@ export function useTimelapsePreview({
     start,
     pause,
     resume,
-    stopToEnded,
+    stop,
     replay,
+    seek,
     exit,
-    /** @deprecated use exit — kept for capsule wiring clarity */
-    stop: exit,
   }
 }

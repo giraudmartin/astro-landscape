@@ -646,6 +646,90 @@ export function PauseSequenceIcon({ size = 16, className }: IconProps) {
   )
 }
 
+/** Compact playback HUD — stroke glyphs (no outer ring). */
+const compactStroke = {
+  fill: 'none' as const,
+  stroke: 'currentColor',
+  strokeWidth: 1.6,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+}
+
+export function CompactPlayIcon({ size = 17, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      {...compactStroke}
+    >
+      <path d="m9 5 11 7-11 7Z" />
+    </svg>
+  )
+}
+
+export function CompactPauseIcon({ size = 17, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      {...compactStroke}
+    >
+      <path d="M8 5v14M16 5v14" />
+    </svg>
+  )
+}
+
+export function CompactStopIcon({ size = 17, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      {...compactStroke}
+    >
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  )
+}
+
+export function CompactReplayIcon({ size = 17, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      {...compactStroke}
+    >
+      <path d="M3 10a9 9 0 1 1 2 8M3 4v6h6" />
+    </svg>
+  )
+}
+
+export function CompactCloseIcon({ size = 17, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      {...compactStroke}
+    >
+      <path d="m6 6 12 12M18 6 6 18" />
+    </svg>
+  )
+}
+
 /** Viewfinder dock — lens / framing. */
 export function CameraLensIcon({ size = 14, className }: IconProps) {
   return (
@@ -744,3 +828,4 @@ export function AzimuthGridIcon({ size = 14, className }: IconProps) {
     </svg>
   )
 }
+

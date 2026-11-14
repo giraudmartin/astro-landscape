@@ -123,8 +123,8 @@ export function DayTimeline({
       if (ms < dayStart - 60_000 || ms > dayEnd + 60_000) return
       list.push({ kind, utcMs: ms, label })
     }
-    push('sunrise', dayInfo.sunrise?.datetimeUtc, '↑☉')
-    push('sunset', dayInfo.sunset?.datetimeUtc, '↓☉')
+    push('sunrise', dayInfo.sunrise?.datetimeUtc, '↑⊙')
+    push('sunset', dayInfo.sunset?.datetimeUtc, '↓⊙')
     push('moonrise', dayInfo.moonrise?.datetimeUtc, '↑☾')
     push('moonset', dayInfo.moonset?.datetimeUtc, '↓☾')
     return list

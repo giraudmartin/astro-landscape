@@ -329,12 +329,18 @@ export function TimelineDock({
           <span>
             Lune {dayInfo.illuminationPercent}% · {dayInfo.phaseLabel}
           </span>
-          {dayInfo.sunrise ? <span>↑☉ {dayInfo.sunrise.datetimeLocal}</span> : null}
-          {dayInfo.sunset ? <span>↓☉ {dayInfo.sunset.datetimeLocal}</span> : null}
-          {dayInfo.moonrise ? (
-            <span>↑☾ {dayInfo.moonrise.datetimeLocal}</span>
+          {dayInfo.sunrise ? (
+            <span title="Lever du soleil">↑⊙ {dayInfo.sunrise.datetimeLocal}</span>
           ) : null}
-          {dayInfo.moonset ? <span>↓☾ {dayInfo.moonset.datetimeLocal}</span> : null}
+          {dayInfo.sunset ? (
+            <span title="Coucher du soleil">↓⊙ {dayInfo.sunset.datetimeLocal}</span>
+          ) : null}
+          {dayInfo.moonrise ? (
+            <span title="Lever de Lune">↑☾ {dayInfo.moonrise.datetimeLocal}</span>
+          ) : null}
+          {dayInfo.moonset ? (
+            <span title="Coucher de Lune">↓☾ {dayInfo.moonset.datetimeLocal}</span>
+          ) : null}
         </div>
       </div>
 

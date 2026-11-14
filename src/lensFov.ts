@@ -30,7 +30,7 @@ export const VIEWFINDER_FRAME_MODE_TITLE: Record<ViewfinderFrameMode, string> = 
 
 export const DEFAULT_FOCAL_LENGTH_MM: FocalLengthMm = 20
 export const DEFAULT_ORIENTATION: ViewfinderOrientation = 'landscape'
-export const DEFAULT_FRAME_MODE: ViewfinderFrameMode = 'dslr'
+export const DEFAULT_FRAME_MODE: ViewfinderFrameMode = 'off'
 /** Manual photo-frame roll (deg, CCW). Independent of paysage/portrait. */
 export const DEFAULT_FRAME_ROLL_DEG = 0
 export const FRAME_ROLL_MIN_DEG = -180

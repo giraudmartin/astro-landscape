@@ -9,7 +9,6 @@ import {
   DEFAULT_FRAME_ROLL_DEG,
   DEFAULT_ORIENTATION,
   DEFAULT_SENSOR_FORMAT,
-  normalizeViewfinderFrameMode,
   SENSOR_FORMATS,
   STAGE_VFOV_DEFAULT_DEG,
   STAGE_VFOV_MAX_DEG,
@@ -275,14 +274,8 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
   }
   const panorama = normalizePanorama(row.panorama)
   const timelapse = normalizeTimelapsePlan(row.timelapse)
-  // Migrate older saves that only had panorama.enabled.
-  // Libre (`off`) is session-only — immersive always relaunches in a capture
-  // mode (Photo / Pano), never sticky free-look without the DSLR frame.
-  const savedMode = normalizeViewfinderFrameMode(
-    row.frameMode ?? (panorama.enabled ? 'pano' : DEFAULT_FRAME_MODE),
-  )
-  const frameMode =
-    savedMode === 'off' ? DEFAULT_FRAME_MODE : savedMode
+  // Immersive always opens in Libre — Photo / Pano are in-session only.
+  const frameMode = DEFAULT_FRAME_MODE
   return {
     focalMm: clampFocalLengthMm(Number(row.focalMm)),
     orientation: normalizeOrientation(row.orientation),
@@ -293,7 +286,7 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
     frameMode,
     panorama: {
       ...panorama,
-      enabled: frameMode === 'pano',
+      enabled: false,
     },
     timelapse,
     projection: normalizeStageProjection(row.projection),

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { mapImageryNightDim } from '../applyMapSky'
 
+/** Matches applyMapSky imagery paint: `raster-opacity = 1 - dim * 0.65`. */
+function imageryOpacityFromDim(dim: number): number {
+  return 1 - Math.min(1, Math.max(0, dim)) * 0.65
+}
+
 describe('mapImageryNightDim', () => {
   it('stays clear on the globe even at local night', () => {
     expect(mapImageryNightDim(1, -20, 0)).toBe(0)
@@ -18,5 +23,16 @@ describe('mapImageryNightDim', () => {
     expect(nautical).toBeGreaterThan(dusk)
     expect(night).toBeGreaterThan(nautical)
     expect(nautical).toBeGreaterThan(0.5)
+    // Deep night must nearly max out — weak dim leaves noon ortho looking like day.
+    expect(night).toBeGreaterThan(0.85)
+    expect(night).toBeLessThanOrEqual(1)
+  })
+
+  it('maps deep-night dim to readable imagery opacity (~0.35, not day/void)', () => {
+    const dim = mapImageryNightDim(1, -20, 1)
+    const opacity = imageryOpacityFromDim(dim)
+    expect(opacity).toBeGreaterThan(0.3)
+    expect(opacity).toBeLessThan(0.45)
+    expect(opacity).toBeCloseTo(1 - dim * 0.65, 5)
   })
 })

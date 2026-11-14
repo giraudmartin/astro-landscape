@@ -40,4 +40,12 @@ describe('starMagLimitForFov', () => {
     const tele = starMagLimitForFov(8, { depth: 0.8, zoomSpan: 0 })
     expect(wide).toBeCloseTo(tele, 10)
   })
+
+  it('applies light-pollution mag penalty without dropping below the floor', () => {
+    const dark = starMagLimitForFov(100, { depth: 0, magPenalty: 0 })
+    const city = starMagLimitForFov(100, { depth: 0, magPenalty: 2.2 })
+    expect(dark).toBeCloseTo(STAR_MAG_WIDE_DEFAULT, 10)
+    expect(city).toBeLessThan(dark)
+    expect(city).toBeGreaterThanOrEqual(1.8)
+  })
 })

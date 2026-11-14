@@ -16,7 +16,11 @@ import {
   ESRI_SAFE_IMAGERY_URL,
 } from './esriSafeImagery'
 import { ensureMapterhornSafeDemProtocol } from './mapterhornSafeDem'
-import { applyMapSky } from './applyMapSky'
+import {
+  applyMapSky,
+  groundViewAmount,
+  invalidateMapSkyCache,
+} from './applyMapSky'
 import { sunPositionAt } from './celestial'
 import { ensureCelestialBodyLayers, ensureNightShadeLayer } from './globeSun'
 import { ensureGlobeMilkyWayLayer } from './globeMilkyWay'
@@ -35,9 +39,11 @@ import { applyBasemapMode } from './satelliteHybrid'
 import {
   LIGHT_POLLUTION_ATTRIBUTION,
   LIGHT_POLLUTION_LAYER_ID,
+  LIGHT_POLLUTION_LAYER_MAX_ZOOM,
   LIGHT_POLLUTION_MAX_ZOOM,
   LIGHT_POLLUTION_SOURCE_ID,
   LIGHT_POLLUTION_TILE_URL,
+  lightPollutionOpacityExpression,
 } from './lightPollution/tiles'
 import {
   sampleLightPollution,
@@ -52,6 +58,38 @@ import {
 import { streetViewUrlAt } from './streetView'
 
 setWorkerUrl(maplibreWorkerUrl)
+
+/**
+ * After globe→spot flyTo, apply night dim only once the camera is in ground
+ * framing. One-shot moveend often fires mid-fly below the gate and never
+ * retries — poll + hard deadline so noon ortho cannot stick.
+ */
+function settleGroundSkyAfterFly(
+  map: Map,
+  minZoom: number,
+  onLand: () => void,
+): void {
+  let landed = false
+  const finish = (force: boolean) => {
+    if (landed) return
+    if (!force && map.getZoom() < minZoom) return
+    landed = true
+    window.clearInterval(poll)
+    window.clearTimeout(hardDeadline)
+    map.off('moveend', onMoveOrIdle)
+    map.off('idle', onMoveOrIdle)
+    map.off('zoomend', onMoveOrIdle)
+    onLand()
+  }
+  const onMoveOrIdle = () => finish(false)
+  const poll = window.setInterval(() => finish(false), 120)
+  const hardDeadline = window.setTimeout(() => finish(true), 2200)
+  map.on('moveend', onMoveOrIdle)
+  map.on('idle', onMoveOrIdle)
+  map.on('zoomend', onMoveOrIdle)
+  // Kick once in case fly is already past minZoom when this is registered.
+  queueMicrotask(() => finish(false))
+}
 
 export type CameraMode = 'orbit' | 'ground'
 
@@ -179,9 +217,10 @@ function buildStyle(): StyleSpecification {
         id: LIGHT_POLLUTION_LAYER_ID,
         type: 'raster',
         source: LIGHT_POLLUTION_SOURCE_ID,
+        // Hard stop before map/city framing — do not overzoom Black Marble blobs.
+        maxzoom: LIGHT_POLLUTION_LAYER_MAX_ZOOM,
         paint: {
-          // Night-only — applyMapSky drives opacity from nightAmount.
-          'raster-opacity': 0,
+          'raster-opacity': lightPollutionOpacityExpression(),
           'raster-fade-duration': 0,
           'raster-resampling': 'linear',
         },
@@ -303,6 +342,34 @@ export function MapCanvas({
     showAllPersonalSpots: (spots: PersonalSpot[]) => void
   } | null>(null)
 
+  /**
+   * Always-fresh playhead apply — mount-effect flyTo closures must not keep a
+   * stale copy that paints globe-day ortho after landing on a night spot.
+   */
+  const applyPlayheadSkyRef = useRef<() => void>(() => {})
+  applyPlayheadSkyRef.current = () => {
+    const map = mapRef.current
+    if (!map?.isStyleLoaded()) return
+    const live = spotRef.current
+    const lat = live?.lat ?? DEFAULT_MAP_VIEW.lat
+    const lon = live?.lon ?? DEFAULT_MAP_VIEW.lon
+    const elev = live?.heightM ?? 0
+    const utc = skyUtcMsRef.current
+    const sun = sunPositionAt(lat, lon, elev, utc)
+    invalidateMapSkyCache(map)
+    applyMapSky(map, skyPaletteFromSunAltitude(sun.altitudeDeg), {
+      utcMs: utc,
+      sunAzimuthDeg: sun.azimuthDeg,
+      sunAltitudeDeg: sun.altitudeDeg,
+      zoom: map.getZoom(),
+    })
+  }
+  if (import.meta.env.DEV) {
+    ;(
+      window as unknown as { __astroApplySky?: () => void }
+    ).__astroApplySky = () => applyPlayheadSkyRef.current()
+  }
+
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -323,11 +390,16 @@ export function MapCanvas({
       minZoom: 0.8,
       // DEM tiles are 512px → MapLibre fetches ~mapZoom−1; 18 unlocks Mapterhorn z17
       maxZoom: 18,
+      // Instant paint — night dim must not ease from noon ortho after flyTo.
+      fadeDuration: 0,
       attributionControl: false,
       fadeDuration: 0,
     })
 
     mapRef.current = map
+    if (import.meta.env.DEV) {
+      ;(window as unknown as { __astroMap?: maplibregl.Map }).__astroMap = map
+    }
 
     const readElevation = (lng: number, lat: number) => {
       if (!map.getTerrain()) return null
@@ -444,12 +516,27 @@ export function MapCanvas({
 
     const setBasemapMode = (next: BasemapMode) => {
       const apply = () => {
-        void applyBasemapMode(map, next).catch((error) => {
-          console.error('[basemap]', error)
-        })
+        void applyBasemapMode(map, next)
+          .catch((error) => {
+            console.error('[basemap]', error)
+          })
+          .finally(() => {
+            // Hillshade paint is reset by basemap — restore playhead night/day.
+            applyPlayheadSkyRef.current()
+          })
       }
       if (map.isStyleLoaded()) apply()
       else map.once('load', apply)
+    }
+
+    /** Mid-fly Black Marble overzoom looked like a PL map — hide before zooming in. */
+    const hideLightPollutionForGroundFly = () => {
+      if (!map.getLayer(LIGHT_POLLUTION_LAYER_ID)) return
+      try {
+        map.setLayoutProperty(LIGHT_POLLUTION_LAYER_ID, 'visibility', 'none')
+      } catch {
+        // style not ready
+      }
     }
 
     const flyToAddress = (result: AddressSearchResult) => {
@@ -459,6 +546,8 @@ export function MapCanvas({
         threeDimensionalRef.current = true
       }
       const pitch = THREE_D_PITCH
+      hideLightPollutionForGroundFly()
+      const targetZoom = 14
       if (result.bbox) {
         const [west, south, east, north] = result.bbox
         map.fitBounds(
@@ -477,17 +566,16 @@ export function MapCanvas({
       } else {
         map.flyTo({
           center: [result.lon, result.lat],
-          zoom: 14,
+          zoom: targetZoom,
           pitch,
           essential: true,
           duration: 1400,
         })
       }
-      const apply = () => {
+      settleGroundSkyAfterFly(map, 10, () => {
         publishSpot(result.lat, result.lon, map.getBearing(), pitch)
-      }
-      map.once('moveend', apply)
-      window.setTimeout(apply, 1400)
+        applyPlayheadSkyRef.current()
+      })
     }
 
     const flyToMyLocation = () => {
@@ -502,18 +590,19 @@ export function MapCanvas({
             threeDimensionalRef.current = true
           }
           const pitch = threeDimensionalRef.current ? THREE_D_PITCH : FLAT_PITCH
+          hideLightPollutionForGroundFly()
+          const targetZoom = Math.max(map.getZoom(), 15)
           map.flyTo({
             center: [lon, lat],
-            zoom: Math.max(map.getZoom(), 15),
+            zoom: targetZoom,
             pitch,
             essential: true,
             duration: 850,
           })
-          const apply = () => {
+          settleGroundSkyAfterFly(map, Math.min(targetZoom - 0.5, 12), () => {
             publishSpot(lat, lon, map.getBearing(), pitch)
-          }
-          map.once('moveend', apply)
-          window.setTimeout(apply, 900)
+            applyPlayheadSkyRef.current()
+          })
         },
         () => {
           // Permission denied / timeout — silent for now
@@ -531,19 +620,22 @@ export function MapCanvas({
       const pitch = threeDimensionalRef.current
         ? Math.min(Math.max(saved.pitchDeg, 45), 65)
         : FLAT_PITCH
+      hideLightPollutionForGroundFly()
+      const targetZoom = Math.max(map.getZoom(), 13.5)
       map.flyTo({
         center: [saved.lon, saved.lat],
-        zoom: Math.max(map.getZoom(), 13.5),
+        zoom: targetZoom,
         pitch,
         bearing: saved.bearingDeg,
         essential: true,
         duration: 900,
       })
-      const apply = () => {
+      // Spot list sets React state at globe zoom first (day paint). One-shot
+      // moveend often fired mid-fly below the gate and never retried — noon stuck.
+      settleGroundSkyAfterFly(map, Math.min(targetZoom - 0.5, 10), () => {
         publishSpot(saved.lat, saved.lon, saved.bearingDeg, pitch)
-      }
-      map.once('moveend', apply)
-      window.setTimeout(apply, 950)
+        applyPlayheadSkyRef.current()
+      })
     }
 
     const showAllPersonalSpots = (spots: PersonalSpot[]) => {
@@ -558,22 +650,6 @@ export function MapCanvas({
       flyToMyLocation,
       flyToPersonalSpot,
       showAllPersonalSpots,
-    }
-
-    const applyPlayheadSky = () => {
-      if (!map.isStyleLoaded()) return
-      const live = spotRef.current
-      const lat = live?.lat ?? DEFAULT_MAP_VIEW.lat
-      const lon = live?.lon ?? DEFAULT_MAP_VIEW.lon
-      const elev = live?.heightM ?? 0
-      const utc = skyUtcMsRef.current
-      const sun = sunPositionAt(lat, lon, elev, utc)
-      applyMapSky(map, skyPaletteFromSunAltitude(sun.altitudeDeg), {
-        utcMs: utc,
-        sunAzimuthDeg: sun.azimuthDeg,
-        sunAltitudeDeg: sun.altitudeDeg,
-        zoom: map.getZoom(),
-      })
     }
 
     map.on('load', () => {
@@ -591,6 +667,11 @@ export function MapCanvas({
       // One re-apply after first tiles are in; never on every moveend (that
       // rewrote light/veil and looked like time jumping on drag-release).
       map.once('idle', applyPlayheadSky)
+      // Permanent: spot-list fly sets React spot at globe zoom (day paint). The
+      // spot-effect zoomend can miss the landing; this always re-dims on settle.
+      map.on('zoomend', () => {
+        applyPlayheadSkyRef.current()
+      })
     })
 
     /** Place / move the working pin — no camera jump (PS: right-click pins in place). */
@@ -836,25 +917,35 @@ export function MapCanvas({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const lat = spot?.lat ?? DEFAULT_MAP_VIEW.lat
-    const lon = spot?.lon ?? DEFAULT_MAP_VIEW.lon
-    const elev = spot?.heightM ?? 0
+    let lastAppliedZoom = map.getZoom()
+    let lastGround = groundViewAmount(lastAppliedZoom) >= 0.35
     const apply = () => {
       if (!map.isStyleLoaded()) return
-      const sun = sunPositionAt(lat, lon, elev, skyUtcMs)
-      applyMapSky(map, skyPaletteFromSunAltitude(sun.altitudeDeg), {
-        utcMs: skyUtcMs,
-        sunAzimuthDeg: sun.azimuthDeg,
-        sunAltitudeDeg: sun.altitudeDeg,
-        zoom: map.getZoom(),
-      })
+      lastAppliedZoom = map.getZoom()
+      lastGround = groundViewAmount(lastAppliedZoom) >= 0.35
+      // Use the live ref so night dim matches current zoom after flyTo landing.
+      applyPlayheadSkyRef.current()
+    }
+    /** Catch globe→spot flyTo (and pans that change framing) without thrashing every frame. */
+    const onMoveEnd = () => {
+      const z = map.getZoom()
+      const ground = groundViewAmount(z) >= 0.35
+      // Always re-apply when crossing globe↔ground — spot list paints day at
+      // globe zoom, then fly lands without a large lastAppliedZoom delta miss.
+      if (ground !== lastGround) {
+        apply()
+        return
+      }
+      if (Math.abs(z - lastAppliedZoom) < 0.15) return
+      apply()
     }
     if (map.isStyleLoaded()) apply()
     else map.once('load', apply)
-    // Globe↔ground blend only — pan must NOT re-apply lighting (terminator jump).
     map.on('zoomend', apply)
+    map.on('moveend', onMoveEnd)
     return () => {
       map.off('zoomend', apply)
+      map.off('moveend', onMoveEnd)
     }
   }, [skyUtcMs, spot?.lat, spot?.lon, spot?.heightM])
 

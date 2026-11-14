@@ -54,7 +54,15 @@ export type StarRevealOptions = {
   depth?: number
   /** How much zooming adds stars above the density floor (1 = default). */
   zoomSpan?: number
+  /**
+   * Subtract from the FOV mag limit (light pollution / NELM crush).
+   * Keeps at least mag ~1.8 so planets & brightest stars remain.
+   */
+  magPenalty?: number
 }
+
+/** Brightest stars / planets still visible under heavy urban wash. */
+export const STAR_MAG_LIMIT_FLOOR = 1.8
 
 function mapLinear(
   x: number,
@@ -102,9 +110,13 @@ export function starMagLimitForFov(
   )
   const headroom = STAR_MAG_TELE_DEFAULT - densityLimit
   const limit = densityLimit + headroom * zoomT * zoomSpan
+  const penalty =
+    typeof opts?.magPenalty === 'number' && Number.isFinite(opts.magPenalty)
+      ? Math.max(0, opts.magPenalty)
+      : 0
 
   return Math.min(
     STAR_MAG_TELE_DEFAULT,
-    Math.max(STAR_MAG_WIDE_DEFAULT, limit),
+    Math.max(STAR_MAG_LIMIT_FLOOR, limit - penalty),
   )
 }

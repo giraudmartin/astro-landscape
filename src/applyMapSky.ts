@@ -6,7 +6,7 @@ import {
 import {
   LIGHT_POLLUTION_LAYER_ID,
   LIGHT_POLLUTION_SOURCE_ID,
-  lightPollutionOpacity,
+  lightPollutionOpacityExpression,
   lightPollutionProtocolTileUrl,
 } from './lightPollution/tiles'
 import { hexToRgb, type SkyPalette } from './skyLighting'
@@ -38,6 +38,11 @@ function clamp01(t: number): number {
 /** Skip identical re-applies (load+idle, StrictMode) — rewrites flash the day face. */
 const lastMapSkyKeyByMap = new WeakMap<Map, string>()
 
+/** Bust cache so flyTo landing always re-applies night dim (not stale globe day paint). */
+export function invalidateMapSkyCache(map: Map): void {
+  lastMapSkyKeyByMap.delete(map)
+}
+
 /**
  * 0 = full globe/space treatment (terminator only).
  * 1 = ground planning treatment (local sky + imagery dim).
@@ -61,7 +66,9 @@ export function mapImageryNightDim(
   const night = clamp01(nightAmount) * ground
   // Dusk ramps from sunset (0°) → 1 at −8°, before nightAmount alone is strong.
   const dusk = clamp01(-sunAltitudeDeg / 8) * ground
-  return clamp01(night * 0.55 + dusk * 0.45)
+  // Stronger than the old 0.55/0.45 (noon ortho stayed “day”), softer than the
+  // pitch-black experiment that stacked 0.62/0.5 with an 0.82 opacity crush.
+  return clamp01(night * 0.7 + dusk * 0.45)
 }
 
 export type ApplyMapSkyOptions = {
@@ -145,36 +152,53 @@ export function applyMapSky(
 
   if (map.getLayer('imagery')) {
     // Globe: soft day exposure so Sahara isn't chalk; night still from terminator.
-    // Ground view: cool/dim with local sky so zoomed spots match the timeline.
+    // Ground: crush noon ortho enough to read as night, keep terrain readable.
     const alt = options?.sunAltitudeDeg ?? 90
     const dim = mapImageryNightDim(localNight, alt, ground)
-    // Globe day face: pull max down so Sahara keeps grain; ground view stays fuller.
     const globeDayMax = 0.78 + 0.22 * ground
-    const brightness = Math.max(0.18, (1 - dim * 0.92) * globeDayMax)
-    const saturation = 1 - dim * 0.55
+    const brightness = Math.max(0.08, (1 - dim * 0.95) * globeDayMax)
+    const saturation = 1 - dim * 0.7
     const twilight = ground * palette.twilightStrength
-    map.setPaintProperty('imagery', 'raster-brightness-min', dim * 0.12)
+    map.setPaintProperty('imagery', 'raster-brightness-min', dim * 0.06)
     map.setPaintProperty('imagery', 'raster-brightness-max', brightness)
     map.setPaintProperty('imagery', 'raster-saturation', saturation - 1)
     // Soft cool shift into night / blue hour (degrees); day stays 0.
     map.setPaintProperty(
       'imagery',
       'raster-hue-rotate',
-      dim * 22 + twilight * 8,
+      dim * 32 + twilight * 9,
     )
-    map.setPaintProperty('imagery', 'raster-opacity', 1 - dim * 0.28)
+    // Deep night ~0.35 opacity — reads as night; not noon, not void.
+    map.setPaintProperty('imagery', 'raster-opacity', 1 - dim * 0.65)
   }
 
-  // City lights: terminator-masked tiles (protocol). Globe always visible;
-  // ground framing follows local nightAmount.
+  // City lights: globe-only. Hard layout visibility + zoom expression + maxzoom.
+  // Never leave Black Marble painted in map framing (flyTo / time scrub).
   if (map.getLayer(LIGHT_POLLUTION_LAYER_ID)) {
+    const zoom = options?.zoom ?? map.getZoom()
+    const onGlobe = groundViewAmount(zoom) < 0.35
+    try {
+      map.setLayoutProperty(
+        LIGHT_POLLUTION_LAYER_ID,
+        'visibility',
+        onGlobe ? 'visible' : 'none',
+      )
+    } catch {
+      // style not ready
+    }
     map.setPaintProperty(
       LIGHT_POLLUTION_LAYER_ID,
       'raster-opacity',
-      lightPollutionOpacity(localNight, ground),
+      lightPollutionOpacityExpression(),
     )
   }
-  if (options && map.getSource(LIGHT_POLLUTION_SOURCE_ID)) {
+  // Only refresh LP tiles while the globe layer can show — scrubbing time on a
+  // spot must not reload Black Marble (looked like a PL map flash).
+  if (
+    options &&
+    groundViewAmount(options.zoom) < 0.35 &&
+    map.getSource(LIGHT_POLLUTION_SOURCE_ID)
+  ) {
     const nextUrl = lightPollutionProtocolTileUrl(options.utcMs)
     if (lastLightPollutionUrlByMap.get(map) !== nextUrl) {
       const source = map.getSource(LIGHT_POLLUTION_SOURCE_ID) as

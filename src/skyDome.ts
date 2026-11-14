@@ -25,17 +25,94 @@ export { EARTH_RADIUS_M }
 
 export type AstroSkyDome = {
   mesh: THREE.Mesh
+  /**
+   * Additive city / regional skyglow — drawn *after* NASA Milky Way tiles
+   * (those use NormalBlending and were burying LP on the main dome).
+   */
+  lightPollutionMesh: THREE.Mesh
   /** Additive ecliptic glow — drawn after Milky Way (renderOrder 22). */
   zodiacalMesh: THREE.Mesh
   geometry: THREE.SphereGeometry
   material: THREE.ShaderMaterial
+  lightPollutionMaterial: THREE.ShaderMaterial
   zodiacalMaterial: THREE.ShaderMaterial
   /** 1D azimuth PL profile (R channel). */
   lightPollutionProfile: THREE.DataTexture
 }
 
+/** After MW tiles (20+z ≤ 21); before zodiacal (22). */
+const LIGHT_POLLUTION_RENDER_ORDER = 21
 /** MW tiles are renderOrder 20+z (maxZ=1 → 21); stars/figures sit above. */
 const ZODIACAL_RENDER_ORDER = 22
+
+/**
+ * Immersive PL — soft skyglow dome like real astrophotos, NOT a zodiacal wedge.
+ * Astrophoto language: wide orange gradient from the polluted horizon, smooth
+ * falloff toward zenith, no hard edges / searchlight tip.
+ */
+const LIGHT_POLLUTION_GLSL = /* glsl */ `
+  uniform float uLightPollution;
+  uniform float uLpBortle;
+  uniform float uLpIntensity;
+  uniform float uLpMean;
+  uniform sampler2D uLpProfile;
+
+  vec3 lightPollutionRgb(vec3 v, float elevN, float alt, float below) {
+    float lpAmt = clamp(uLightPollution, 0.0, 1.0);
+    float lpClass = clamp(uLpBortle, 0.0, 1.0);
+    float lpPeak = clamp(uLpIntensity, 0.0, 1.0);
+    float nightLp = clamp((-alt - 6.0) / 10.0, 0.0, 1.0);
+    float site = max(lpClass, lpPeak);
+    float live = lpAmt * site * nightLp;
+    if (live < 0.001 || below >= 0.55) return vec3(0.0);
+
+    // ENU: +X east, +Y up, +Z south — azimuth clockwise from north.
+    float az = atan(v.x, -v.z);
+    float az01 = fract(az / (2.0 * 3.14159265) + 1.0);
+
+    // Wide azimuth blur (~±22°) — city glow is a flattened dome, never a needle.
+    float t = 1.0 / 64.0;
+    float c0 = texture2D(uLpProfile, vec2(az01, 0.5)).r;
+    float c1 = texture2D(uLpProfile, vec2(fract(az01 + t), 0.5)).r;
+    float c2 = texture2D(uLpProfile, vec2(fract(az01 - t + 1.0), 0.5)).r;
+    float c3 = texture2D(uLpProfile, vec2(fract(az01 + 2.0 * t), 0.5)).r;
+    float c4 = texture2D(uLpProfile, vec2(fract(az01 - 2.0 * t + 1.0), 0.5)).r;
+    float c5 = texture2D(uLpProfile, vec2(fract(az01 + 4.0 * t), 0.5)).r;
+    float c6 = texture2D(uLpProfile, vec2(fract(az01 - 4.0 * t + 1.0), 0.5)).r;
+    float city =
+      c0 * 0.26
+      + (c1 + c2) * 0.17
+      + (c3 + c4) * 0.12
+      + (c5 + c6) * 0.08;
+    city = clamp(city, 0.0, 1.0);
+    // Blend with regional mean so direction stays soft (no hard lobe walls).
+    float cityDome = mix(uLpMean, city, 0.55);
+    cityDome = max(cityDome, mix(uLpMean, city, 0.35));
+
+    // Soft elevation dome (airmass / Garstang-ish): bright on the limb, gone mid-sky.
+    // Scale height in degrees — taller for bright cities, never a pointed triangle tip.
+    float elevDeg = elevN * 90.0;
+    float scaleH = mix(11.0, 26.0, max(cityDome, lpClass));
+    float dome = exp(-elevDeg / max(scaleH, 5.0));
+    // Soft outer fade so the top rounds off (kills zodiacal-like tip).
+    dome *= 1.0 - smoothstep(scaleH * 1.6, scaleH * 3.4, elevDeg);
+    float limb = pow(clamp(1.0 - elevN, 0.0, 1.0), 1.15);
+
+    float dirGlow = cityDome * dome * limb;
+    // Isotropic wash: rural opposite sky still faintly lit; urban fills higher.
+    float washAmt = mix(uLpMean * 0.55, max(uLpMean, lpClass) * 0.9, lpClass);
+    float wash = washAmt * dome * limb;
+    float zenFill = lpClass * lpClass * (0.12 + 0.28 * elevN);
+
+    float gain = live * (dirGlow * 1.05 + wash + zenFill);
+
+    // Muted sodium / LED amber — soft gradient, not neon beam.
+    vec3 cool = vec3(0.34, 0.4, 0.58);
+    vec3 warm = vec3(1.02, 0.7, 0.3);
+    vec3 col = mix(cool, warm, clamp(max(cityDome, lpClass) * 0.92, 0.0, 1.0));
+    return col * gain * 1.2;
+  }
+`
 
 /** Warm inland fill when the eye is near sea level. */
 const GROUND_FILL = new THREE.Color(0x8a7349)
@@ -86,14 +163,6 @@ export function createAstroSkyDome(): AstroSkyDome {
       uAirglowWaves: { value: 0.55 },
       uAirglowColor: { value: new THREE.Vector3(0.22, 1.15, 0.4) },
       uAirglowTime: { value: 0 },
-      /** Display intensity 0…1 from sky settings. */
-      uLightPollution: { value: 0 },
-      /** Spot pollution factor 0…1 (Bortle 1→0, Bortle 9→1). */
-      uLpBortle: { value: 0 },
-      /** Mean azimuthal glow 0…1 — soft zenith wash. */
-      uLpMean: { value: 0 },
-      /** 1D azimuth profile (R = glow 0…1), u = az/360 clockwise from north. */
-      uLpProfile: { value: lightPollutionProfile },
       uGroundColor: {
         value: new THREE.Vector3(GROUND_FILL.r, GROUND_FILL.g, GROUND_FILL.b),
       },
@@ -136,49 +205,9 @@ export function createAstroSkyDome(): AstroSkyDome {
       uniform float uAirglowWaves;
       uniform vec3 uAirglowColor;
       uniform float uAirglowTime;
-      uniform float uLightPollution;
-      uniform float uLpBortle;
-      uniform float uLpMean;
-      uniform sampler2D uLpProfile;
       uniform vec3 uGroundColor;
       uniform vec3 uSeaColor;
       varying vec3 vDir;
-
-      // Directional PL dome — city lobes on the horizon (all-sky style).
-      vec3 lightPollutionRgb(vec3 v, float elevN, float alt, float below) {
-        float lpAmt = clamp(uLightPollution, 0.0, 1.0);
-        float lpClass = clamp(uLpBortle, 0.0, 1.0);
-        float nightLp = clamp((-alt - 6.0) / 10.0, 0.0, 1.0);
-        float live = lpAmt * max(lpClass, 0.08) * nightLp;
-        if (live < 0.001 || below >= 0.55) return vec3(0.0);
-
-        // ENU: +X east, +Y up, +Z south — azimuth clockwise from north.
-        float az = atan(v.x, -v.z);
-        float az01 = fract(az / (2.0 * 3.14159265) + 1.0);
-        float city = texture2D(uLpProfile, vec2(az01, 0.5)).r;
-        city = clamp(city, 0.0, 1.0);
-
-        // Strong near horizon toward lit azimuths; reaches higher if city is bright.
-        float reach = mix(0.14, 0.62, city);
-        float horiz = pow(max(1.0 - elevN, 0.0), mix(2.2, 1.15, city));
-        float heightMask = 1.0 - smoothstep(reach * 0.25, reach, elevN);
-        float lobe = city * horiz * heightMask;
-
-        // Opposite / dark sky still gets a faint isotropic wash from regional PL.
-        float wash = uLpMean * pow(clamp(1.0 - elevN, 0.0, 1.0), 1.8) * 0.22;
-        // Tiny zenith fill when the site is generally polluted (scattered).
-        float zenFill = uLpMean * lpClass * elevN * 0.06;
-
-        float gain = live * (lobe * 1.15 + wash + zenFill);
-        // Yellow-amber toward cities (bright), cooler blue fringe when faint —
-        // reads closer to all-sky sky-brightness maps than a flat orange band.
-        vec3 cool = vec3(0.28, 0.38, 0.72);
-        vec3 warm = vec3(1.2, 0.72, 0.22);
-        vec3 hot = vec3(1.35, 0.95, 0.35);
-        vec3 col = mix(cool, warm, clamp(city * 1.2, 0.0, 1.0));
-        col = mix(col, hot, clamp(city * city * 1.4, 0.0, 1.0));
-        return col * gain * 0.62;
-      }
 
       const vec3 BETA_R = vec3(5.8e-6, 13.5e-6, 33.1e-6);
       const vec3 BETA_M = vec3(21e-6);
@@ -428,18 +457,15 @@ export function createAstroSkyDome(): AstroSkyDome {
         }
 
         float atmo = clamp(uAtmosphere, 0.0, 1.0);
-        vec3 lpRgb = lightPollutionRgb(v, elevN, alt, below);
-        float lpLive = length(lpRgb);
 
         if (atmo < 0.001) {
-          // Full Rayleigh off: keep ground fill; sky only if airglow / LP needs it.
-          // Zodiacal is a separate additive mesh (above Milky Way).
-          if (below < 0.01 && agAmt * nightAg < 0.001 && lpLive < 0.001) discard;
+          // Full Rayleigh off: keep ground fill; sky only if airglow needs it.
+          // Zodiacal + LP are separate additive meshes (above Milky Way).
+          if (below < 0.01 && agAmt * nightAg < 0.001) discard;
           mapped = below >= 0.01
             ? distant * (0.55 + 0.45 * (1.0 - nightDim))
             : vec3(0.0);
           mapped += airglowRgb;
-          mapped += lpRgb;
           gl_FragColor = vec4(mapped, 1.0);
           return;
         }
@@ -451,12 +477,6 @@ export function createAstroSkyDome(): AstroSkyDome {
         }
         // Airglow on top of atmosphere — never scaled by uAtmosphere.
         mapped += airglowRgb;
-        // Directional PL dome (city lobes) — additive amber/yellow wash.
-        mapped += lpRgb;
-        if (lpLive > 0.02) {
-          float wash = clamp(lpLive * 0.55, 0.0, 0.45);
-          mapped = mix(mapped, mapped * vec3(1.06, 0.94, 0.8), wash);
-        }
 
         gl_FragColor = vec4(mapped, 1.0);
       }
@@ -466,6 +486,81 @@ export function createAstroSkyDome(): AstroSkyDome {
   mesh.frustumCulled = false
   // Draw after terrain so depth-test keeps mountains in front of the sky.
   mesh.renderOrder = 10
+
+  // Separate additive pass so city glow sits *over* NASA Milky Way tiles
+  // (NormalBlending MW was burying LP when it lived on the Rayleigh dome).
+  const lightPollutionMaterial = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    fog: false,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uStelMode: stelModeUniform,
+      uSunAltitude: { value: -20 },
+      uEyeElevM: { value: 0 },
+      uLightPollution: { value: 0 },
+      uLpBortle: { value: 0 },
+      uLpIntensity: { value: 0 },
+      uLpMean: { value: 0 },
+      uLpProfile: { value: lightPollutionProfile },
+    },
+    vertexShader: /* glsl */ `
+      ${STEL_PROJECT_GLSL}
+      varying vec3 vDir;
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        varying float vFragDepth;
+        varying float vIsPerspective;
+        bool isPerspectiveMatrix(mat4 m) { return m[2][3] == -1.0; }
+      #endif
+      void main() {
+        vDir = normalize(position);
+        gl_Position = stelProject(modelViewMatrix * vec4(position, 1.0));
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          vFragDepth = 1.0 + gl_Position.w;
+          vIsPerspective = float(isPerspectiveMatrix(projectionMatrix));
+        #endif
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      ${STEL_FRAGMENT_GLSL}
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        uniform float logDepthBufFC;
+        varying float vFragDepth;
+        varying float vIsPerspective;
+      #endif
+      uniform float uSunAltitude;
+      uniform float uEyeElevM;
+      varying vec3 vDir;
+      const float EARTH_R = 6371000.0;
+      ${LIGHT_POLLUTION_GLSL}
+
+      void main() {
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          gl_FragDepth = vIsPerspective == 0.0 ? gl_FragCoord.z : log2(vFragDepth) * logDepthBufFC * 0.5;
+        #endif
+        stelDiscardBow();
+        vec3 v = normalize(vDir);
+        float alt = uSunAltitude;
+        float hEye = max(uEyeElevM, 0.0);
+        float horSin = hEye > 0.5
+          ? -sqrt(hEye * (2.0 * EARTH_R + hEye)) / (EARTH_R + hEye)
+          : 0.0;
+        float aboveHor = max(0.0, v.y - horSin);
+        float elevN = clamp(aboveHor / max(1.0 - horSin, 1e-3), 0.0, 1.0);
+        float below = smoothstep(horSin + 0.004, horSin - 0.03, v.y);
+        vec3 lpRgb = lightPollutionRgb(v, elevN, alt, below);
+        if (dot(lpRgb, lpRgb) < 1.0e-6) discard;
+        gl_FragColor = vec4(lpRgb, 1.0);
+      }
+    `,
+  })
+  const lightPollutionMesh = new THREE.Mesh(geometry, lightPollutionMaterial)
+  lightPollutionMesh.frustumCulled = false
+  lightPollutionMesh.renderOrder = LIGHT_POLLUTION_RENDER_ORDER
+  lightPollutionMesh.name = 'lightPollutionGlow'
 
   // Separate additive pass so zodiacal glows *over* NASA Milky Way tiles
   // (those sit at renderOrder 20+z; atmosphere alone was painted underneath).
@@ -582,15 +677,21 @@ export function createAstroSkyDome(): AstroSkyDome {
 
   return {
     mesh,
+    lightPollutionMesh,
     zodiacalMesh,
     geometry,
     material,
+    lightPollutionMaterial,
     zodiacalMaterial,
     lightPollutionProfile,
   }
 }
 
-/** Upload an azimuthal PL profile into the sky-dome 1D texture. */
+/**
+ * Upload an azimuthal PL profile into the sky-dome 1D texture.
+ * Extra circular blur (~±3 bins ≈ ±17°) so immersive lobes stay soft domes
+ * (all-sky panel keeps the sharper source profile).
+ */
 export function setLightPollutionProfile(
   sky: AstroSkyDome,
   azimuth01: ArrayLike<number>,
@@ -599,13 +700,24 @@ export function setLightPollutionProfile(
   const tex = sky.lightPollutionProfile
   const data = tex.image.data as Uint8Array
   const n = Math.min(data.length, azimuth01.length)
+  const radius = 3
   for (let i = 0; i < n; i++) {
-    const v = Math.min(1, Math.max(0, azimuth01[i]!))
-    data[i] = Math.round(v * 255)
+    let sum = 0
+    let w = 0
+    for (let d = -radius; d <= radius; d++) {
+      const j = (i + d + n * 4) % n
+      const ww = radius + 1 - Math.abs(d)
+      sum += Math.min(1, Math.max(0, azimuth01[j]!)) * ww
+      w += ww
+    }
+    data[i] = Math.round((sum / w) * 255)
   }
   for (let i = n; i < data.length; i++) data[i] = 0
   tex.needsUpdate = true
-  sky.material.uniforms.uLpMean.value = Math.min(1, Math.max(0, mean01))
+  sky.lightPollutionMaterial.uniforms.uLpMean.value = Math.min(
+    1,
+    Math.max(0, mean01),
+  )
 }
 
 export function updateAstroSkyDome(
@@ -633,8 +745,13 @@ export function updateAstroSkyDome(
     zodiacalAmount?: number
     /** Light-pollution display intensity 0…1 (sky settings slider). */
     lightPollutionAmount?: number
-    /** Spot Bortle pollution factor 0…1 (1 = pristine, 9 → 1). */
+    /** Spot Bortle pollution factor 0…1 (Bortle 1 → 0, Bortle 9 → 1). */
     lightPollutionBortleFactor?: number
+    /**
+     * Absolute horizon-peak intensity 0…1 (`peakIntensity01`).
+     * Drives city lobes under pristine zeniths (Spitzkoppe / La Palma).
+     */
+    lightPollutionPeakIntensity?: number
     /** Mean of azimuthal profile 0…1 (optional — setLightPollutionProfile also sets it). */
     lightPollutionMean?: number
     /**
@@ -688,7 +805,10 @@ export function updateAstroSkyDome(
       .copy(input.eclipticPole)
       .normalize()
   }
-  sky.material.uniforms.uLightPollution.value = clampLightPollutionAmount(
+  const lpMat = sky.lightPollutionMaterial
+  lpMat.uniforms.uSunAltitude.value = input.sunAltitudeDeg
+  lpMat.uniforms.uEyeElevM.value = Math.max(0, input.eyeElevationMslM)
+  lpMat.uniforms.uLightPollution.value = clampLightPollutionAmount(
     input.lightPollutionAmount ?? 0,
   )
   const lpBortle =
@@ -696,19 +816,25 @@ export function updateAstroSkyDome(
     Number.isFinite(input.lightPollutionBortleFactor)
       ? Math.min(1, Math.max(0, input.lightPollutionBortleFactor))
       : 0
-  sky.material.uniforms.uLpBortle.value = lpBortle
+  lpMat.uniforms.uLpBortle.value = lpBortle
+  const lpPeak =
+    typeof input.lightPollutionPeakIntensity === 'number' &&
+    Number.isFinite(input.lightPollutionPeakIntensity)
+      ? Math.min(1, Math.max(0, input.lightPollutionPeakIntensity))
+      : 0
+  lpMat.uniforms.uLpIntensity.value = lpPeak
   if (
     typeof input.lightPollutionMean === 'number' &&
     Number.isFinite(input.lightPollutionMean)
   ) {
-    sky.material.uniforms.uLpMean.value = Math.min(
+    lpMat.uniforms.uLpMean.value = Math.min(
       1,
       Math.max(0, input.lightPollutionMean),
     )
   }
   // Always keep the dome: it paints sea/ground under the geometric horizon
   // even when Rayleigh atmosphere is toggled off (avoids a black void).
-  // ImmersiveView may still hide both meshes via render-diag showSky.
+  // ImmersiveView may still hide meshes via render-diag showSky.
   sky.mesh.visible = true
 }
 

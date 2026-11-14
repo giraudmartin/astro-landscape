@@ -343,6 +343,12 @@ export function createNightSky(opts?: {
       starBrightness = 1,
       starGlow = 1,
       starTrailArcRad = 0,
+      /** Mag cut from local Bortle (0 = dark, ~2.2 = inner city). */
+      lightPollutionMagPenalty = 0,
+      /** Extra star luminance crush under urban skyglow. */
+      lightPollutionStarBrightMul = 1,
+      /** Milky Way opacity × local zenith pollution (0 = gone). */
+      lightPollutionMilkyWayMul = 1,
       viewSize,
       terrainOccluded,
     }) => {
@@ -374,11 +380,21 @@ export function createNightSky(opts?: {
 
       // Never let the field collapse to invisible under residual twilight.
       const layerOpacity = Math.max(deepNight, nightOn ? 0.75 : 0)
+      const lpStarMul =
+        Number.isFinite(lightPollutionStarBrightMul) &&
+        lightPollutionStarBrightMul > 0
+          ? Math.min(1, Math.max(0.2, lightPollutionStarBrightMul))
+          : 1
+      const lpMwMul =
+        Number.isFinite(lightPollutionMilkyWayMul)
+          ? Math.min(1, Math.max(0, lightPollutionMilkyWayMul))
+          : 1
       vectorLayers.setOpacity(layerOpacity)
-      vectorLayers.setStarBrightness(starBrightness)
-      vectorLayers.setStarGlow(starGlow)
+      vectorLayers.setStarBrightness(starBrightness * lpStarMul)
+      vectorLayers.setStarGlow(starGlow * (0.55 + 0.45 * lpStarMul))
       // Punch through Rayleigh without depending on night-crush hacks.
-      vectorLayers.setSkyComp(1.6 + atmoAmt * 0.5)
+      // Urban wash: less skyComp so stars don't look like deep-sky pinpricks.
+      vectorLayers.setSkyComp((1.6 + atmoAmt * 0.5) * (0.65 + 0.35 * lpStarMul))
       const stageFov =
         typeof camera.userData.stageVfovDeg === 'number' &&
         Number.isFinite(camera.userData.stageVfovDeg)
@@ -387,6 +403,7 @@ export function createNightSky(opts?: {
       vectorLayers.setView(stageFov, {
         depth: starMagDepth,
         zoomSpan: starZoomSpan,
+        magPenalty: lightPollutionMagPenalty,
       })
       vectorLayers.setStarTrailArcRad(
         nightOn && Number.isFinite(starTrailArcRad) ? starTrailArcRad : 0,
@@ -428,18 +445,22 @@ export function createNightSky(opts?: {
 
       if (milkyWayTiles && milkyReady) {
         // Hα lives in the MW shader — keep the dome up if either layer is on.
+        // Bortle ≥7: MW invisible; still allow Hα alone if the user forces it.
+        const mwVisible = showMilkyWay && lpMwMul > 0.02
         const showDome =
           nightOn &&
           deepNight > 0.05 &&
-          (showMilkyWay || (showHalpha && !!halphaTexture))
+          (mwVisible || (showHalpha && !!halphaTexture))
         milkyWayTiles.setVisible(showDome)
-        milkyWayTiles.setOpacity(
+        const baseOp =
           deepNight *
-            THREE.MathUtils.lerp(
-              MILKY_WAY_DOME_OPACITY_NO_ATMO,
-              MILKY_WAY_DOME_OPACITY,
-              atmoAmt,
-            ),
+          THREE.MathUtils.lerp(
+            MILKY_WAY_DOME_OPACITY_NO_ATMO,
+            MILKY_WAY_DOME_OPACITY,
+            atmoAmt,
+          )
+        milkyWayTiles.setOpacity(
+          showHalpha && !mwVisible ? baseOp : baseOp * lpMwMul,
         )
         if (showDome) milkyWayTiles.update(camera)
       }

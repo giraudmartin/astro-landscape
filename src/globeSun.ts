@@ -123,7 +123,10 @@ export function applyGlobeSunLighting(
   // Globe atmosphere is view-dependent enough already — don't also tint the
   // light orange/blue from local twilight or the day disk "pops" in colour.
   // Keep stable intensity modest: Esri deserts + MapLibre light blow out above ~0.5.
-  const intensity = stable ? 0.4 : 0.85 - night * 0.7
+  // Ground framing: moonlit at night — old 0.85-0.7*n still read as daylight.
+  const intensity = stable
+    ? 0.4
+    : Math.max(0.08, 0.75 - night * 0.72)
   const color = stable
     ? '#ffffff'
     : night > 0.7
@@ -149,8 +152,9 @@ export function applyGlobeSunLighting(
     }
   }
 
-  // Real night veil (not just soft globe shade) — strongest when zoomed out.
-  updateNightShadeLayer(map, utcMs, stable ? 1 : Math.max(0, 1 - night))
+  // Terminator veil: full on the globe; on ground follow local night.
+  // (Was `1 - night`, which killed the veil exactly when ortho most needs it.)
+  updateNightShadeLayer(map, utcMs, stable ? 1 : night)
 
   if (map.getLayer('hillshade')) {
     // Globe: local spot azimuth as global hillshade reads as a second sun that
@@ -168,7 +172,7 @@ export function applyGlobeSunLighting(
       map.setPaintProperty(
         'hillshade',
         'hillshade-exaggeration',
-        0.22 * (1 - night * 0.35),
+        0.22 * (1 - night * 0.7),
       )
       map.setPaintProperty(
         'hillshade',
@@ -217,6 +221,7 @@ export function ensureNightShadeLayer(map: Map, utcMs: number): void {
 
   if (!map.getLayer(NIGHT_SHADE_LAYER_ID)) {
     // Above satellite imagery, below hillshade / labels / markers.
+    // No layer maxzoom — source maxzoom 7 overzooms so spot framing keeps a soft veil.
     const before =
       map.getLayer('hillshade') != null
         ? 'hillshade'
@@ -228,7 +233,6 @@ export function ensureNightShadeLayer(map: Map, utcMs: number): void {
         id: NIGHT_SHADE_LAYER_ID,
         type: 'raster',
         source: NIGHT_SHADE_SOURCE_ID,
-        maxzoom: 7.5,
         paint: {
           'raster-opacity': [
             'interpolate',
@@ -238,10 +242,12 @@ export function ensureNightShadeLayer(map: Map, utcMs: number): void {
             1,
             4.5,
             1,
-            6.5,
-            0.55,
-            7.5,
-            0,
+            8.5,
+            0.62,
+            14,
+            0.7,
+            18,
+            0.65,
           ],
           'raster-fade-duration': 0,
           'raster-resampling': 'linear',
@@ -271,25 +277,33 @@ export function updateNightShadeLayer(
   ) {
     source.setTiles([nextUrl])
   }
-  // Pan/zoomend must not rewrite opacity every frame — that flashes the veil.
-  if (
-    map.getLayer(NIGHT_SHADE_LAYER_ID) &&
-    (prev?.strength !== s || prev?.url !== nextUrl || !prev)
-  ) {
-    map.setPaintProperty(NIGHT_SHADE_LAYER_ID, 'raster-opacity', [
-      'interpolate',
-      ['linear'],
-      ['zoom'],
-      0,
-      s,
-      4.5,
-      s,
-      6.5,
-      0.55 * s,
-      7.5,
-      0,
-    ])
+  if (!map.getLayer(NIGHT_SHADE_LAYER_ID)) {
+    lastNightShadeByMap.set(map, { url: nextUrl, strength: s })
+    return
   }
+  // Sessions that created the layer with maxzoom 7.5 would hide it on spots.
+  try {
+    map.setLayerZoomRange(NIGHT_SHADE_LAYER_ID, 0, 24)
+  } catch {
+    // older maplibre
+  }
+  // Always rewrite opacity (curve + strength). Only setTiles above is URL-gated —
+  // skipping opacity when strength was unchanged left noon spots after HMR / land.
+  map.setPaintProperty(NIGHT_SHADE_LAYER_ID, 'raster-opacity', [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    0,
+    s,
+    4.5,
+    s,
+    8.5,
+    0.62 * s,
+    14,
+    0.7 * s,
+    18,
+    0.65 * s,
+  ])
   lastNightShadeByMap.set(map, { url: nextUrl, strength: s })
 }
 

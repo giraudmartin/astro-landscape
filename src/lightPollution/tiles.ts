@@ -2,8 +2,11 @@
  * NASA GIBS VIIRS Black Marble — commercial-OK (NASA open data; attribute NASA,
  * do not imply endorsement). Served via `astro-lightpollution` protocol which
  * punches transparent oceans and gates glow by the solar terminator.
+ *
+ * Overlay is globe-only: map/city framing must never show overzoomed light blobs.
  */
 
+import type { ExpressionSpecification } from 'maplibre-gl'
 import {
   LIGHT_POLLUTION_YEAR,
   lightPollutionTileUrl as protocolTileUrl,
@@ -11,7 +14,18 @@ import {
 
 export { LIGHT_POLLUTION_YEAR }
 
+/** Source tile pyramid (GIBS Level8). Overzoom must not paint the layer in map mode. */
 export const LIGHT_POLLUTION_MAX_ZOOM = 8
+
+/**
+ * Layer hard cutoff — hide before spot flyTo mid-zooms (was 8.5: stretched
+ * Black Marble blobs looked like a “PL map” while flying globe→spot).
+ * MapLibre hides the layer for zoom ≥ maxzoom.
+ */
+export const LIGHT_POLLUTION_LAYER_MAX_ZOOM = 6
+
+/** Fade start — globe overview only (≤ ~z3.5). */
+export const LIGHT_POLLUTION_GLOBE_FADE_ZOOM = 3.5
 
 export const LIGHT_POLLUTION_LAYER_ID = 'lightPollution'
 export const LIGHT_POLLUTION_SOURCE_ID = 'lightPollution'
@@ -22,25 +36,35 @@ export const LIGHT_POLLUTION_TILE_URL = protocolTileUrl(Date.now())
 export const LIGHT_POLLUTION_ATTRIBUTION =
   'NASA Black Marble / VIIRS nighttime lights via GIBS — NASA Earth Observing System Data and Information System. Not an endorsement of this product.'
 
-/** Peak raster opacity for the processed lights layer. */
+/** Peak raster opacity on the globe (terminator-masked sparks on a bright disc). */
 export const LIGHT_POLLUTION_OPACITY_MAX = 0.9
 
 /**
- * Globe: always on (terminator lives in the tile protocol).
- * Ground: only when the spot/playhead is night.
+ * MapLibre zoom expression: full on globe, 0 by map framing.
+ * Prefer this over a scalar so pan/zoom never leaves city lights stuck on.
+ */
+export function lightPollutionOpacityExpression(): ExpressionSpecification {
+  return [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    LIGHT_POLLUTION_GLOBE_FADE_ZOOM,
+    LIGHT_POLLUTION_OPACITY_MAX,
+    LIGHT_POLLUTION_LAYER_MAX_ZOOM,
+    0,
+  ]
+}
+
+/**
+ * Globe: on. Map/ground: off.
+ * (`nightAmount` kept for call-site stability; terminator is in the tile protocol.)
  */
 export function lightPollutionOpacity(
-  nightAmount: number,
+  _nightAmount: number,
   groundView: number,
 ): number {
-  const ground = Math.min(1, Math.max(0, groundView))
-  const globe = 1 - ground
-  const n = Math.min(1, Math.max(0, nightAmount))
-  const groundGate = Math.min(1, Math.max(0, (n - 0.2) / 0.55))
-  return (
-    LIGHT_POLLUTION_OPACITY_MAX *
-    (globe * 1 + ground * groundGate)
-  )
+  const globe = 1 - Math.min(1, Math.max(0, groundView))
+  return LIGHT_POLLUTION_OPACITY_MAX * globe
 }
 
 export { protocolTileUrl as lightPollutionProtocolTileUrl }

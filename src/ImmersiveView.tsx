@@ -93,7 +93,15 @@ import {
   sunDirectionFromAltAz,
   updateAstroSkyDome,
 } from './skyDome'
-import { buildHorizonGlowProfile } from './lightPollution/horizonGlowProfile'
+import {
+  buildHorizonGlowProfile,
+  peakIntensity01,
+} from './lightPollution/horizonGlowProfile'
+import {
+  lightPollutionMilkyWayMul,
+  lightPollutionStarBrightMul,
+  lightPollutionStarMagPenalty,
+} from './lightPollution/lpVisual'
 import {
   applyStageProjection,
   getStageProjection,
@@ -393,6 +401,7 @@ export function ImmersiveView({
   }
   const lightPollutionBortleFactorRef = useRef(0)
   const lightPollutionMeanRef = useRef(0)
+  const lightPollutionPeakIntensityRef = useRef(0)
   /** Live fixed-tripod star-trail arc — only while the Timelapse planner is active. */
   const starTrailArcRadRef = useRef(0)
   starTrailArcRadRef.current =
@@ -407,8 +416,7 @@ export function ImmersiveView({
         orientation,
         frameRollDeg,
         sensorFormat,
-        // Persist Photo/Pano only — Libre must not become the next launch mode.
-        frameMode: frameMode === 'off' ? 'dslr' : frameMode,
+        frameMode,
         panorama,
         timelapse,
         projection,
@@ -606,6 +614,7 @@ export function ImmersiveView({
 
     const sky = createAstroSkyDome()
     scene.add(sky.mesh)
+    scene.add(sky.lightPollutionMesh)
     scene.add(sky.zodiacalMesh)
     const eclipticPoleLocal = new THREE.Vector3()
 
@@ -641,20 +650,6 @@ export function ImmersiveView({
     let raf = 0
     let disposed = false
 
-    // Bortle + directional PL dome (sample rings → azimuth texture).
-    void sampleLightPollution(lat, lon).then((sample) => {
-      if (disposed || !sample) return
-      lightPollutionBortleFactorRef.current = bortlePollutionFactor(
-        sample.bortle,
-      )
-    })
-    void buildHorizonGlowProfile(lat, lon, {
-      observerElevM: sceneGroundElevM,
-    }).then((profile) => {
-      if (disposed) return
-      setLightPollutionProfile(sky, profile.azimuth, profile.mean)
-      lightPollutionMeanRef.current = profile.mean
-    })
     /** False on WebGL context loss — parked GPU objects would be invalid. */
     let parkOnRelease = true
     let terrainDispose: (() => void) | null = null
@@ -703,6 +698,7 @@ export function ImmersiveView({
         groundElevMslAt?.(east, north) ?? sceneGroundElevM
       const eyeMsl = Math.max(0, eyeGroundElevMsl + eyeH)
       sky.material.uniforms.uEyeElevM.value = eyeMsl
+      sky.lightPollutionMaterial.uniforms.uEyeElevM.value = eyeMsl
       sky.zodiacalMaterial.uniforms.uEyeElevM.value = eyeMsl
     }
 
@@ -772,6 +768,7 @@ export function ImmersiveView({
         zodiacalAmount: zodiacalAmountLive,
         lightPollutionAmount: lightPollutionAmountLive,
         lightPollutionBortleFactor: lightPollutionBortleFactorRef.current,
+        lightPollutionPeakIntensity: lightPollutionPeakIntensityRef.current,
         lightPollutionMean: lightPollutionMeanRef.current,
         eclipticPole: eclipticPoleLocal,
       })
@@ -925,6 +922,24 @@ export function ImmersiveView({
         renderer.setClearColor(0x010208, 1)
       }
     }
+
+    // Bortle + directional PL dome (sample rings → azimuth texture).
+    void sampleLightPollution(lat, lon).then((sample) => {
+      if (disposed || !sample) return
+      lightPollutionBortleFactorRef.current = bortlePollutionFactor(
+        sample.bortle,
+      )
+      applySky(latestSkyUtc)
+    })
+    void buildHorizonGlowProfile(lat, lon, {
+      observerElevM: sceneGroundElevM,
+    }).then((profile) => {
+      if (disposed) return
+      setLightPollutionProfile(sky, profile.azimuth, profile.mean)
+      lightPollutionMeanRef.current = profile.mean
+      lightPollutionPeakIntensityRef.current = peakIntensity01(profile.peak)
+      applySky(latestSkyUtc)
+    })
 
     let activeTerrain: LocalTerrainHandle | null = null
     const releaseTerrain = (terrain: LocalTerrainHandle) => {
@@ -1270,6 +1285,7 @@ export function ImmersiveView({
         camera.updateProjectionMatrix()
       }
       sky.mesh.visible = diag.showSky
+      sky.lightPollutionMesh.visible = diag.showSky
       sky.zodiacalMesh.visible = diag.showSky
       nightSky.root.visible = diag.showNightSky
       if (terrainNearObj) terrainNearObj.visible = diag.showTerrainNear
@@ -1285,11 +1301,14 @@ export function ImmersiveView({
       }
 
       sky.mesh.position.copy(camera.position)
+      sky.lightPollutionMesh.position.copy(camera.position)
       sky.zodiacalMesh.position.copy(camera.position)
       // Drift airglow gravity-wave phase each frame (slow band advection).
       sky.material.uniforms.uAirglowTime.value = performance.now() * 0.001
       adaptTerrain?.(camera.position.x, camera.position.y, camera.position.z)
       const skyToggles = skyTogglesRef.current
+      const lpAmt = skyToggles.lightPollutionAmount
+      const lpBortle = lightPollutionBortleFactorRef.current
       nightSky.update({
         utcMs: latestSkyUtc,
         lat,
@@ -1308,6 +1327,12 @@ export function ImmersiveView({
         starBrightness: starBrightnessRef.current,
         starGlow: starGlowRef.current,
         starTrailArcRad: starTrailArcRadRef.current,
+        lightPollutionMagPenalty: lightPollutionStarMagPenalty(lpBortle, lpAmt),
+        lightPollutionStarBrightMul: lightPollutionStarBrightMul(
+          lpBortle,
+          lpAmt,
+        ),
+        lightPollutionMilkyWayMul: lightPollutionMilkyWayMul(lpBortle, lpAmt),
         viewSize: {
           width: host.clientWidth,
           height: host.clientHeight,
@@ -1404,6 +1429,7 @@ export function ImmersiveView({
       nightSkyApiRef.current = null
       sky.geometry.dispose()
       sky.material.dispose()
+      sky.lightPollutionMaterial.dispose()
       sky.zodiacalMaterial.dispose()
       sky.lightPollutionProfile.dispose()
       nightSky.dispose()

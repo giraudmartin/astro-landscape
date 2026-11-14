@@ -27,6 +27,9 @@ function clamp01(t: number): number {
   return Math.min(1, Math.max(0, t))
 }
 
+/** Skip identical re-applies (load+idle, StrictMode) — rewrites flash the day face. */
+const lastMapSkyKeyByMap = new WeakMap<Map, string>()
+
 /**
  * 0 = full globe/space treatment (terminator only).
  * 1 = ground planning treatment (local sky + imagery dim).
@@ -36,6 +39,23 @@ export function groundViewAmount(zoom: number): number {
   return clamp01((zoom - 4.5) / 4)
 }
 
+/**
+ * How hard to crush satellite imagery in ground framing (0 = day, 1 = deep night).
+ * Globe overview keeps this near 0 — day/night there is the terminator veil.
+ * Zoomed spots must track dusk/night or ortho tiles stay noon-bright.
+ */
+export function mapImageryNightDim(
+  nightAmount: number,
+  sunAltitudeDeg: number,
+  groundView: number,
+): number {
+  const ground = clamp01(groundView)
+  const night = clamp01(nightAmount) * ground
+  // Dusk ramps from sunset (0°) → 1 at −8°, before nightAmount alone is strong.
+  const dusk = clamp01(-sunAltitudeDeg / 8) * ground
+  return clamp01(night * 0.55 + dusk * 0.45)
+}
+
 export type ApplyMapSkyOptions = {
   /** UTC playhead — drives terminator + sun/moon markers. */
   utcMs: number
@@ -43,6 +63,8 @@ export type ApplyMapSkyOptions = {
   sunAzimuthDeg: number
   /** Current map zoom — blends globe vs ground lighting. */
   zoom: number
+  /** Local sun altitude at map focus (°) — drives post-sunset imagery dim. */
+  sunAltitudeDeg: number
 }
 
 /**
@@ -61,6 +83,18 @@ export function applyMapSky(
   const ground = options ? groundViewAmount(options.zoom) : 1
   const globe = 1 - ground
   const localNight = palette.nightAmount
+  if (options) {
+    const applyKey = [
+      options.utcMs,
+      options.zoom.toFixed(2),
+      options.sunAltitudeDeg.toFixed(2),
+      localNight.toFixed(3),
+      palette.zenith,
+      palette.horizon,
+    ].join('|')
+    if (lastMapSkyKeyByMap.get(map) === applyKey) return
+    lastMapSkyKeyByMap.set(map, applyKey)
+  }
   // On the globe, ignore local day/night for global colour — otherwise the
   // lit hemisphere looks totally different facing the camera vs behind it.
   const night = localNight * ground
@@ -88,9 +122,9 @@ export function applyMapSky(
         ['linear'],
         ['zoom'],
         2,
-        0.85,
-        5,
         0.55,
+        5,
+        0.4,
         10,
         Math.max(0.08, 0.35 - night * 0.25) * ground,
         13,
@@ -102,25 +136,25 @@ export function applyMapSky(
   }
 
   if (map.getLayer('imagery')) {
-    // Globe: leave satellite at natural exposure — terminator darkens night.
-    // Ground view: also cool/dim with local sky so the map floor tracks dusk.
-    const brightness = 1 - night * 0.58
-    const saturation = 1 - night * 0.4
+    // Globe: soft day exposure so Sahara isn't chalk; night still from terminator.
+    // Ground view: cool/dim with local sky so zoomed spots match the timeline.
+    const alt = options?.sunAltitudeDeg ?? 90
+    const dim = mapImageryNightDim(localNight, alt, ground)
+    // Globe day face: pull max down so Sahara keeps grain; ground view stays fuller.
+    const globeDayMax = 0.78 + 0.22 * ground
+    const brightness = Math.max(0.18, (1 - dim * 0.92) * globeDayMax)
+    const saturation = 1 - dim * 0.55
     const twilight = ground * palette.twilightStrength
-    map.setPaintProperty('imagery', 'raster-brightness-min', night * 0.1)
+    map.setPaintProperty('imagery', 'raster-brightness-min', dim * 0.12)
     map.setPaintProperty('imagery', 'raster-brightness-max', brightness)
     map.setPaintProperty('imagery', 'raster-saturation', saturation - 1)
     // Soft cool shift into night / blue hour (degrees); day stays 0.
     map.setPaintProperty(
       'imagery',
       'raster-hue-rotate',
-      night * 18 * ground + twilight * 8,
+      dim * 22 + twilight * 8,
     )
-    map.setPaintProperty(
-      'imagery',
-      'raster-opacity',
-      1 - night * 0.14,
-    )
+    map.setPaintProperty('imagery', 'raster-opacity', 1 - dim * 0.28)
   }
 
   if (map.getLayer('background')) {

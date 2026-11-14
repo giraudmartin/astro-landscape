@@ -87,9 +87,10 @@ export default function App() {
   const clockIsUtc = spot == null
 
   const [date, setDate] = useState(() => civilDateFromUtc(Date.now(), 0))
+  /** Wall-clock UTC (minute floor) — never a fixed 18:00, or globe/map disagree with “now”. */
   const [playheadUtcMs, setPlayheadUtcMs] = useState(() => {
-    const start = civilDayStartUtcMs(civilDateFromUtc(Date.now(), 0), 0)
-    return start + 18 * 3600_000
+    const now = Date.now()
+    return Math.floor(now / 60_000) * 60_000
   })
   const playheadUtcMsRef = useRef(playheadUtcMs)
   playheadUtcMsRef.current = playheadUtcMs
@@ -454,6 +455,7 @@ export default function App() {
             skyUtcMs={playheadUtcMs}
             onSkyUtcChange={onPlayheadChange}
             date={date}
+            onDateChange={onDateChange}
             selectedCelestial={selectedCelestial}
             onSelectCelestial={setSelectedCelestial}
             onTerrainReadyChange={setImmersiveTerrainReady}

@@ -242,6 +242,9 @@ export function MapCanvas({
   const onRequestEditSpotRef = useRef(onRequestEditSpot)
   const onMarkerMenuOpenChangeRef = useRef(onMarkerMenuOpenChange)
 
+  const skyUtcMsRef = useRef(skyUtcMs)
+  skyUtcMsRef.current = skyUtcMs
+
   modeRef.current = mode
   spotRef.current = spot
   threeDimensionalRef.current = threeDimensional
@@ -524,15 +527,37 @@ export function MapCanvas({
       showAllPersonalSpots,
     }
 
+    const applyPlayheadSky = () => {
+      if (!map.isStyleLoaded()) return
+      const live = spotRef.current
+      const lat = live?.lat ?? DEFAULT_MAP_VIEW.lat
+      const lon = live?.lon ?? DEFAULT_MAP_VIEW.lon
+      const elev = live?.heightM ?? 0
+      const utc = skyUtcMsRef.current
+      const sun = sunPositionAt(lat, lon, elev, utc)
+      applyMapSky(map, skyPaletteFromSunAltitude(sun.altitudeDeg), {
+        utcMs: utc,
+        sunAzimuthDeg: sun.azimuthDeg,
+        sunAltitudeDeg: sun.altitudeDeg,
+        zoom: map.getZoom(),
+      })
+    }
+
     map.on('load', () => {
       map.setTerrain({
         source: 'terrain',
         exaggeration: TERRAIN_EXAGGERATION,
       })
       ensureGlobeMilkyWayLayer(map)
-      ensureNightShadeLayer(map)
-      ensureCelestialBodyLayers(map)
+      // Playhead UTC — never Date.now(), or first shade tiles disagree with the dock.
+      ensureNightShadeLayer(map, skyUtcMsRef.current)
+      ensureCelestialBodyLayers(map, skyUtcMsRef.current)
+      // Terminator + light before first paint settle — don't wait for a user pan.
+      applyPlayheadSky()
       setBasemapMode(basemapModeRef.current)
+      // One re-apply after first tiles are in; never on every moveend (that
+      // rewrote light/veil and looked like time jumping on drag-release).
+      map.once('idle', applyPlayheadSky)
     })
 
     /** Place / move the working pin — no camera jump (PS: right-click pins in place). */
@@ -787,12 +812,13 @@ export function MapCanvas({
       applyMapSky(map, skyPaletteFromSunAltitude(sun.altitudeDeg), {
         utcMs: skyUtcMs,
         sunAzimuthDeg: sun.azimuthDeg,
+        sunAltitudeDeg: sun.altitudeDeg,
         zoom: map.getZoom(),
       })
     }
     if (map.isStyleLoaded()) apply()
     else map.once('load', apply)
-    // Re-blend globe↔ground lighting when the user zooms.
+    // Globe↔ground blend only — pan must NOT re-apply lighting (terminator jump).
     map.on('zoomend', apply)
     return () => {
       map.off('zoomend', apply)

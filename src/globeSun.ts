@@ -81,7 +81,13 @@ export function sunLightSpec(
 /** Last Earth-fixed light we pushed — skip setLight on pan/zoom churn. */
 const lastGlobeLightByMap = new WeakMap<
   Map,
-  { key: string; intensity: number; color: string }
+  { key: string; intensity: number; color: string; stable: boolean }
+>()
+
+/** Last night-veil URL + strength — skip setTiles / opacity thrash on pan. */
+const lastNightShadeByMap = new WeakMap<
+  Map,
+  { url: string; strength: number }
 >()
 
 export function moonIlluminationAt(utcMs: number): {
@@ -116,7 +122,8 @@ export function applyGlobeSunLighting(
 
   // Globe atmosphere is view-dependent enough already — don't also tint the
   // light orange/blue from local twilight or the day disk "pops" in colour.
-  const intensity = stable ? 0.62 : 0.95 - night * 0.78
+  // Keep stable intensity modest: Esri deserts + MapLibre light blow out above ~0.5.
+  const intensity = stable ? 0.4 : 0.85 - night * 0.7
   const color = stable
     ? '#ffffff'
     : night > 0.7
@@ -129,18 +136,17 @@ export function applyGlobeSunLighting(
   // would slide the terminator across continents).
   const lightKey = `${subsolar.lon.toFixed(3)},${subsolar.lat.toFixed(3)}`
   const prev = lastGlobeLightByMap.get(map)
-  if (
+  const lightChanged =
     !prev ||
     prev.key !== lightKey ||
     prev.intensity !== intensity ||
     prev.color !== color
-  ) {
+  if (lightChanged) {
     try {
       map.setLight(sunLightSpec(subsolar, { intensity, color }))
     } catch {
       // Style not ready / light unsupported
     }
-    lastGlobeLightByMap.set(map, { key: lightKey, intensity, color })
   }
 
   // Real night veil (not just soft globe shade) — strongest when zoomed out.
@@ -149,8 +155,12 @@ export function applyGlobeSunLighting(
   if (map.getLayer('hillshade')) {
     // Globe: local spot azimuth as global hillshade reads as a second sun that
     // fights the subsolar terminator — kill it until we're in ground framing.
+    // Only rewrite paint when globe↔ground mode flips (pan must not thrash this).
+    const modeFlipped = !prev || prev.stable !== stable
     if (stable) {
-      map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0)
+      if (modeFlipped || lightChanged) {
+        map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0)
+      }
     } else {
       const az = ((opts.sunAzimuthDeg % 360) + 360) % 360
       map.setPaintProperty('hillshade', 'hillshade-illumination-direction', az)
@@ -173,6 +183,13 @@ export function applyGlobeSunLighting(
     }
   }
 
+  lastGlobeLightByMap.set(map, {
+    key: lightKey,
+    intensity,
+    color,
+    stable,
+  })
+
   return subsolar
 }
 
@@ -183,7 +200,7 @@ export const MOON_LAYER_ID = 'astro-moon-marker'
 export const MOON_GLOW_LAYER_ID = 'astro-moon-marker-glow'
 
 /** Night-side raster veil over imagery (globe overview). */
-export function ensureNightShadeLayer(map: Map, utcMs = Date.now()): void {
+export function ensureNightShadeLayer(map: Map, utcMs: number): void {
   if (!map.isStyleLoaded()) return
   ensureNightShadeProtocol()
 
@@ -241,16 +258,24 @@ export function updateNightShadeLayer(
   strength = 1,
 ): void {
   ensureNightShadeLayer(map, utcMs)
+  const s = Math.max(0, Math.min(1, strength))
+  const nextUrl = nightShadeTileUrl(utcMs)
+  const prev = lastNightShadeByMap.get(map)
   const source = map.getSource(NIGHT_SHADE_SOURCE_ID) as
     | RasterTileSource
     | undefined
-  if (source && typeof source.setTiles === 'function') {
-    const next = nightShadeTileUrl(utcMs)
-    const current = source.tiles?.[0]
-    if (current !== next) source.setTiles([next])
+  if (
+    source &&
+    typeof source.setTiles === 'function' &&
+    prev?.url !== nextUrl
+  ) {
+    source.setTiles([nextUrl])
   }
-  if (map.getLayer(NIGHT_SHADE_LAYER_ID)) {
-    const s = Math.max(0, Math.min(1, strength))
+  // Pan/zoomend must not rewrite opacity every frame — that flashes the veil.
+  if (
+    map.getLayer(NIGHT_SHADE_LAYER_ID) &&
+    (prev?.strength !== s || prev?.url !== nextUrl || !prev)
+  ) {
     map.setPaintProperty(NIGHT_SHADE_LAYER_ID, 'raster-opacity', [
       'interpolate',
       ['linear'],
@@ -265,12 +290,13 @@ export function updateNightShadeLayer(
       0,
     ])
   }
+  lastNightShadeByMap.set(map, { url: nextUrl, strength: s })
 }
 
 /** GeoJSON source + circle layers for sun/moon on the globe (low zoom). */
-export function ensureCelestialBodyLayers(map: Map): void {
+export function ensureCelestialBodyLayers(map: Map, utcMs: number): void {
   if (!map.isStyleLoaded()) return
-  ensureNightShadeLayer(map)
+  ensureNightShadeLayer(map, utcMs)
 
   if (!map.getSource(CELESTIAL_SOURCE_ID)) {
     map.addSource(CELESTIAL_SOURCE_ID, {
@@ -410,7 +436,7 @@ function emptyBodies(): BodyCollection {
 }
 
 export function updateCelestialBodyMarkers(map: Map, utcMs: number): void {
-  ensureCelestialBodyLayers(map)
+  ensureCelestialBodyLayers(map, utcMs)
   const source = map.getSource(CELESTIAL_SOURCE_ID) as GeoJSONSource | undefined
   if (!source || typeof source.setData !== 'function') return
 

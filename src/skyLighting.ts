@@ -263,12 +263,13 @@ export function groundAlbedoFromSky(
     : 0
   let dim: number
   if (atmosphereOn) {
-    dim = 1 - dusk * 0.55 - night * 0.5
+    // Stronger post-sunset crush so nautical/astro match the timeline (not noon ortho).
+    dim = 1 - dusk * 0.62 - night * 0.58
     dim *= 0.78 + 0.22 * clamp01(palette.exposure / 0.85)
   } else {
     dim = 1 - night * 0.48
   }
-  dim = Math.max(atmosphereOn ? 0.18 : 0.48, Math.min(1, dim))
+  dim = Math.max(atmosphereOn ? 0.12 : 0.48, Math.min(1, dim))
   // Slider after the soft floor — 0 = black ground at night if the user wants.
   const nightMix = atmosphereOn ? Math.max(dusk, night) : night
   dim *= 1 + (nightBrightness - 1) * nightMix

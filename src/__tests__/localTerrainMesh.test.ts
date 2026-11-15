@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   clearParkedLocalTerrain,
+  createFlatLocalTerrainMesh,
   demZoomForDistance,
   enhanceOceanPixelData,
   FAR_TERRAIN_RADIUS_M,
@@ -190,5 +191,26 @@ describe('parked local terrain', () => {
     parkLocalTerrain(45.1, 6.2, 1000, handle)
     expect(hasParkedLocalTerrainForTests()).toBe(false)
     expect(disposed.value).toBe(true)
+  })
+})
+
+describe('createFlatLocalTerrainMesh', () => {
+  it('returns an instant ready black lower hemisphere with no DEM tiles', () => {
+    const terrain = createFlatLocalTerrainMesh({
+      centerElevationM: 1234,
+      radiusM: 1_000,
+    })
+    expect(terrain.ready).toBe(true)
+    expect(terrain.stats.phase).toBe('ready')
+    expect(terrain.stats.tiles).toBe(0)
+    expect(terrain.groundElevationMslAt(0, 0)).toBe(1234)
+    expect(terrain.groundYAt(10, -20)).toBe(0)
+    expect(terrain.farMesh).toBeNull()
+    const mat = terrain.mesh.material as { color: { getHex: () => number } }
+    expect(mat.color.getHex()).toBe(0x000000)
+    expect(terrain.mesh.geometry.getAttribute('position').count).toBeGreaterThan(
+      100,
+    )
+    terrain.dispose()
   })
 })

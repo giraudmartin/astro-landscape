@@ -1349,10 +1349,16 @@
   --delay: 45ms;
 }
 
+.spot-action-marker__spoke--sky-flat {
+  --x: -56.6px;
+  --y: 56.6px;
+  --delay: 60ms;
+}
+
 .spot-action-marker__spoke--save {
-  --x: 0px;
-  --y: 80px;
-  --delay: 70ms;
+  --x: 56.6px;
+  --y: 56.6px;
+  --delay: 75ms;
 }
 
 .spot-action-marker__spoke button {
@@ -1410,6 +1416,10 @@
 
 .spot-action-marker__spoke--immersive button {
   color: var(--ui-accent);
+}
+
+.spot-action-marker__spoke--sky-flat button {
+  color: #9ec5ff;
 }
 
 .spot-action-marker__center {

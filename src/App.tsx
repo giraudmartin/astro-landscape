@@ -43,6 +43,8 @@ type PendingSave = {
 export default function App() {
   const savedMap = useMemo(() => loadAppSettings().map, [])
   const [mode, setMode] = useState<CameraMode>('orbit')
+  /** Immersive without DEM — flat disc for fast sky testing. */
+  const [flatTerrain, setFlatTerrain] = useState(false)
   const [threeDimensional, setThreeDimensional] = useState(
     savedMap.threeDimensional,
   )
@@ -136,6 +138,7 @@ export default function App() {
           bearingDeg: opts.bearingDeg,
           pitchDeg: opts.pitchDeg,
         })
+        setFlatTerrain(false)
         setMode('ground')
       },
       setPlayheadUtcMs,
@@ -392,7 +395,14 @@ export default function App() {
           basemapMode={basemapMode}
           addressSearchOpen={addressSearchOpen}
           spot={spot}
-          onModeChange={setMode}
+          onModeChange={(next, opts) => {
+            // Only flip flatTerrain on enter — resetting it on exit remounts
+            // the parked same-spot scene and starts a DEM load in the background.
+            if (next === 'ground') {
+              setFlatTerrain(Boolean(opts?.flatTerrain))
+            }
+            setMode(next)
+          }}
           onSpotChange={(next) => {
             setSpot(next)
             setSelectedPersonalSpotId((currentId) => {
@@ -460,6 +470,7 @@ export default function App() {
             onSelectCelestial={setSelectedCelestial}
             onTerrainReadyChange={setImmersiveTerrainReady}
             onTimelapsePreviewPlayingChange={setTimelapsePreviewPlaying}
+            flatTerrain={flatTerrain}
             onExit={() => {
               setImmersiveLook(null)
               setImmersiveTerrainReady(false)

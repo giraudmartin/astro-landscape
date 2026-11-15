@@ -2993,3 +2993,70 @@ export async function createLocalTerrainMesh(input: {
   commitTerrainTileSession(sessionGen)
   return handle
 }
+
+/**
+ * Instant black ground for sky-only testing — no DEM / ortho fetches.
+ *
+ * A flat disc shreds under stereographic (gray wedges / black holes). Use a
+ * dense lower hemisphere (same family as the sky dome) so every projector
+ * gets a smooth black fill below the horizon.
+ */
+export function createFlatLocalTerrainMesh(input: {
+  centerElevationM: number
+  /** Shell radius (m). Default inside the sky dome, past far LOD. */
+  radiusM?: number
+}): LocalTerrainHandle {
+  const radiusM = input.radiusM ?? 300_000
+  // Lower hemi: phiStart=π/2 (horizon) → π (nadir). Dense like the sky dome.
+  const geometry = new THREE.SphereGeometry(
+    radiusM,
+    256,
+    128,
+    0,
+    Math.PI * 2,
+    Math.PI / 2,
+    Math.PI / 2,
+  )
+  // Pure black — ImmersiveView must not re-tint this with day albedo.
+  const material = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    side: THREE.BackSide,
+    depthWrite: true,
+  })
+  const eyeHeight = { value: TRIPOD_HEIGHT_M }
+  const eyeXZ = { value: new THREE.Vector2(0, 0) }
+  material.userData.eyeHeight = eyeHeight
+  material.userData.eyeXZ = eyeXZ
+  material.userData.isFlatTerrain = true
+  attachStelProjector(material, { terrainSafe: true })
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.frustumCulled = false
+  mesh.name = 'local-terrain-flat'
+  mesh.renderOrder = 0
+  let disposed = false
+  return {
+    mesh,
+    farMesh: null,
+    materials: [material],
+    adaptToEye: () => {},
+    groundYAt: () => 0,
+    groundElevationMslAt: () => input.centerElevationM,
+    ready: true,
+    stats: {
+      minH: input.centerElevationM,
+      maxH: input.centerElevationM,
+      tiles: 0,
+      demMaxZ: 0,
+      farRadiusM: radiusM,
+      phase: 'ready',
+      progress: 1,
+    },
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      geometry.dispose()
+      material.dispose()
+      mesh.removeFromParent()
+    },
+  }
+}

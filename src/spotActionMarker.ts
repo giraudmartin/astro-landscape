@@ -12,6 +12,8 @@ export type SpotActionMarkerActions = {
   onStreetView: () => void
   /** Open the Three.js immersive / tripod view. */
   onImmersive: () => void
+  /** Open immersive with a flat disc (no DEM) — sky testing. */
+  onSkyFlat: () => void
   /** Return false when saving was cancelled / deferred to a dialog. */
   onAdd: () => boolean
   onEdit: () => void
@@ -23,6 +25,7 @@ export type SpotActionMarkerLabels = {
   closeMenu: string
   street: string
   immersive: string
+  skyFlat: string
   save: string
   edit: string
 }
@@ -40,7 +43,15 @@ export type SpotActionMarkerController = {
 let closeOpenMarkerMenu: (() => void) | null = null
 
 const icon = (
-  name: 'pin' | 'camera' | 'close' | 'street' | 'immersive' | 'add' | 'edit',
+  name:
+    | 'pin'
+    | 'camera'
+    | 'close'
+    | 'street'
+    | 'immersive'
+    | 'skyFlat'
+    | 'add'
+    | 'edit',
 ): string => {
   if (name === 'pin') {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>'
@@ -53,6 +64,9 @@ const icon = (
       '<circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6M6 8l6 2 6-2M12 10v4"/>',
     immersive:
       '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>',
+    // Crescent sky + flat ground line — sky-only / no-DEM mode.
+    skyFlat:
+      '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/><path d="M3 19h18"/>',
     add: '<path d="M19.914 11.105A7.298 7.298 0 0 0 20 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 1.202 0 32 32 0 0 0 .824-.738"/><circle cx="12" cy="10" r="3"/><path d="M16 18h6M19 15v6"/>',
     edit: '<path d="M17.97 9.304A8 8 0 0 0 2 10c0 4.69 4.887 9.562 7.022 11.468"/><path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><circle cx="10" cy="10" r="3"/>',
   }
@@ -65,6 +79,7 @@ export const SPOT_ACTION_MARKER_LABELS_FR: SpotActionMarkerLabels = {
   closeMenu: 'Fermer les actions du marker',
   street: 'Ouvrir Google Street View',
   immersive: 'Ouvrir la vue trépied (Three.js)',
+  skyFlat: 'Vue ciel (sol plat, sans DEM)',
   save: 'Enregistrer ce spot',
   edit: 'Modifier ce spot',
 }
@@ -84,6 +99,7 @@ export function createSpotActionMarkerElement(
     <div class="spot-action-marker__orbit">
       <span class="spot-action-marker__spoke spot-action-marker__spoke--street"><button type="button" data-action="street" title="${currentLabels.street}" aria-label="${currentLabels.street}">${icon('street')}</button></span>
       <span class="spot-action-marker__spoke spot-action-marker__spoke--immersive"><button type="button" data-action="immersive" title="${currentLabels.immersive}" aria-label="${currentLabels.immersive}">${icon('immersive')}</button></span>
+      <span class="spot-action-marker__spoke spot-action-marker__spoke--sky-flat"><button type="button" data-action="sky-flat" title="${currentLabels.skyFlat}" aria-label="${currentLabels.skyFlat}">${icon('skyFlat')}</button></span>
       <span class="spot-action-marker__spoke spot-action-marker__spoke--save"><button type="button" data-action="save" title="${currentLabels.save}" aria-label="${currentLabels.save}"><span class="spot-action-marker__save-add">${icon('add')}</span><span class="spot-action-marker__save-edit">${icon('edit')}</span></button></span>
     </div>
     <button type="button" class="spot-action-marker__center" aria-label="${currentLabels.openMenu}" aria-expanded="false">
@@ -108,6 +124,9 @@ export function createSpotActionMarkerElement(
   const immersiveButton = element.querySelector<HTMLButtonElement>(
     '[data-action="immersive"]',
   )!
+  const skyFlatButton = element.querySelector<HTMLButtonElement>(
+    '[data-action="sky-flat"]',
+  )!
   const saveButton = element.querySelector<HTMLButtonElement>(
     '[data-action="save"]',
   )!
@@ -128,6 +147,8 @@ export function createSpotActionMarkerElement(
     streetButton.setAttribute('aria-label', currentLabels.street)
     immersiveButton.title = currentLabels.immersive
     immersiveButton.setAttribute('aria-label', currentLabels.immersive)
+    skyFlatButton.title = currentLabels.skyFlat
+    skyFlatButton.setAttribute('aria-label', currentLabels.skyFlat)
     center.setAttribute(
       'aria-label',
       open ? currentLabels.closeMenu : currentLabels.openMenu,
@@ -200,6 +221,10 @@ export function createSpotActionMarkerElement(
     if (action === 'street') actions.onStreetView()
     if (action === 'immersive') {
       actions.onImmersive()
+      setOpen(false)
+    }
+    if (action === 'sky-flat') {
+      actions.onSkyFlat()
       setOpen(false)
     }
     if (action === 'save') {

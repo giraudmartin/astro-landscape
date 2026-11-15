@@ -29,6 +29,7 @@ import {
 } from './frustumCullingControl'
 import {
   clearParkedLocalTerrain,
+  createFlatLocalTerrainMesh,
   createLocalTerrainMesh,
   NEAR_TERRAIN_RADIUS_M,
   parkLocalTerrain,
@@ -178,6 +179,10 @@ type ImmersiveViewProps = {
    * rendering — used while the user is back on the orbit map.
    */
   active?: boolean
+  /**
+   * Skip DEM/ortho — mount a flat disc instantly for sky / night testing.
+   */
+  flatTerrain?: boolean
 }
 
 const LOOK_PITCH_MIN = -85
@@ -208,6 +213,7 @@ export function ImmersiveView({
   onTerrainReadyChange,
   onTimelapsePreviewPlayingChange,
   active = true,
+  flatTerrain = false,
 }: ImmersiveViewProps) {
   const onTerrainReadyChangeRef = useRef(onTerrainReadyChange)
   onTerrainReadyChangeRef.current = onTerrainReadyChange
@@ -947,6 +953,11 @@ export function ImmersiveView({
       // stays sharp, not mud / cream.
       if (landscapeMats.length > 0) {
         for (const mat of landscapeMats) {
+          if (mat.userData.isFlatTerrain) {
+            // Sky-test stub stays pure black — never inherit day albedo.
+            mat.color.setRGB(0, 0, 0)
+            continue
+          }
           if (mat.userData.isSea) {
             mat.color.setRGB(
               0.29 * groundTint.r,
@@ -1033,9 +1044,16 @@ export function ImmersiveView({
     })
 
     let activeTerrain: LocalTerrainHandle | null = null
+    const isFlatTerrainHandle = (terrain: LocalTerrainHandle): boolean => {
+      const mat = Array.isArray(terrain.mesh.material)
+        ? terrain.mesh.material[0]
+        : terrain.mesh.material
+      return Boolean((mat as THREE.Material | undefined)?.userData?.isFlatTerrain)
+    }
     const releaseTerrain = (terrain: LocalTerrainHandle) => {
+      // Flat discs are disposable stubs — never park them as DEM cache.
       // Same spot quit→relaunch: keep GPU mesh. Incomplete builds still die.
-      if (parkOnRelease && terrain.ready) {
+      if (parkOnRelease && terrain.ready && !isFlatTerrainHandle(terrain)) {
         parkLocalTerrain(lat, lon, sceneGroundElevM, terrain)
       } else {
         terrain.dispose()
@@ -1090,7 +1108,9 @@ export function ImmersiveView({
         setTerrainReady(true)
         onTerrainReadyChangeRef.current?.(true)
         setTerrainLabel(
-          `DEM z${terrain.stats.demMaxZ} · ${terrain.stats.tiles} tuiles · Δ${Math.round(relief)} m · LOD ${farKm} km`,
+          isFlatTerrainHandle(terrain)
+            ? 'Sol plat · sans DEM'
+            : `DEM z${terrain.stats.demMaxZ} · ${terrain.stats.tiles} tuiles · Δ${Math.round(relief)} m · LOD ${farKm} km`,
         )
         window.setTimeout(() => {
           if (!disposed) setLoaderVisible(false)
@@ -1110,10 +1130,12 @@ export function ImmersiveView({
       )
     }
 
-    const parked = takeParkedLocalTerrain(lat, lon, sceneGroundElevM)
-      if (parked) {
-      reviveLocalTerrainTextures(parked)
-      setTerrainDemFromCache(true)
+    if (flatTerrain) {
+      clearParkedLocalTerrain()
+      const flat = createFlatLocalTerrainMesh({
+        centerElevationM: sceneGroundElevM,
+      })
+      setTerrainDemFromCache(false)
       setTerrainPhase('ready')
       setTerrainProgress(1)
       setTerrainReady(true)
@@ -1121,61 +1143,76 @@ export function ImmersiveView({
       terrainUnlockedRef.current = true
       setTerrainUnlocked(true)
       setLoaderVisible(false)
-      mountTerrain(parked)
+      setTerrainLabel('Sol plat · sans DEM')
+      mountTerrain(flat)
     } else {
-      clearParkedLocalTerrain()
-      setTerrainLabel('Relief…')
-      setTerrainPhase('dem')
-      setTerrainDemFromCache(false)
-      setTerrainProgress(0)
-      setTerrainReady(false)
-      onTerrainReadyChangeRef.current?.(false)
-      terrainUnlockedRef.current = false
-      setTerrainUnlocked(false)
-      setLoaderVisible(true)
-      void createLocalTerrainMesh({
-        lat,
-        lon,
-        centerElevationM: sceneGroundElevM,
-        radiusM: NEAR_TERRAIN_RADIUS_M,
-        // 1600 + triple 4096 atlas bake OOMed the GPU (Context Lost). Stay ≤1400.
-        resolution: 1200,
-        onPreview: (terrain) => mountTerrain(terrain),
-        onUpgrade: (terrain) => mountTerrain(terrain),
-        onProgress: ({ phase, progress, cacheHitRatio }) => {
-          if (disposed) return
-          setTerrainPhase(phase)
-          setTerrainProgress(progress)
-          if (cacheHitRatio != null && cacheHitRatio >= 0.7) {
-            setTerrainDemFromCache(true)
-          }
-          if (phase === 'ready') {
-            setTerrainReady(true)
-            onTerrainReadyChangeRef.current?.(true)
-            window.setTimeout(() => {
-              if (!disposed) setLoaderVisible(false)
-            }, 650)
-          }
-        },
-      })
-        .then((terrain) => {
-          if (disposed) {
-            releaseTerrain(terrain)
-            return
-          }
-          mountTerrain(terrain)
+      const parked = takeParkedLocalTerrain(lat, lon, sceneGroundElevM)
+      if (parked) {
+        reviveLocalTerrainTextures(parked)
+        setTerrainDemFromCache(true)
+        setTerrainPhase('ready')
+        setTerrainProgress(1)
+        setTerrainReady(true)
+        onTerrainReadyChangeRef.current?.(true)
+        terrainUnlockedRef.current = true
+        setTerrainUnlocked(true)
+        setLoaderVisible(false)
+        mountTerrain(parked)
+      } else {
+        clearParkedLocalTerrain()
+        setTerrainLabel('Relief…')
+        setTerrainPhase('dem')
+        setTerrainDemFromCache(false)
+        setTerrainProgress(0)
+        setTerrainReady(false)
+        onTerrainReadyChangeRef.current?.(false)
+        terrainUnlockedRef.current = false
+        setTerrainUnlocked(false)
+        setLoaderVisible(true)
+        void createLocalTerrainMesh({
+          lat,
+          lon,
+          centerElevationM: sceneGroundElevM,
+          radiusM: NEAR_TERRAIN_RADIUS_M,
+          // 1600 + triple 4096 atlas bake OOMed the GPU (Context Lost). Stay ≤1400.
+          resolution: 1200,
+          onPreview: (terrain) => mountTerrain(terrain),
+          onUpgrade: (terrain) => mountTerrain(terrain),
+          onProgress: ({ phase, progress, cacheHitRatio }) => {
+            if (disposed) return
+            setTerrainPhase(phase)
+            setTerrainProgress(progress)
+            if (cacheHitRatio != null && cacheHitRatio >= 0.7) {
+              setTerrainDemFromCache(true)
+            }
+            if (phase === 'ready') {
+              setTerrainReady(true)
+              onTerrainReadyChangeRef.current?.(true)
+              window.setTimeout(() => {
+                if (!disposed) setLoaderVisible(false)
+              }, 650)
+            }
+          },
         })
-        .catch((err: unknown) => {
-          console.error('[terrain]', err)
-          if (!disposed) {
-            setTerrainLabel('Relief indisponible')
-            terrainUnlockedRef.current = true
-            setTerrainUnlocked(true)
-            setTerrainReady(true)
-            onTerrainReadyChangeRef.current?.(true)
-            setLoaderVisible(false)
-          }
-        })
+          .then((terrain) => {
+            if (disposed) {
+              releaseTerrain(terrain)
+              return
+            }
+            mountTerrain(terrain)
+          })
+          .catch((err: unknown) => {
+            console.error('[terrain]', err)
+            if (!disposed) {
+              setTerrainLabel('Relief indisponible')
+              terrainUnlockedRef.current = true
+              setTerrainUnlocked(true)
+              setTerrainReady(true)
+              onTerrainReadyChangeRef.current?.(true)
+              setLoaderVisible(false)
+            }
+          })
+      }
     }
 
     const resize = () => {
@@ -1536,10 +1573,11 @@ export function ImmersiveView({
       renderer.dispose()
       renderer.domElement.remove()
     }
-    // lat/lon only — groundElevationM updates from the map DEM must NOT remount
-    // (that was reloading the whole terrain on every quit→relaunch).
-    // bearingDeg must NOT remount either — that dropped back to muddy preview.
-  }, [lat, lon])
+    // lat/lon (+ flatTerrain) only — groundElevationM updates from the map DEM
+    // must NOT remount (that was reloading the whole terrain on every
+    // quit→relaunch). bearingDeg must NOT remount either — that dropped back
+    // to muddy preview. flatTerrain toggles a DEM-free sky test stub.
+  }, [lat, lon, flatTerrain])
 
   useEffect(() => {
     apiRef.current?.setSkyUtc(skyUtcMs)

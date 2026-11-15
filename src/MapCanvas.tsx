@@ -107,7 +107,10 @@ type MapCanvasProps = {
   basemapMode: BasemapMode
   addressSearchOpen: boolean
   spot: SpotState | null
-  onModeChange: (mode: CameraMode) => void
+  onModeChange: (
+    mode: CameraMode,
+    opts?: { flatTerrain?: boolean },
+  ) => void
   onSpotChange: (spot: SpotState) => void
   onThreeDimensionalChange: (next: boolean) => void
   onBasemapModeChange: (next: BasemapMode) => void
@@ -448,7 +451,11 @@ export function MapCanvas({
           },
           onImmersive: () => {
             if (!spotRef.current) return
-            onModeChangeRef.current('ground')
+            onModeChangeRef.current('ground', { flatTerrain: false })
+          },
+          onSkyFlat: () => {
+            if (!spotRef.current) return
+            onModeChangeRef.current('ground', { flatTerrain: true })
           },
           onAdd: () => {
             onRequestSaveSpotRef.current()

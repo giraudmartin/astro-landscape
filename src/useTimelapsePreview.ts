@@ -11,7 +11,6 @@ import {
   timelapsePreviewFrameDelayMs,
   timelapseShotCount,
   timelapseShotUtcMs,
-  type TimelapseEqRotation,
   type TimelapsePlan,
   type TimelapseSupport,
 } from './timelapse'
@@ -27,7 +26,6 @@ export type TimelapsePreviewStatus = {
   shotIndex: number
   shotCount: number
   support: TimelapseSupport
-  eqRotation: TimelapseEqRotation
 }
 
 type PreviewSession = {
@@ -37,11 +35,11 @@ type PreviewSession = {
   shotCount: number
   intervalS: number
   support: TimelapseSupport
-  eqRotation: TimelapseEqRotation
   playbackFps: number
   lockRaHours: number | null
   lockDecDeg: number | null
   trackObject: CelestialObject | null
+  /** Parallactic angle at lock time — EQ field rotation baseline. */
   q0Rad: number
 }
 
@@ -63,7 +61,6 @@ const IDLE: TimelapsePreviewStatus = {
   shotIndex: 0,
   shotCount: 0,
   support: 'fixed',
-  eqRotation: 'scene',
 }
 
 /**
@@ -99,8 +96,10 @@ export function useTimelapsePreview({
     (
       session: PreviewSession,
       utcMs: number,
-    ): { yaw: number; pitch: number } | null => {
-      if (session.support !== 'equatorial') return null
+    ): { yaw: number; pitch: number } => {
+      // Prefer a selected body when it has a position; always fall back to the
+      // RA/Dec lock of the viewfinder centre so EQ never leaves the look fixed
+      // while the sky clock advances (that reads as a fixed tripod).
       if (session.trackObject) {
         const pos = objectHorizontalAt(
           session.trackObject,
@@ -109,20 +108,20 @@ export function useTimelapsePreview({
           elevationM,
           utcMs,
         )
-        return pos
-          ? { yaw: pos.azimuthDeg, pitch: pos.altitudeDeg }
-          : null
+        if (pos) return { yaw: pos.azimuthDeg, pitch: pos.altitudeDeg }
       }
-      if (session.lockRaHours == null || session.lockDecDeg == null) return null
-      const pos = j2000ToHorizontal(
-        session.lockRaHours,
-        session.lockDecDeg,
-        lat,
-        lon,
-        elevationM,
-        utcMs,
-      )
-      return { yaw: pos.azimuthDeg, pitch: pos.altitudeDeg }
+      if (session.lockRaHours != null && session.lockDecDeg != null) {
+        const pos = j2000ToHorizontal(
+          session.lockRaHours,
+          session.lockDecDeg,
+          lat,
+          lon,
+          elevationM,
+          utcMs,
+        )
+        return { yaw: pos.azimuthDeg, pitch: pos.altitudeDeg }
+      }
+      return session.startLook
     },
     [elevationM, lat, lon],
   )
@@ -135,34 +134,22 @@ export function useTimelapsePreview({
         index,
       )
       onSkyUtcChange(utc)
+      onFrameRollChange(0)
 
       if (session.support !== 'equatorial') {
+        // Fixed tripod: camera stays put, sky drifts through the frame.
         onLookChange(session.startLook.yaw, session.startLook.pitch, 0)
-        onFrameRollChange(0)
         return
       }
 
+      // Equatorial: track the lock point + field rotation (camera roll).
+      // Stars stay fixed in the frame; the landscape tips over time.
       const target = resolveTarget(session, utc)
-      if (!target) return
-
       const q = parallacticAngleRad(target.yaw, target.pitch, lat)
-      const rollDeg = timelapseFieldRollDeg(session.q0Rad, q)
-
-      if (session.eqRotation === 'frame') {
-        onLookChange(target.yaw, target.pitch, 0)
-        onFrameRollChange(rollDeg)
-      } else {
-        onLookChange(target.yaw, target.pitch, rollDeg)
-        onFrameRollChange(0)
-      }
+      const fieldRollDeg = timelapseFieldRollDeg(session.q0Rad, q)
+      onLookChange(target.yaw, target.pitch, fieldRollDeg)
     },
-    [
-      lat,
-      onFrameRollChange,
-      onLookChange,
-      onSkyUtcChange,
-      resolveTarget,
-    ],
+    [lat, onFrameRollChange, onLookChange, onSkyUtcChange, resolveTarget],
   )
 
   const finishToEnded = useCallback(() => {
@@ -177,7 +164,6 @@ export function useTimelapsePreview({
       shotIndex: last,
       shotCount: session.shotCount,
       support: session.support,
-      eqRotation: session.eqRotation,
     })
   }, [])
 
@@ -225,6 +211,20 @@ export function useTimelapsePreview({
       let q0Rad = 0
 
       if (plan.support === 'equatorial') {
+        // Always pin RA/Dec of the framed sky (viewfinder centre) so tracking
+        // cannot fail open into a fixed look.
+        const eq = horizontalToJ2000(
+          startLook.pitch,
+          startLook.yaw,
+          lat,
+          lon,
+          elevationM,
+          startUtcMs,
+        )
+        lockRaHours = eq.raHours
+        lockDecDeg = eq.decDeg
+        q0Rad = parallacticAngleRad(startLook.yaw, startLook.pitch, lat)
+
         if (
           selectedCelestial &&
           (selectedCelestial.raHours != null ||
@@ -232,29 +232,26 @@ export function useTimelapsePreview({
         ) {
           trackObject = selectedCelestial
           const pos = objectHorizontalAt(
-            trackObject,
+            selectedCelestial,
             lat,
             lon,
             elevationM,
             startUtcMs,
           )
+          // If the selection is up, lock on it instead of the look centre.
           if (pos) {
+            const pinned = horizontalToJ2000(
+              pos.altitudeDeg,
+              pos.azimuthDeg,
+              lat,
+              lon,
+              elevationM,
+              startUtcMs,
+            )
+            lockRaHours = pinned.raHours
+            lockDecDeg = pinned.decDeg
             q0Rad = parallacticAngleRad(pos.azimuthDeg, pos.altitudeDeg, lat)
-          } else {
-            q0Rad = parallacticAngleRad(startLook.yaw, startLook.pitch, lat)
           }
-        } else {
-          const eq = horizontalToJ2000(
-            startLook.pitch,
-            startLook.yaw,
-            lat,
-            lon,
-            elevationM,
-            startUtcMs,
-          )
-          lockRaHours = eq.raHours
-          lockDecDeg = eq.decDeg
-          q0Rad = parallacticAngleRad(startLook.yaw, startLook.pitch, lat)
         }
       }
 
@@ -265,7 +262,6 @@ export function useTimelapsePreview({
         shotCount,
         intervalS: plan.intervalS,
         support: plan.support,
-        eqRotation: plan.eqRotation,
         playbackFps: plan.playbackFps,
         lockRaHours,
         lockDecDeg,
@@ -301,7 +297,6 @@ export function useTimelapsePreview({
       shotIndex: shotIndexRef.current,
       shotCount: session.shotCount,
       support: session.support,
-      eqRotation: session.eqRotation,
     })
   }, [])
 
@@ -314,7 +309,6 @@ export function useTimelapsePreview({
       shotIndex: shotIndexRef.current,
       shotCount: session.shotCount,
       support: session.support,
-      eqRotation: session.eqRotation,
     })
     scheduleFrom(shotIndexRef.current)
   }, [scheduleFrom])
@@ -332,7 +326,6 @@ export function useTimelapsePreview({
       shotIndex: 0,
       shotCount: session.shotCount,
       support: session.support,
-      eqRotation: session.eqRotation,
     })
   }, [applyShot])
 
@@ -346,7 +339,6 @@ export function useTimelapsePreview({
         shotIndex: fromIndex,
         shotCount: session.shotCount,
         support: session.support,
-        eqRotation: session.eqRotation,
       })
       applyShot(session, fromIndex)
       scheduleFrom(fromIndex)
@@ -388,7 +380,6 @@ export function useTimelapsePreview({
           shotIndex: next,
           shotCount: session.shotCount,
           support: session.support,
-          eqRotation: session.eqRotation,
         })
         return
       }
@@ -401,7 +392,6 @@ export function useTimelapsePreview({
         shotIndex: next,
         shotCount: session.shotCount,
         support: session.support,
-        eqRotation: session.eqRotation,
       })
 
       if (phase === 'playing') {

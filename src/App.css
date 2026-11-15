@@ -2245,6 +2245,35 @@
   z-index: 40;
 }
 
+/* Canvas + FOV — preview can CSS-rotate this layer without touching DSLR. */
+.immersive__stage {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+}
+
+.immersive__stage--rot1 {
+  inset: auto;
+  width: 100vh;
+  height: 100vw;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.immersive__stage--rot2 {
+  transform: rotate(180deg);
+}
+
+.immersive__stage--rot3 {
+  inset: auto;
+  width: 100vh;
+  height: 100vw;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(270deg);
+}
+
 .immersive__canvas {
   position: absolute;
   inset: 0;
@@ -3401,6 +3430,12 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   height: 7px;
   border: 0;
   background: transparent;
+}
+
+.tlapse-hud__btn--rotate.is-hot {
+  border-color: transparent;
+  background: rgba(var(--ui-accent-rgb), 0.14);
+  color: var(--ui-accent);
 }
 
 .tlapse-hud__divider {

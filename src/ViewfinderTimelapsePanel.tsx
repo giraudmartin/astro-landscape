@@ -9,8 +9,6 @@ import {
   formatTimelapseVideoSeconds,
   TIMELAPSE_DURATION_MAX_MIN,
   TIMELAPSE_DURATION_MIN_MIN,
-  TIMELAPSE_EQ_ROTATION_LABELS,
-  TIMELAPSE_EQ_ROTATIONS,
   TIMELAPSE_FPS_MAX,
   TIMELAPSE_FPS_MIN,
   TIMELAPSE_INTERVAL_MAX_S,
@@ -22,7 +20,6 @@ import {
   timelapseShotCount,
   timelapseStarTrailArcRad,
   timelapseVideoSeconds,
-  type TimelapseEqRotation,
   type TimelapsePlan,
   type TimelapseSupport,
 } from './timelapse'
@@ -194,7 +191,6 @@ export function ViewfinderTimelapsePanel({
         partial.playbackFps ?? plan.playbackFps,
       ),
       support: partial.support ?? plan.support,
-      eqRotation: partial.eqRotation ?? plan.eqRotation,
     })
   }
 
@@ -213,8 +209,8 @@ export function ViewfinderTimelapsePanel({
   const eqHint =
     plan.support === 'equatorial'
       ? selectedCelestial
-        ? `Suit ${selectedCelestial.name} + rotation de champ.`
-        : 'Suit le centre du viseur + rotation de champ.'
+        ? `Verrouillé sur ${selectedCelestial.name} — étoiles fixes dans le cadre, le sol bascule (rotation de champ).`
+        : 'Verrouillé sur le centre du viseur — étoiles fixes dans le cadre, le sol bascule (rotation de champ).'
       : 'Paysage fixe — le ciel dérive.'
 
   const popupBody = (
@@ -314,40 +310,6 @@ export function ViewfinderTimelapsePanel({
           {trailHint}
         </p>
       </div>
-
-      {plan.support === 'equatorial' ? (
-        <div className="vf-camera-pop__field">
-          <label
-            className="vf-camera-pop__label"
-            htmlFor={`${panelId}-eq-rot`}
-          >
-            Rotation de champ
-          </label>
-          <select
-            id={`${panelId}-eq-rot`}
-            className="vf-pano-select"
-            aria-label="Affichage de la rotation de champ"
-            disabled={busy}
-            value={plan.eqRotation}
-            onChange={(event) =>
-              patch({
-                eqRotation: event.target.value as TimelapseEqRotation,
-              })
-            }
-          >
-            {TIMELAPSE_EQ_ROTATIONS.map((mode) => (
-              <option key={mode} value={mode}>
-                {TIMELAPSE_EQ_ROTATION_LABELS[mode]}
-              </option>
-            ))}
-          </select>
-          <p className="vf-camera-pop__hint">
-            {plan.eqRotation === 'scene'
-              ? 'La caméra roule : le sol bascule, les étoiles restent fixes dans le cadre.'
-              : 'Horizon niveau : seul le cadre photo tourne (lecture illustrative).'}
-          </p>
-        </div>
-      ) : null}
 
       <div className="vf-pano-pop__summary">
         <span className="vf-camera-pop__big vf-tlapse-pop__count">

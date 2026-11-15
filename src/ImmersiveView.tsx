@@ -113,6 +113,10 @@ import {
   clampAirglowAmount,
   clampAirglowHue,
   clampAirglowWaves,
+  clampAuroraAmount,
+  clampAuroraHeight,
+  clampAuroraKp,
+  clampAuroraSpeed,
   clampAtmosphereAmount,
   clampGroundNightBrightness,
   clampGroundNightContrast,
@@ -236,6 +240,18 @@ export function ImmersiveView({
   )
   /** Extra overlay roll from equatorial timelapse « Cadre seul ». */
   const [timelapseFrameRollDeg, setTimelapseFrameRollDeg] = useState(0)
+  /**
+   * Preview-only screen rotation of the render (0/90/180/270).
+   * Does not touch DSLR orientation / focal settings.
+   */
+  const [previewRenderRollDeg, setPreviewRenderRollDeg] = useState(0)
+  /**
+   * Scene roll applied for the whole preview (snapped from photo frame roll).
+   * Added on top of per-shot look roll so EQ tracking keeps the snap.
+   */
+  const previewSceneRollRef = useRef(0)
+  /** Restore photo-settings frame roll when leaving preview. */
+  const savedFrameRollRef = useRef(0)
   const [yawDeg, setYawDeg] = useState(bearingDeg)
   const [pitchDeg, setPitchDeg] = useState(
     Math.max(LOOK_PITCH_MIN, Math.min(LOOK_PITCH_MAX, initialPitchDeg)),
@@ -355,6 +371,22 @@ export function ImmersiveView({
   const [airglowWaves, setAirglowWaves] = useState(() =>
     clampAirglowWaves(savedImmersive.airglowWaves),
   )
+  const [auroraKp, setAuroraKp] = useState(() =>
+    clampAuroraKp(savedImmersive.auroraKp),
+  )
+  const [auroraAmount, setAuroraAmount] = useState(() =>
+    clampAuroraAmount(savedImmersive.auroraAmount),
+  )
+  const [auroraSpeed, setAuroraSpeed] = useState(() =>
+    clampAuroraSpeed(savedImmersive.auroraSpeed),
+  )
+  const [auroraHeight, setAuroraHeight] = useState(() =>
+    clampAuroraHeight(savedImmersive.auroraHeight),
+  )
+  const setAuroraKpRef = useRef(setAuroraKp)
+  setAuroraKpRef.current = setAuroraKp
+  const auroraKpRef = useRef(auroraKp)
+  auroraKpRef.current = auroraKp
   const [zodiacalAmount, setZodiacalAmount] = useState(() =>
     clampZodiacalAmount(savedImmersive.zodiacalAmount),
   )
@@ -378,6 +410,10 @@ export function ImmersiveView({
     airglowAmount: clampAirglowAmount(savedImmersive.airglowAmount),
     airglowHue: clampAirglowHue(savedImmersive.airglowHue),
     airglowWaves: clampAirglowWaves(savedImmersive.airglowWaves),
+    auroraKp: clampAuroraKp(savedImmersive.auroraKp),
+    auroraAmount: clampAuroraAmount(savedImmersive.auroraAmount),
+    auroraSpeed: clampAuroraSpeed(savedImmersive.auroraSpeed),
+    auroraHeight: clampAuroraHeight(savedImmersive.auroraHeight),
     zodiacalAmount: clampZodiacalAmount(savedImmersive.zodiacalAmount),
     lightPollutionAmount: clampLightPollutionAmount(
       savedImmersive.lightPollutionAmount,
@@ -393,6 +429,10 @@ export function ImmersiveView({
     airglowAmount,
     airglowHue,
     airglowWaves,
+    auroraKp,
+    auroraAmount,
+    auroraSpeed,
+    auroraHeight,
     zodiacalAmount,
     lightPollutionAmount,
     showConstellations,
@@ -435,6 +475,10 @@ export function ImmersiveView({
         airglowAmount,
         airglowHue,
         airglowWaves,
+        auroraKp,
+        auroraAmount,
+        auroraSpeed,
+        auroraHeight,
         zodiacalAmount,
         lightPollutionAmount,
         showConstellations,
@@ -466,6 +510,10 @@ export function ImmersiveView({
     airglowAmount,
     airglowHue,
     airglowWaves,
+    auroraKp,
+    auroraAmount,
+    auroraSpeed,
+    auroraHeight,
     zodiacalAmount,
     lightPollutionAmount,
     showConstellations,
@@ -536,18 +584,46 @@ export function ImmersiveView({
       onSkyUtcChange?.(utcMs)
     },
     onLookChange: (yaw, pitch, rollDeg = 0) => {
-      apiRef.current?.setLook(yaw, pitch, rollDeg)
+      apiRef.current?.setLook(
+        yaw,
+        pitch,
+        rollDeg + previewSceneRollRef.current,
+      )
     },
     onFrameRollChange: setTimelapseFrameRollDeg,
   })
   const timelapsePreviewActive = timelapsePreview.status.active
-  const timelapsePreviewPlayingRef = useRef(false)
-  timelapsePreviewPlayingRef.current =
-    timelapsePreview.status.phase === 'playing'
+  /** Whole preview session (play / pause / ended) — look stays locked. */
+  const timelapsePreviewLookLockedRef = useRef(false)
+  timelapsePreviewLookLockedRef.current = timelapsePreviewActive
 
   useEffect(() => {
     onTimelapsePreviewPlayingChange?.(timelapsePreviewActive)
   }, [timelapsePreviewActive, onTimelapsePreviewPlayingChange])
+
+  const endTimelapsePreview = () => {
+    // Clear before exit() restores look — otherwise onLookChange would re-add it.
+    previewSceneRollRef.current = 0
+    timelapsePreview.exit()
+  }
+  const endTimelapsePreviewRef = useRef(endTimelapsePreview)
+  endTimelapsePreviewRef.current = endTimelapsePreview
+
+  useEffect(() => {
+    if (timelapsePreviewActive) return
+    setPreviewRenderRollDeg(0)
+    previewSceneRollRef.current = 0
+    if (savedFrameRollRef.current === 0) return
+    const restore = savedFrameRollRef.current
+    savedFrameRollRef.current = 0
+    setFrameRollDeg(restore)
+  }, [timelapsePreviewActive])
+
+  // Stage size swaps on 90°/270° CSS rotate — refresh WebGL + FOV layout.
+  useEffect(() => {
+    if (!timelapsePreviewActive) return
+    window.dispatchEvent(new Event('resize'))
+  }, [timelapsePreviewActive, previewRenderRollDeg])
 
   const timelapsePhase = timelapsePreview.status.phase
   useEffect(() => {
@@ -555,7 +631,7 @@ export function ImmersiveView({
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (timelapsePhase === 'ended') {
-        timelapsePreview.exit()
+        endTimelapsePreviewRef.current()
         return
       }
       if (timelapsePhase === 'playing') {
@@ -571,7 +647,6 @@ export function ImmersiveView({
   }, [
     timelapsePreviewActive,
     timelapsePhase,
-    timelapsePreview.exit,
     timelapsePreview.pause,
     timelapsePreview.resume,
   ])
@@ -615,6 +690,7 @@ export function ImmersiveView({
     const sky = createAstroSkyDome()
     scene.add(sky.mesh)
     scene.add(sky.lightPollutionMesh)
+    scene.add(sky.auroraMesh)
     scene.add(sky.zodiacalMesh)
     const eclipticPoleLocal = new THREE.Vector3()
 
@@ -743,6 +819,16 @@ export function ImmersiveView({
       const airglowWavesLive = clampAirglowWaves(
         skyTogglesRef.current.airglowWaves,
       )
+      const auroraKpLive = clampAuroraKp(skyTogglesRef.current.auroraKp)
+      const auroraAmountLive = clampAuroraAmount(
+        skyTogglesRef.current.auroraAmount,
+      )
+      const auroraSpeedLive = clampAuroraSpeed(
+        skyTogglesRef.current.auroraSpeed,
+      )
+      const auroraHeightLive = clampAuroraHeight(
+        skyTogglesRef.current.auroraHeight,
+      )
       const zodiacalAmountLive = clampZodiacalAmount(
         skyTogglesRef.current.zodiacalAmount,
       )
@@ -765,6 +851,11 @@ export function ImmersiveView({
         airglowAmount: airglowAmountLive,
         airglowHue: airglowHueLive,
         airglowWaves: airglowWavesLive,
+        auroraKp: auroraKpLive,
+        auroraAmount: auroraAmountLive,
+        auroraSpeed: auroraSpeedLive,
+        auroraHeight: auroraHeightLive,
+        observerLatDeg: lat,
         zodiacalAmount: zodiacalAmountLive,
         lightPollutionAmount: lightPollutionAmountLive,
         lightPollutionBortleFactor: lightPollutionBortleFactorRef.current,
@@ -1098,7 +1189,7 @@ export function ImmersiveView({
 
     const onPointerDown = (event: PointerEvent) => {
       if (!terrainUnlockedRef.current) return
-      if (timelapsePreviewPlayingRef.current) return
+      if (timelapsePreviewLookLockedRef.current) return
       dragging = true
       lastX = event.clientX
       lastY = event.clientY
@@ -1106,7 +1197,7 @@ export function ImmersiveView({
     }
     const onPointerMove = (event: PointerEvent) => {
       if (!dragging || !terrainUnlockedRef.current) return
-      if (timelapsePreviewPlayingRef.current) return
+      if (timelapsePreviewLookLockedRef.current) return
       const dx = event.clientX - lastX
       const dy = event.clientY - lastY
       lastX = event.clientX
@@ -1286,6 +1377,7 @@ export function ImmersiveView({
       }
       sky.mesh.visible = diag.showSky
       sky.lightPollutionMesh.visible = diag.showSky
+      sky.auroraMesh.visible = diag.showSky
       sky.zodiacalMesh.visible = diag.showSky
       nightSky.root.visible = diag.showNightSky
       if (terrainNearObj) terrainNearObj.visible = diag.showTerrainNear
@@ -1302,9 +1394,12 @@ export function ImmersiveView({
 
       sky.mesh.position.copy(camera.position)
       sky.lightPollutionMesh.position.copy(camera.position)
+      sky.auroraMesh.position.copy(camera.position)
       sky.zodiacalMesh.position.copy(camera.position)
-      // Drift airglow gravity-wave phase each frame (slow band advection).
-      sky.material.uniforms.uAirglowTime.value = performance.now() * 0.001
+      // Drift airglow / aurora phase each frame (living folds / mist).
+      const skyPhaseSec = performance.now() * 0.001
+      sky.material.uniforms.uAirglowTime.value = skyPhaseSec
+      sky.auroraMaterial.uniforms.uAuroraTime.value = skyPhaseSec
       adaptTerrain?.(camera.position.x, camera.position.y, camera.position.z)
       const skyToggles = skyTogglesRef.current
       const lpAmt = skyToggles.lightPollutionAmount
@@ -1428,8 +1523,10 @@ export function ImmersiveView({
       apiRef.current = null
       nightSkyApiRef.current = null
       sky.geometry.dispose()
+      sky.auroraGeometry.dispose()
       sky.material.dispose()
       sky.lightPollutionMaterial.dispose()
+      sky.auroraMaterial.dispose()
       sky.zodiacalMaterial.dispose()
       sky.lightPollutionProfile.dispose()
       nightSky.dispose()
@@ -1452,6 +1549,10 @@ export function ImmersiveView({
     airglowAmount,
     airglowHue,
     airglowWaves,
+    auroraKp,
+    auroraAmount,
+    auroraSpeed,
+    auroraHeight,
     zodiacalAmount,
     lightPollutionAmount,
     groundNightBrightness,
@@ -1460,7 +1561,9 @@ export function ImmersiveView({
   ])
 
   // Target lock: re-aim whenever the playhead / selection / site changes.
+  // Skip during timelapse preview — EQ playback owns the look (sky lock).
   useEffect(() => {
+    if (timelapsePreviewActive) return
     if (!targetLocked || !selectedCelestial) return
     const pos = objectHorizontalAt(
       selectedCelestial,
@@ -1481,6 +1584,7 @@ export function ImmersiveView({
     }
     apiRef.current?.setLook(targetYaw, targetPitch)
   }, [
+    timelapsePreviewActive,
     targetLocked,
     selectedCelestial,
     skyUtcMs,
@@ -1552,6 +1656,8 @@ export function ImmersiveView({
       },
       getStageVfovDeg: () => stageVfovLiveRef.current,
       getProjection: () => projection,
+      setAuroraKp: (kp) => setAuroraKpRef.current(clampAuroraKp(kp)),
+      getAuroraKp: () => auroraKpRef.current,
     }
     window.__astroQaImmersive = api
     return () => {
@@ -1635,6 +1741,8 @@ export function ImmersiveView({
 
   setStageProjection(projection)
 
+  const previewRotQuarter = ((previewRenderRollDeg / 90) % 4 + 4) % 4
+
   return (
     <div
       className={[
@@ -1645,45 +1753,67 @@ export function ImmersiveView({
         .filter(Boolean)
         .join(' ')}
     >
-      <div ref={hostRef} className="immersive__canvas" />
-      {!terrainUnlocked ? (
-        <div className="immersive__input-lock" aria-hidden="true" />
-      ) : null}
-      <PhotoFrameOverlay
-        stageW={size.w}
-        stageH={size.h}
-        orientation={orientation}
-        frameMode={frameMode}
-        stageVfovDeg={stageVfovDeg}
-        opticalVfovDeg={optical.v}
-        opticalHfovDeg={optical.h}
-        panorama={panorama}
-        frameRollDeg={frameRollDeg + timelapseFrameRollDeg}
-        label={`${focalMm} mm · ${optical.h.toFixed(0)}° × ${optical.v.toFixed(0)}°`}
-        worldLock={{
-          locked: framesLocked,
-          lockYawDeg: lockLook.yaw,
-          lockPitchDeg: lockLook.pitch,
-          lookYawDeg: yawDeg,
-          lookPitchDeg: pitchDeg,
-        }}
-        onToggleWorldLock={() => {
-          if (framesLocked) {
-            setFramesLocked(false)
-            return
+      <div
+        className={
+          previewRotQuarter === 0
+            ? 'immersive__stage'
+            : `immersive__stage immersive__stage--rot${previewRotQuarter}`
+        }
+      >
+        <div ref={hostRef} className="immersive__canvas" />
+        {!terrainUnlocked ? (
+          <div className="immersive__input-lock" aria-hidden="true" />
+        ) : null}
+        <PhotoFrameOverlay
+          stageW={size.w}
+          stageH={size.h}
+          orientation={orientation}
+          frameMode={frameMode}
+          stageVfovDeg={stageVfovDeg}
+          opticalVfovDeg={optical.v}
+          opticalHfovDeg={optical.h}
+          panorama={panorama}
+          frameRollDeg={frameRollDeg + timelapseFrameRollDeg}
+          label={`${focalMm} mm · ${optical.h.toFixed(0)}° × ${optical.v.toFixed(0)}°`}
+          hideGrid={timelapsePreviewActive}
+          hideMeta={timelapsePreviewActive}
+          outsideDimOpacity={timelapsePreviewActive ? 0.72 : 0.28}
+          worldLock={{
+            // Preview look tracks the sequence — keep the sensor FOV centered
+            // (follow frame). A retained landscape lock projects off-screen as
+            // equatorial shots advance.
+            locked: framesLocked && !timelapsePreviewActive,
+            lockYawDeg: lockLook.yaw,
+            lockPitchDeg: lockLook.pitch,
+            lookYawDeg: yawDeg,
+            lookPitchDeg: pitchDeg,
+          }}
+          onToggleWorldLock={
+            timelapsePreviewActive
+              ? undefined
+              : () => {
+                  if (framesLocked) {
+                    setFramesLocked(false)
+                    return
+                  }
+                  const look = lookRef.current
+                  setLockLook({ yaw: look.yaw, pitch: look.pitch })
+                  setFramesLocked(true)
+                }
           }
-          const look = lookRef.current
-          setLockLook({ yaw: look.yaw, pitch: look.pitch })
-          setFramesLocked(true)
-        }}
-        onRecenterWorldLock={() => {
-          const { yaw, pitch } = lockLook
-          lookRef.current = { yaw, pitch, roll: 0 }
-          setYawDeg(yaw)
-          setPitchDeg(pitch)
-          apiRef.current?.setLook(yaw, pitch, 0)
-        }}
-      />
+          onRecenterWorldLock={
+            timelapsePreviewActive
+              ? undefined
+              : () => {
+                  const { yaw, pitch } = lockLook
+                  lookRef.current = { yaw, pitch, roll: 0 }
+                  setYawDeg(yaw)
+                  setPitchDeg(pitch)
+                  apiRef.current?.setLook(yaw, pitch, 0)
+                }
+          }
+        />
+      </div>
 
       <ViewBearingHud
         bearingDeg={yawDeg}
@@ -1893,6 +2023,17 @@ export function ImmersiveView({
           onTimelapseChange={setTimelapse}
           onStartTimelapsePreview={() => {
             if (frameMode !== 'dslr') applyFrameMode('dslr')
+            // Sensor overlay must follow the camera during preview playback.
+            setFramesLocked(false)
+            // Photo frame roll → same angle as camera roll so cadre + paysage
+            // turn together (do NOT snap/level — keep the composed angle).
+            const fromSettings = clampFrameRollDeg(frameRollDeg)
+            savedFrameRollRef.current = fromSettings
+            previewSceneRollRef.current = fromSettings
+            setFrameRollDeg(0)
+            setTimelapseFrameRollDeg(0)
+            const look = lookRef.current
+            apiRef.current?.setLook(look.yaw, look.pitch, fromSettings)
             timelapsePreview.start(timelapse)
           }}
           timelapsePreviewPlaying={timelapsePreviewActive}
@@ -1905,14 +2046,19 @@ export function ImmersiveView({
           phase={timelapsePreview.status.phase}
           shotIndex={timelapsePreview.status.shotIndex}
           shotCount={timelapsePreview.status.shotCount}
+          renderRollDeg={previewRenderRollDeg}
           onPause={timelapsePreview.pause}
           onResume={timelapsePreview.resume}
           onStop={timelapsePreview.stop}
           onReplay={timelapsePreview.replay}
-          onExit={timelapsePreview.exit}
+          onExit={endTimelapsePreview}
           onSeek={timelapsePreview.seek}
           onOpenSettings={() => {
+            endTimelapsePreview()
             window.dispatchEvent(new Event(OPEN_TIMELAPSE_SETTINGS_EVENT))
+          }}
+          onRotateRender={() => {
+            setPreviewRenderRollDeg((deg) => (deg + 90) % 360)
           }}
         />
       ) : null}
@@ -2178,6 +2324,10 @@ export function ImmersiveView({
           airglowAmount={airglowAmount}
           airglowHue={airglowHue}
           airglowWaves={airglowWaves}
+          auroraKp={auroraKp}
+          auroraAmount={auroraAmount}
+          auroraSpeed={auroraSpeed}
+          auroraHeight={auroraHeight}
           zodiacalAmount={zodiacalAmount}
           lightPollutionAmount={lightPollutionAmount}
           starMagDepth={starMagDepth}
@@ -2188,6 +2338,10 @@ export function ImmersiveView({
           onAirglowAmountChange={setAirglowAmount}
           onAirglowHueChange={setAirglowHue}
           onAirglowWavesChange={setAirglowWaves}
+          onAuroraKpChange={setAuroraKp}
+          onAuroraAmountChange={setAuroraAmount}
+          onAuroraSpeedChange={setAuroraSpeed}
+          onAuroraHeightChange={setAuroraHeight}
           onZodiacalAmountChange={setZodiacalAmount}
           onLightPollutionAmountChange={setLightPollutionAmount}
           onStarMagDepthChange={setStarMagDepth}

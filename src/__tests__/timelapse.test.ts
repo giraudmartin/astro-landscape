@@ -121,8 +121,13 @@ describe('timelapseFieldRollDeg (EQ field lock)', () => {
     expect(Math.abs(timelapseFieldRollDeg(q0, q1))).toBeGreaterThan(5)
   })
 
-  it('defaults eqRotation to scene', () => {
-    expect(normalizeTimelapsePlan({}).eqRotation).toBe('scene')
+  it('drops legacy eqRotation from saved plans', () => {
+    const plan = normalizeTimelapsePlan({
+      support: 'equatorial',
+      eqRotation: 'frame',
+    })
+    expect(plan.support).toBe('equatorial')
+    expect(plan).not.toHaveProperty('eqRotation')
   })
 })
 

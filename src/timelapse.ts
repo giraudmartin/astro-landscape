@@ -2,29 +2,15 @@
 
 export type TimelapseSupport = 'fixed' | 'equatorial'
 
-/** How equatorial field rotation is shown during preview. */
-export type TimelapseEqRotation = 'scene' | 'frame'
-
 export const TIMELAPSE_SUPPORTS: readonly TimelapseSupport[] = [
   'fixed',
   'equatorial',
-] as const
-
-export const TIMELAPSE_EQ_ROTATIONS: readonly TimelapseEqRotation[] = [
-  'scene',
-  'frame',
 ] as const
 
 export const TIMELAPSE_SUPPORT_LABELS: Record<TimelapseSupport, string> = {
   fixed: 'Trépied fixe',
   equatorial: 'Monture équatoriale',
 }
-
-export const TIMELAPSE_EQ_ROTATION_LABELS: Record<TimelapseEqRotation, string> =
-  {
-    scene: 'Sol (roll caméra)',
-    frame: 'Cadre seul',
-  }
 
 export type TimelapsePlan = {
   /** Exposure length (seconds) — planning only; interval starts next pose. */
@@ -36,12 +22,6 @@ export type TimelapsePlan = {
   /** Playback rate for the preview / resulting video (images per second). */
   playbackFps: number
   support: TimelapseSupport
-  /**
-   * Equatorial field rotation visualisation:
-   * - scene: roll the 3D camera (horizon tips — true EQ feel)
-   * - frame: keep horizon level, rotate the photo frame overlay
-   */
-  eqRotation: TimelapseEqRotation
 }
 
 export const DEFAULT_TIMELAPSE_PLAN: TimelapsePlan = {
@@ -50,7 +30,6 @@ export const DEFAULT_TIMELAPSE_PLAN: TimelapsePlan = {
   durationMin: 120,
   playbackFps: 25,
   support: 'fixed',
-  eqRotation: 'scene',
 }
 
 export const TIMELAPSE_POSE_MIN_S = 1
@@ -68,14 +47,6 @@ export function normalizeTimelapseSupport(value: unknown): TimelapseSupport {
   return TIMELAPSE_SUPPORTS.includes(value as TimelapseSupport)
     ? (value as TimelapseSupport)
     : DEFAULT_TIMELAPSE_PLAN.support
-}
-
-export function normalizeTimelapseEqRotation(
-  value: unknown,
-): TimelapseEqRotation {
-  return TIMELAPSE_EQ_ROTATIONS.includes(value as TimelapseEqRotation)
-    ? (value as TimelapseEqRotation)
-    : DEFAULT_TIMELAPSE_PLAN.eqRotation
 }
 
 function clampInt(value: number, min: number, max: number, fallback: number): number {
@@ -134,7 +105,6 @@ export function normalizeTimelapsePlan(value: unknown): TimelapsePlan {
     durationMin: clampTimelapseDurationMin(Number(row.durationMin)),
     playbackFps: clampTimelapsePlaybackFps(Number(row.playbackFps)),
     support: normalizeTimelapseSupport(row.support),
-    eqRotation: normalizeTimelapseEqRotation(row.eqRotation),
   }
 }
 

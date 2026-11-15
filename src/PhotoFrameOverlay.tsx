@@ -50,6 +50,12 @@ type PhotoFrameOverlayProps = {
    * equatorial timelapse « Cadre seul » mode. Positive = CCW.
    */
   frameRollDeg?: number
+  /** Timelapse preview: hide FOV crosshair while the playback bar is up. */
+  hideGrid?: boolean
+  /** Hide the mm / FOV pill under the frame (timelapse playback bar). */
+  hideMeta?: boolean
+  /** Outside-matte opacity 0…1 (default soft letterbox). */
+  outsideDimOpacity?: number
 }
 
 type Vec3 = { x: number; y: number; z: number }
@@ -824,6 +830,9 @@ export function PhotoFrameOverlay({
   onToggleWorldLock,
   onRecenterWorldLock,
   frameRollDeg = 0,
+  hideGrid = false,
+  hideMeta = false,
+  outsideDimOpacity = 0.28,
 }: PhotoFrameOverlayProps) {
   if (stageW < 2 || stageH < 2) return null
   if (frameMode === 'off') return null
@@ -985,7 +994,9 @@ export function PhotoFrameOverlay({
     : 0
 
   const quadPoints = lockedPoly ? pointsToSvg(lockedPoly) : ''
+  const dimAlpha = Math.min(1, Math.max(0, outsideDimOpacity))
   const showCrosshair =
+    !hideGrid &&
     showLockedFrame &&
     lockedProj?.midTop &&
     lockedProj.midBottom &&
@@ -1035,7 +1046,7 @@ export function PhotoFrameOverlay({
           <rect
             width={stageW}
             height={stageH}
-            fill="rgba(0, 0, 0, 0.28)"
+            fill={`rgba(0, 0, 0, ${dimAlpha})`}
             mask="url(#photo-frame-mask)"
           />
         ) : null}
@@ -1143,92 +1154,98 @@ export function PhotoFrameOverlay({
               strokeWidth={2.5}
               rx={2}
             />
-            <line
-              x1={left + frameW / 2}
-              y1={top}
-              x2={left + frameW / 2}
-              y2={top + frameH}
-              stroke={accentRgba(0.22)}
-              strokeWidth={1}
-            />
-            <line
-              x1={left}
-              y1={top + frameH / 2}
-              x2={left + frameW}
-              y2={top + frameH / 2}
-              stroke={accentRgba(0.22)}
-              strokeWidth={1}
-            />
+            {!hideGrid ? (
+              <>
+                <line
+                  x1={left + frameW / 2}
+                  y1={top}
+                  x2={left + frameW / 2}
+                  y2={top + frameH}
+                  stroke={accentRgba(0.22)}
+                  strokeWidth={1}
+                />
+                <line
+                  x1={left}
+                  y1={top + frameH / 2}
+                  x2={left + frameW}
+                  y2={top + frameH / 2}
+                  stroke={accentRgba(0.22)}
+                  strokeWidth={1}
+                />
+              </>
+            ) : null}
           </g>
         ) : null}
       </svg>
 
-      <div
-        className="photo-frame__meta"
-        style={{
-          /* Keep controls reachable if the framed patch pans off-screen. */
-          left: Math.min(stageW - 28, Math.max(28, envelopeCenterX)),
-          top: Math.min(stageH - 72, Math.max(12, envelopeBottom + 8)),
-        }}
-      >
-        <p className="photo-frame__label">
-          {panoOn
-            ? `${label} · ${shots} vues · overlap ${panorama.overlapPercent}%`
-            : `${label} · ${aspect.toFixed(2)}∶1`}
-          {locked ? ' · fixé' : ''}
-        </p>
-        {onToggleWorldLock || (locked && onRecenterWorldLock) ? (
-          <div className="photo-frame__actions">
-            {onToggleWorldLock ? (
-              <button
-                type="button"
-                className={
-                  locked
-                    ? 'photo-frame__lock is-locked'
-                    : 'photo-frame__lock'
-                }
-                aria-pressed={locked}
-                title={
-                  locked
-                    ? 'Déverrouiller le cadrage (suit le viseur)'
-                    : 'Verrouiller le cadrage sur le paysage'
-                }
-                aria-label={
-                  locked
-                    ? 'Déverrouiller le cadrage'
-                    : 'Verrouiller le cadrage sur le paysage'
-                }
-                onPointerDown={(event) => {
-                  event.stopPropagation()
-                }}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onToggleWorldLock()
-                }}
-              >
-                <LockKeyholeIcon open={!locked} />
-              </button>
-            ) : null}
-            {locked && onRecenterWorldLock ? (
-              <button
-                type="button"
-                className="photo-frame__recenter"
-                title="Recentrer la vue sur le cadrage verrouillé"
-                aria-label="Recentrer la vue sur le cadrage verrouillé"
-                onPointerDown={(event) => {
-                  event.stopPropagation()
-                }}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onRecenterWorldLock()
-                }}
-              >
-                <RecenterIcon />
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+      {!hideMeta ? (
+        <div
+          className="photo-frame__meta"
+          style={{
+            /* Keep controls reachable if the framed patch pans off-screen. */
+            left: Math.min(stageW - 28, Math.max(28, envelopeCenterX)),
+            top: Math.min(stageH - 72, Math.max(12, envelopeBottom + 8)),
+          }}
+        >
+          <p className="photo-frame__label">
+            {panoOn
+              ? `${label} · ${shots} vues · overlap ${panorama.overlapPercent}%`
+              : `${label} · ${aspect.toFixed(2)}∶1`}
+            {locked ? ' · fixé' : ''}
+          </p>
+          {onToggleWorldLock || (locked && onRecenterWorldLock) ? (
+            <div className="photo-frame__actions">
+              {onToggleWorldLock ? (
+                <button
+                  type="button"
+                  className={
+                    locked
+                      ? 'photo-frame__lock is-locked'
+                      : 'photo-frame__lock'
+                  }
+                  aria-pressed={locked}
+                  title={
+                    locked
+                      ? 'Déverrouiller le cadrage (suit le viseur)'
+                      : 'Verrouiller le cadrage sur le paysage'
+                  }
+                  aria-label={
+                    locked
+                      ? 'Déverrouiller le cadrage'
+                      : 'Verrouiller le cadrage sur le paysage'
+                  }
+                  onPointerDown={(event) => {
+                    event.stopPropagation()
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onToggleWorldLock()
+                  }}
+                >
+                  <LockKeyholeIcon open={!locked} />
+                </button>
+              ) : null}
+              {locked && onRecenterWorldLock ? (
+                <button
+                  type="button"
+                  className="photo-frame__recenter"
+                  title="Recentrer la vue sur le cadrage verrouillé"
+                  aria-label="Recentrer la vue sur le cadrage verrouillé"
+                  onPointerDown={(event) => {
+                    event.stopPropagation()
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onRecenterWorldLock()
+                  }}
+                >
+                  <RecenterIcon />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

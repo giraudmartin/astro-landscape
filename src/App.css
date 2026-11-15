@@ -3104,20 +3104,9 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   justify-content: flex-start;
 }
 
-.vf-camera-pop__roll-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.vf-camera-pop__roll-head .vf-camera-pop__label {
-  margin: 0;
-}
-
 .vf-camera-pop__roll-reset {
-  margin: 0;
+  display: block;
+  margin: 6px 0 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -3125,11 +3114,18 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   font: inherit;
   font-size: 0.68rem;
   font-weight: 650;
+  line-height: 1.35;
   cursor: pointer;
+  text-align: left;
 }
 
-.vf-camera-pop__roll-reset:hover {
+.vf-camera-pop__roll-reset:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+.vf-camera-pop__roll-reset:disabled {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .vf-camera-pop__field > .moon-preview-stepper {

@@ -274,18 +274,16 @@ export function ViewfinderCameraPanel({
         >
           +
         </button>
-        {roll !== 0 ? (
-          <button
-            type="button"
-            className="vf-camera-pop__roll-reset"
-            aria-label="Remettre la rotation à 0"
-            title="Remettre à 0"
-            onClick={() => onFrameRollChange(0)}
-          >
-            0°
-          </button>
-        ) : null}
       </div>
+      <button
+        type="button"
+        className="vf-camera-pop__roll-reset"
+        aria-label="Remettre la rotation à 0"
+        disabled={roll === 0}
+        onClick={() => onFrameRollChange(0)}
+      >
+        Remettre à 0°
+      </button>
       <p className="vf-camera-pop__hint">
         Incline le cadre photo (antihoraire).
       </p>

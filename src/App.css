@@ -1343,22 +1343,22 @@
   --y: -56.6px;
 }
 
+.spot-action-marker__spoke--sky-flat {
+  --x: 0px;
+  --y: -80px;
+  --delay: 30ms;
+}
+
 .spot-action-marker__spoke--immersive {
   --x: 56.6px;
   --y: -56.6px;
   --delay: 45ms;
 }
 
-.spot-action-marker__spoke--sky-flat {
-  --x: -56.6px;
-  --y: 56.6px;
-  --delay: 60ms;
-}
-
 .spot-action-marker__spoke--save {
-  --x: 56.6px;
-  --y: 56.6px;
-  --delay: 75ms;
+  --x: 0px;
+  --y: 80px;
+  --delay: 70ms;
 }
 
 .spot-action-marker__spoke button {

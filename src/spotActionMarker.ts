@@ -62,11 +62,11 @@ const icon = (
     close: '<path d="m18 6-12 12M6 6l12 12"/>',
     street:
       '<circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6M6 8l6 2 6-2M12 10v4"/>',
-    immersive:
-      '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>',
-    // Crescent sky + flat ground line — sky-only / no-DEM mode.
+    // Lucide mountain — immersive WITH DEM / relief.
+    immersive: '<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>',
+    // Lucide star — sky-only / no DEM.
     skyFlat:
-      '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/><path d="M3 19h18"/>',
+      '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
     add: '<path d="M19.914 11.105A7.298 7.298 0 0 0 20 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 1.202 0 32 32 0 0 0 .824-.738"/><circle cx="12" cy="10" r="3"/><path d="M16 18h6M19 15v6"/>',
     edit: '<path d="M17.97 9.304A8 8 0 0 0 2 10c0 4.69 4.887 9.562 7.022 11.468"/><path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><circle cx="10" cy="10" r="3"/>',
   }
@@ -98,8 +98,8 @@ export function createSpotActionMarkerElement(
     <span class="spot-action-marker__veil" aria-hidden="true"></span>
     <div class="spot-action-marker__orbit">
       <span class="spot-action-marker__spoke spot-action-marker__spoke--street"><button type="button" data-action="street" title="${currentLabels.street}" aria-label="${currentLabels.street}">${icon('street')}</button></span>
-      <span class="spot-action-marker__spoke spot-action-marker__spoke--immersive"><button type="button" data-action="immersive" title="${currentLabels.immersive}" aria-label="${currentLabels.immersive}">${icon('immersive')}</button></span>
       <span class="spot-action-marker__spoke spot-action-marker__spoke--sky-flat"><button type="button" data-action="sky-flat" title="${currentLabels.skyFlat}" aria-label="${currentLabels.skyFlat}">${icon('skyFlat')}</button></span>
+      <span class="spot-action-marker__spoke spot-action-marker__spoke--immersive"><button type="button" data-action="immersive" title="${currentLabels.immersive}" aria-label="${currentLabels.immersive}">${icon('immersive')}</button></span>
       <span class="spot-action-marker__spoke spot-action-marker__spoke--save"><button type="button" data-action="save" title="${currentLabels.save}" aria-label="${currentLabels.save}"><span class="spot-action-marker__save-add">${icon('add')}</span><span class="spot-action-marker__save-edit">${icon('edit')}</span></button></span>
     </div>
     <button type="button" class="spot-action-marker__center" aria-label="${currentLabels.openMenu}" aria-expanded="false">

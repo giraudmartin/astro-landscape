@@ -26,11 +26,11 @@ export { EARTH_RADIUS_M }
 export type AstroSkyDome = {
   mesh: THREE.Mesh
   /**
-   * Additive city / regional skyglow — drawn *after* NASA Milky Way tiles
-   * (those use NormalBlending and were burying LP on the main dome).
+   * Fullscreen LP overlay mesh — NOT in the main scene.
+   * Drawn after the frame via {@link renderImmersiveLightPollution}.
    */
   lightPollutionMesh: THREE.Mesh
-  /** Additive ecliptic glow — drawn after Milky Way (renderOrder 22). */
+  /** Additive ecliptic glow — drawn after light pollution. */
   zodiacalMesh: THREE.Mesh
   geometry: THREE.SphereGeometry
   material: THREE.ShaderMaterial
@@ -38,17 +38,83 @@ export type AstroSkyDome = {
   zodiacalMaterial: THREE.ShaderMaterial
   /** 1D azimuth PL profile (R channel). */
   lightPollutionProfile: THREE.DataTexture
+  /** Private overlay scene for post-frame LP (no stereo mesh). */
+  _lpOverlay: {
+    scene: THREE.Scene
+    camera: THREE.OrthographicCamera
+  }
 }
 
-/** After MW tiles (20+z ≤ 21); before zodiacal (22). */
-const LIGHT_POLLUTION_RENDER_ORDER = 21
-/** MW tiles are renderOrder 20+z (maxZ=1 → 21); stars/figures sit above. */
-const ZODIACAL_RENDER_ORDER = 22
+/**
+ * After MW (20+z) + LP overlay + constellation figures (23); stars sit at 24.
+ * Must stay above `renderOrder + tileZ` for milkyway tiles.
+ */
+const ZODIACAL_RENDER_ORDER = 27
+
+/** Immersive PL profile resolution (1D R texture). */
+export const LP_PROFILE_TEX_WIDTH = 128
+
+/** Must match GLSL `live * (glow * X + …)` — keep tests in sync. */
+export const LP_IMMERSIVE_GLOW_GAIN = 2.2
 
 /**
- * Immersive PL — soft skyglow dome like real astrophotos, NOT a zodiacal wedge.
- * Astrophoto language: wide orange gradient from the polluted horizon, smooth
- * falloff toward zenith, no hard edges / searchlight tip.
+ * CPU mirror of immersive LP brightness at one sample (for unit tests).
+ * Returns RGB length² proxy — must be clearly > 0 toward a city on the horizon.
+ */
+export function estimateImmersiveLpGlow01(input: {
+  amount: number
+  bortle01: number
+  peak01: number
+  mean01: number
+  city01: number
+  elevN: number
+  sunAltDeg: number
+}): number {
+  const lpAmt = Math.min(1, Math.max(0, input.amount))
+  const lpClass = Math.min(1, Math.max(0, input.bortle01))
+  const lpPeak = Math.min(1, Math.max(0, input.peak01))
+  // smoothstep(1.5, -10, alt)
+  const t = Math.min(1, Math.max(0, (1.5 - input.sunAltDeg) / 11.5))
+  const night = t * t * (3 - 2 * t)
+  const site = Math.max(lpClass, lpPeak)
+  const live = lpAmt * site * night
+  if (live < 0.0005) return 0
+  const blob = Math.pow(Math.min(1, Math.max(0, input.city01)), 0.7)
+  const dir = Math.max(0, blob - input.mean01 * 0.18)
+  const elevDeg = input.elevN * 90
+  const h = 12 + (26 - 12) * Math.max(blob, lpPeak)
+  let elevFall = Math.exp(-elevDeg / Math.max(h, 7))
+  const a = h * 1.35
+  const b = h * 2.9
+  const u = elevDeg <= a ? 0 : elevDeg >= b ? 1 : (elevDeg - a) / (b - a)
+  elevFall *= 1 - u * u * (3 - 2 * u)
+  const limb =
+    Math.min(1, Math.max(0, input.elevN / 0.05)) *
+    Math.pow(Math.min(1, Math.max(0, 1 - input.elevN)), 1)
+  const glow = dir * elevFall * limb
+  const wash =
+    input.mean01 * 0.14 * elevFall * limb * (0.35 + 0.55 * lpClass)
+  return live * (glow * LP_IMMERSIVE_GLOW_GAIN + wash * 0.55)
+}
+
+/**
+ * Inverse Stellarium stereographic: st = n.xy / (0.5·(1−n.z)).
+ */
+export function invertStereographicSt(
+  stX: number,
+  stY: number,
+): [number, number, number] {
+  const s2 = stX * stX + stY * stY
+  const denom = s2 + 4
+  const nz = (s2 - 4) / denom
+  const h = 4 / denom
+  return [stX * h, stY * h, nz]
+}
+
+/**
+ * Immersive PL — post-frame fullscreen overlay (NOT the sky sphere).
+ * Sphere + interpolated vDir under stereo = concentric “tuiles”.
+ * Per-pixel screen ray after the warped frame = continuous sodium domes.
  */
 const LIGHT_POLLUTION_GLSL = /* glsl */ `
   uniform float uLightPollution;
@@ -56,61 +122,67 @@ const LIGHT_POLLUTION_GLSL = /* glsl */ `
   uniform float uLpIntensity;
   uniform float uLpMean;
   uniform sampler2D uLpProfile;
+  uniform vec2 uLpResolution;
+  uniform vec2 uLpNdcScale;
+  uniform mat3 uLpInvMv;
+
+  vec3 lpDirFromScreen() {
+    vec2 res = max(uLpResolution, vec2(1.0));
+    vec2 ndc = (gl_FragCoord.xy / res) * 2.0 - 1.0;
+    vec2 st = ndc * uLpNdcScale;
+    vec3 vd;
+    if (uStelMode < 0.5) {
+      float s2 = dot(st, st);
+      float denom = s2 + 4.0;
+      float nz = (s2 - 4.0) / denom;
+      float h = 4.0 / denom;
+      vd = normalize(vec3(st * h, nz));
+    } else if (uStelMode < 1.5) {
+      float ca = cos(st.y);
+      vd = normalize(vec3(sin(st.x) * ca, sin(st.y), -cos(st.x) * ca));
+    } else {
+      vd = normalize(vec3(st, -1.0));
+    }
+    return normalize(uLpInvMv * vd);
+  }
 
   vec3 lightPollutionRgb(vec3 v, float elevN, float alt, float below) {
     float lpAmt = clamp(uLightPollution, 0.0, 1.0);
     float lpClass = clamp(uLpBortle, 0.0, 1.0);
     float lpPeak = clamp(uLpIntensity, 0.0, 1.0);
-    float nightLp = clamp((-alt - 6.0) / 10.0, 0.0, 1.0);
+    float nightLp = smoothstep(1.5, -10.0, alt);
     float site = max(lpClass, lpPeak);
     float live = lpAmt * site * nightLp;
-    if (live < 0.001 || below >= 0.55) return vec3(0.0);
+    if (live < 0.0005 || below >= 0.55) return vec3(0.0);
 
-    // ENU: +X east, +Y up, +Z south — azimuth clockwise from north.
     float az = atan(v.x, -v.z);
-    float az01 = fract(az / (2.0 * 3.14159265) + 1.0);
+    float az01 = fract(az / (6.2831853) + 1.0);
 
-    // Wide azimuth blur (~±22°) — city glow is a flattened dome, never a needle.
-    float t = 1.0 / 64.0;
+    float t = 1.5 / 128.0;
     float c0 = texture2D(uLpProfile, vec2(az01, 0.5)).r;
     float c1 = texture2D(uLpProfile, vec2(fract(az01 + t), 0.5)).r;
     float c2 = texture2D(uLpProfile, vec2(fract(az01 - t + 1.0), 0.5)).r;
-    float c3 = texture2D(uLpProfile, vec2(fract(az01 + 2.0 * t), 0.5)).r;
-    float c4 = texture2D(uLpProfile, vec2(fract(az01 - 2.0 * t + 1.0), 0.5)).r;
-    float c5 = texture2D(uLpProfile, vec2(fract(az01 + 4.0 * t), 0.5)).r;
-    float c6 = texture2D(uLpProfile, vec2(fract(az01 - 4.0 * t + 1.0), 0.5)).r;
-    float city =
-      c0 * 0.26
-      + (c1 + c2) * 0.17
-      + (c3 + c4) * 0.12
-      + (c5 + c6) * 0.08;
-    city = clamp(city, 0.0, 1.0);
-    // Blend with regional mean so direction stays soft (no hard lobe walls).
-    float cityDome = mix(uLpMean, city, 0.55);
-    cityDome = max(cityDome, mix(uLpMean, city, 0.35));
+    float c3 = texture2D(uLpProfile, vec2(fract(az01 + 3.0 * t), 0.5)).r;
+    float c4 = texture2D(uLpProfile, vec2(fract(az01 - 3.0 * t + 1.0), 0.5)).r;
+    float city = clamp(c0 * 0.4 + (c1 + c2) * 0.2 + (c3 + c4) * 0.1, 0.0, 1.0);
+    float blob = pow(city, 0.72);
+    float dir = max(0.0, blob - uLpMean * 0.16);
 
-    // Soft elevation dome (airmass / Garstang-ish): bright on the limb, gone mid-sky.
-    // Scale height in degrees — taller for bright cities, never a pointed triangle tip.
     float elevDeg = elevN * 90.0;
-    float scaleH = mix(11.0, 26.0, max(cityDome, lpClass));
-    float dome = exp(-elevDeg / max(scaleH, 5.0));
-    // Soft outer fade so the top rounds off (kills zodiacal-like tip).
-    dome *= 1.0 - smoothstep(scaleH * 1.6, scaleH * 3.4, elevDeg);
-    float limb = pow(clamp(1.0 - elevN, 0.0, 1.0), 1.15);
+    float h = mix(13.0, 28.0, max(blob, lpPeak));
+    float hh = max(h, 7.0);
+    float elevFall = exp(-elevDeg / hh);
+    elevFall *= 1.0 - smoothstep(h * 1.2, h * 3.4, elevDeg);
+    float limb = smoothstep(0.0, 0.08, elevN) * pow(clamp(1.0 - elevN, 0.0, 1.0), 0.95);
 
-    float dirGlow = cityDome * dome * limb;
-    // Isotropic wash: rural opposite sky still faintly lit; urban fills higher.
-    float washAmt = mix(uLpMean * 0.55, max(uLpMean, lpClass) * 0.9, lpClass);
-    float wash = washAmt * dome * limb;
-    float zenFill = lpClass * lpClass * (0.12 + 0.28 * elevN);
+    float glow = dir * elevFall * limb;
+    float wash = uLpMean * 0.12 * elevFall * limb * mix(0.3, 0.85, lpClass);
+    float gain = live * (glow * ${LP_IMMERSIVE_GLOW_GAIN.toFixed(1)} + wash * 0.5);
 
-    float gain = live * (dirGlow * 1.05 + wash + zenFill);
-
-    // Muted sodium / LED amber — soft gradient, not neon beam.
-    vec3 cool = vec3(0.34, 0.4, 0.58);
-    vec3 warm = vec3(1.02, 0.7, 0.3);
-    vec3 col = mix(cool, warm, clamp(max(cityDome, lpClass) * 0.92, 0.0, 1.0));
-    return col * gain * 1.2;
+    vec3 sodium = vec3(1.2, 0.82, 0.18);
+    vec3 amber = vec3(1.0, 0.62, 0.14);
+    vec3 col = mix(amber, sodium, clamp(blob, 0.0, 1.0));
+    return col * gain;
   }
 `
 
@@ -127,13 +199,19 @@ export function geometricHorizonSin(eyeElevationMslM: number): number {
 }
 
 function createLightPollutionProfileTexture(): THREE.DataTexture {
-  // 64×1 R — filled later by updateAstroSkyDome / setLightPollutionProfile.
-  const data = new Uint8Array(64)
-  const tex = new THREE.DataTexture(data, 64, 1, THREE.RedFormat)
+  // 128×1 RGBA (R=G=B=glow) — RedFormat alone sampled black on some paths.
+  const data = new Uint8Array(LP_PROFILE_TEX_WIDTH * 4)
+  const tex = new THREE.DataTexture(
+    data,
+    LP_PROFILE_TEX_WIDTH,
+    1,
+    THREE.RGBAFormat,
+  )
   tex.magFilter = THREE.LinearFilter
   tex.minFilter = THREE.LinearFilter
   tex.wrapS = THREE.RepeatWrapping
   tex.wrapT = THREE.ClampToEdgeWrapping
+  tex.generateMipmaps = false
   tex.needsUpdate = true
   return tex
 }
@@ -141,8 +219,8 @@ function createLightPollutionProfileTexture(): THREE.DataTexture {
 /** Physical sky dome — same Rayleigh/Mie shader as Photo Sightline. */
 export function createAstroSkyDome(): AstroSkyDome {
   // Past far-terrain LOD radius (~300 km) so distant ridges aren't painted over.
-  // Dense tessellation — stereo is nonlinear; coarse spheres stretch into columns.
-  const geometry = new THREE.SphereGeometry(360_000, 384, 256)
+  // Dense tessellation — stereo chords on a coarse dome = sky “tuiles”.
+  const geometry = new THREE.SphereGeometry(360_000, 768, 512)
   const lightPollutionProfile = createLightPollutionProfileTexture()
   const material = new THREE.ShaderMaterial({
     side: THREE.BackSide,
@@ -460,7 +538,7 @@ export function createAstroSkyDome(): AstroSkyDome {
 
         if (atmo < 0.001) {
           // Full Rayleigh off: keep ground fill; sky only if airglow needs it.
-          // Zodiacal + LP are separate additive meshes (above Milky Way).
+          // Zodiacal / LP are separate additive meshes (above Milky Way).
           if (below < 0.01 && agAmt * nightAg < 0.001) discard;
           mapped = below >= 0.01
             ? distant * (0.55 + 0.45 * (1.0 - nightDim))
@@ -487,13 +565,13 @@ export function createAstroSkyDome(): AstroSkyDome {
   // Draw after terrain so depth-test keeps mountains in front of the sky.
   mesh.renderOrder = 10
 
-  // Separate additive pass so city glow sits *over* NASA Milky Way tiles
-  // (NormalBlending MW was burying LP when it lived on the Rayleigh dome).
+  // Fullscreen overlay — never in the main scene (stereo sphere = tuiles).
+  const lpGeometry = new THREE.PlaneGeometry(2, 2)
   const lightPollutionMaterial = new THREE.ShaderMaterial({
-    side: THREE.BackSide,
+    side: THREE.DoubleSide,
     transparent: true,
     depthWrite: false,
-    depthTest: true,
+    depthTest: false,
     fog: false,
     toneMapped: false,
     blending: THREE.AdditiveBlending,
@@ -506,43 +584,24 @@ export function createAstroSkyDome(): AstroSkyDome {
       uLpIntensity: { value: 0 },
       uLpMean: { value: 0 },
       uLpProfile: { value: lightPollutionProfile },
+      uLpResolution: { value: new THREE.Vector2(1, 1) },
+      uLpNdcScale: { value: new THREE.Vector2(1, 1) },
+      uLpInvMv: { value: new THREE.Matrix3() },
     },
     vertexShader: /* glsl */ `
-      ${STEL_PROJECT_GLSL}
-      varying vec3 vDir;
-      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
-        varying float vFragDepth;
-        varying float vIsPerspective;
-        bool isPerspectiveMatrix(mat4 m) { return m[2][3] == -1.0; }
-      #endif
       void main() {
-        vDir = normalize(position);
-        gl_Position = stelProject(modelViewMatrix * vec4(position, 1.0));
-        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
-          vFragDepth = 1.0 + gl_Position.w;
-          vIsPerspective = float(isPerspectiveMatrix(projectionMatrix));
-        #endif
+        gl_Position = vec4(position.xy, 0.0, 1.0);
       }
     `,
     fragmentShader: /* glsl */ `
-      ${STEL_FRAGMENT_GLSL}
-      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
-        uniform float logDepthBufFC;
-        varying float vFragDepth;
-        varying float vIsPerspective;
-      #endif
+      uniform float uStelMode;
       uniform float uSunAltitude;
       uniform float uEyeElevM;
-      varying vec3 vDir;
       const float EARTH_R = 6371000.0;
       ${LIGHT_POLLUTION_GLSL}
 
       void main() {
-        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
-          gl_FragDepth = vIsPerspective == 0.0 ? gl_FragCoord.z : log2(vFragDepth) * logDepthBufFC * 0.5;
-        #endif
-        stelDiscardBow();
-        vec3 v = normalize(vDir);
+        vec3 v = lpDirFromScreen();
         float alt = uSunAltitude;
         float hEye = max(uEyeElevM, 0.0);
         float horSin = hEye > 0.5
@@ -552,15 +611,17 @@ export function createAstroSkyDome(): AstroSkyDome {
         float elevN = clamp(aboveHor / max(1.0 - horSin, 1e-3), 0.0, 1.0);
         float below = smoothstep(horSin + 0.004, horSin - 0.03, v.y);
         vec3 lpRgb = lightPollutionRgb(v, elevN, alt, below);
-        if (dot(lpRgb, lpRgb) < 1.0e-6) discard;
+        if (dot(lpRgb, lpRgb) < 1.0e-8) discard;
         gl_FragColor = vec4(lpRgb, 1.0);
       }
     `,
   })
-  const lightPollutionMesh = new THREE.Mesh(geometry, lightPollutionMaterial)
+  const lightPollutionMesh = new THREE.Mesh(lpGeometry, lightPollutionMaterial)
   lightPollutionMesh.frustumCulled = false
-  lightPollutionMesh.renderOrder = LIGHT_POLLUTION_RENDER_ORDER
   lightPollutionMesh.name = 'lightPollutionGlow'
+  const lpOverlayScene = new THREE.Scene()
+  lpOverlayScene.add(lightPollutionMesh)
+  const lpOverlayCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
 
   // Separate additive pass so zodiacal glows *over* NASA Milky Way tiles
   // (those sit at renderOrder 20+z; atmosphere alone was painted underneath).
@@ -684,13 +745,74 @@ export function createAstroSkyDome(): AstroSkyDome {
     lightPollutionMaterial,
     zodiacalMaterial,
     lightPollutionProfile,
+    _lpOverlay: {
+      scene: lpOverlayScene,
+      camera: lpOverlayCamera,
+    },
   }
 }
 
 /**
- * Upload an azimuthal PL profile into the sky-dome 1D texture.
- * Extra circular blur (~±3 bins ≈ ±17°) so immersive lobes stay soft domes
- * (all-sky panel keeps the sharper source profile).
+ * Sample a peak-normalized azimuth ring with linear interpolation.
+ */
+function sampleAz01(azimuth01: ArrayLike<number>, az01: number): number {
+  const n = azimuth01.length
+  if (n < 1) return 0
+  const x = ((az01 % 1) + 1) % 1 * n
+  const i0 = Math.floor(x) % n
+  const i1 = (i0 + 1) % n
+  const f = x - Math.floor(x)
+  return (
+    Math.min(1, Math.max(0, azimuth01[i0]!)) * (1 - f) +
+    Math.min(1, Math.max(0, azimuth01[i1]!)) * f
+  )
+}
+
+/** Immersive dome width (σ°) — city mounds, not a uniform wash. */
+export const LP_IMMERSIVE_DOME_SIGMA_DEG = 16
+
+const _lpInvMv = new THREE.Matrix3()
+const _lpDrawSize = new THREE.Vector2()
+
+/** Sync screen-ray uniforms — call immediately before overlay draw. */
+export function syncImmersiveLpScreenUniforms(
+  sky: AstroSkyDome,
+  renderer: THREE.WebGLRenderer,
+  camera: THREE.Camera,
+): void {
+  const u = sky.lightPollutionMaterial.uniforms
+  renderer.getDrawingBufferSize(_lpDrawSize)
+  ;(u.uLpResolution.value as THREE.Vector2).copy(_lpDrawSize)
+  camera.updateMatrixWorld(true)
+  _lpInvMv.setFromMatrix4(camera.matrixWorld)
+  ;(u.uLpInvMv.value as THREE.Matrix3).copy(_lpInvMv)
+  const p = (camera as THREE.PerspectiveCamera).projectionMatrix.elements
+  const sx = Math.abs(p[0]!) > 1e-8 ? 1 / p[0]! : 1
+  const sy = Math.abs(p[5]!) > 1e-8 ? 1 / p[5]! : 1
+  ;(u.uLpNdcScale.value as THREE.Vector2).set(sx, sy)
+}
+
+/**
+ * Draw LP after the main/cubemap frame. Must not live in the warped scene.
+ */
+export function renderImmersiveLightPollution(
+  sky: AstroSkyDome,
+  renderer: THREE.WebGLRenderer,
+  camera: THREE.Camera,
+): void {
+  if (!sky.lightPollutionMesh.visible) return
+  const amt = sky.lightPollutionMaterial.uniforms.uLightPollution.value as number
+  if (!(amt > 0.0005)) return
+  syncImmersiveLpScreenUniforms(sky, renderer, camera)
+  const prevAutoClear = renderer.autoClear
+  renderer.autoClear = false
+  renderer.render(sky._lpOverlay.scene, sky._lpOverlay.camera)
+  renderer.autoClear = prevAutoClear
+}
+
+/**
+ * Upload an azimuthal PL profile into the sky-dome 1D RGBA texture.
+ * Upsamples + mild Gaussian; peak-normalized so city lobes stay hot.
  */
 export function setLightPollutionProfile(
   sky: AstroSkyDome,
@@ -699,20 +821,39 @@ export function setLightPollutionProfile(
 ): void {
   const tex = sky.lightPollutionProfile
   const data = tex.image.data as Uint8Array
-  const n = Math.min(data.length, azimuth01.length)
-  const radius = 3
+  const n = LP_PROFILE_TEX_WIDTH
+  const srcN = azimuth01.length
+  if (srcN < 1 || data.length < n * 4) return
+
+  const row = new Float32Array(n)
+  for (let i = 0; i < n; i++) {
+    row[i] = sampleAz01(azimuth01, (i + 0.5) / n)
+  }
+  const sigmaBins = (LP_IMMERSIVE_DOME_SIGMA_DEG / 360) * n
+  const radius = Math.min(n >> 1, Math.max(2, Math.ceil(sigmaBins * 3)))
+  const twoS2 = 2 * sigmaBins * sigmaBins
+  const blurred = new Float32Array(n)
+  let peak = 0
   for (let i = 0; i < n; i++) {
     let sum = 0
     let w = 0
     for (let d = -radius; d <= radius; d++) {
-      const j = (i + d + n * 4) % n
-      const ww = radius + 1 - Math.abs(d)
-      sum += Math.min(1, Math.max(0, azimuth01[j]!)) * ww
+      const ww = Math.exp(-(d * d) / twoS2)
+      sum += row[(i + d + n * 4) % n]! * ww
       w += ww
     }
-    data[i] = Math.round((sum / w) * 255)
+    blurred[i] = sum / w
+    peak = Math.max(peak, blurred[i]!)
   }
-  for (let i = n; i < data.length; i++) data[i] = 0
+  const invPeak = peak > 1e-6 ? 1 / peak : 1
+  for (let i = 0; i < n; i++) {
+    const v = Math.round(Math.min(1, Math.max(0, blurred[i]! * invPeak)) * 255)
+    const o = i * 4
+    data[o] = v
+    data[o + 1] = v
+    data[o + 2] = v
+    data[o + 3] = 255
+  }
   tex.needsUpdate = true
   sky.lightPollutionMaterial.uniforms.uLpMean.value = Math.min(
     1,

@@ -68,6 +68,7 @@ import { clampEyeHeightM, EYE_HEIGHT_STEP_M } from './presets'
 import { ViewBearingHud } from './ViewBearingHud'
 import { type PanoramaPlan } from './panorama'
 import {
+  normalizeTimelapsePlan,
   timelapseStarTrailArcRad,
   type TimelapsePlan,
 } from './timelapse'
@@ -91,6 +92,7 @@ import {
   createAstroSkyDome,
   eclipticNorthPoleThreeLocal,
   setLightPollutionProfile,
+  renderImmersiveLightPollution,
   sunDirectionFromAltAz,
   updateAstroSkyDome,
 } from './skyDome'
@@ -114,10 +116,6 @@ import {
   clampAirglowAmount,
   clampAirglowHue,
   clampAirglowWaves,
-  clampAuroraAmount,
-  clampAuroraHeight,
-  clampAuroraKp,
-  clampAuroraSpeed,
   clampAtmosphereAmount,
   clampGroundNightBrightness,
   clampGroundNightContrast,
@@ -377,22 +375,6 @@ export function ImmersiveView({
   const [airglowWaves, setAirglowWaves] = useState(() =>
     clampAirglowWaves(savedImmersive.airglowWaves),
   )
-  const [auroraKp, setAuroraKp] = useState(() =>
-    clampAuroraKp(savedImmersive.auroraKp),
-  )
-  const [auroraAmount, setAuroraAmount] = useState(() =>
-    clampAuroraAmount(savedImmersive.auroraAmount),
-  )
-  const [auroraSpeed, setAuroraSpeed] = useState(() =>
-    clampAuroraSpeed(savedImmersive.auroraSpeed),
-  )
-  const [auroraHeight, setAuroraHeight] = useState(() =>
-    clampAuroraHeight(savedImmersive.auroraHeight),
-  )
-  const setAuroraKpRef = useRef(setAuroraKp)
-  setAuroraKpRef.current = setAuroraKp
-  const auroraKpRef = useRef(auroraKp)
-  auroraKpRef.current = auroraKp
   const [zodiacalAmount, setZodiacalAmount] = useState(() =>
     clampZodiacalAmount(savedImmersive.zodiacalAmount),
   )
@@ -416,10 +398,6 @@ export function ImmersiveView({
     airglowAmount: clampAirglowAmount(savedImmersive.airglowAmount),
     airglowHue: clampAirglowHue(savedImmersive.airglowHue),
     airglowWaves: clampAirglowWaves(savedImmersive.airglowWaves),
-    auroraKp: clampAuroraKp(savedImmersive.auroraKp),
-    auroraAmount: clampAuroraAmount(savedImmersive.auroraAmount),
-    auroraSpeed: clampAuroraSpeed(savedImmersive.auroraSpeed),
-    auroraHeight: clampAuroraHeight(savedImmersive.auroraHeight),
     zodiacalAmount: clampZodiacalAmount(savedImmersive.zodiacalAmount),
     lightPollutionAmount: clampLightPollutionAmount(
       savedImmersive.lightPollutionAmount,
@@ -435,10 +413,6 @@ export function ImmersiveView({
     airglowAmount,
     airglowHue,
     airglowWaves,
-    auroraKp,
-    auroraAmount,
-    auroraSpeed,
-    auroraHeight,
     zodiacalAmount,
     lightPollutionAmount,
     showConstellations,
@@ -481,10 +455,6 @@ export function ImmersiveView({
         airglowAmount,
         airglowHue,
         airglowWaves,
-        auroraKp,
-        auroraAmount,
-        auroraSpeed,
-        auroraHeight,
         zodiacalAmount,
         lightPollutionAmount,
         showConstellations,
@@ -516,10 +486,6 @@ export function ImmersiveView({
     airglowAmount,
     airglowHue,
     airglowWaves,
-    auroraKp,
-    auroraAmount,
-    auroraSpeed,
-    auroraHeight,
     zodiacalAmount,
     lightPollutionAmount,
     showConstellations,
@@ -586,6 +552,9 @@ export function ImmersiveView({
     getLook: () => lookRef.current,
     getSkyUtcMs: () => skyUtcLiveRef.current,
     onSkyUtcChange: (utcMs) => {
+      // Keep live ref in sync before React commits playhead — EQ start/seek
+      // must not read a stale UTC if something re-enters buildSession mid-run.
+      skyUtcLiveRef.current = utcMs
       apiRef.current?.setSkyUtc(utcMs)
       onSkyUtcChange?.(utcMs)
     },
@@ -695,8 +664,7 @@ export function ImmersiveView({
 
     const sky = createAstroSkyDome()
     scene.add(sky.mesh)
-    scene.add(sky.lightPollutionMesh)
-    scene.add(sky.auroraMesh)
+    // LP is a post-frame fullscreen overlay (not in the stereo-warped scene).
     scene.add(sky.zodiacalMesh)
     const eclipticPoleLocal = new THREE.Vector3()
 
@@ -825,16 +793,6 @@ export function ImmersiveView({
       const airglowWavesLive = clampAirglowWaves(
         skyTogglesRef.current.airglowWaves,
       )
-      const auroraKpLive = clampAuroraKp(skyTogglesRef.current.auroraKp)
-      const auroraAmountLive = clampAuroraAmount(
-        skyTogglesRef.current.auroraAmount,
-      )
-      const auroraSpeedLive = clampAuroraSpeed(
-        skyTogglesRef.current.auroraSpeed,
-      )
-      const auroraHeightLive = clampAuroraHeight(
-        skyTogglesRef.current.auroraHeight,
-      )
       const zodiacalAmountLive = clampZodiacalAmount(
         skyTogglesRef.current.zodiacalAmount,
       )
@@ -857,11 +815,6 @@ export function ImmersiveView({
         airglowAmount: airglowAmountLive,
         airglowHue: airglowHueLive,
         airglowWaves: airglowWavesLive,
-        auroraKp: auroraKpLive,
-        auroraAmount: auroraAmountLive,
-        auroraSpeed: auroraSpeedLive,
-        auroraHeight: auroraHeightLive,
-        observerLatDeg: lat,
         zodiacalAmount: zodiacalAmountLive,
         lightPollutionAmount: lightPollutionAmountLive,
         lightPollutionBortleFactor: lightPollutionBortleFactorRef.current,
@@ -1026,7 +979,9 @@ export function ImmersiveView({
     }
 
     // Bortle + directional PL dome (sample rings → azimuth texture).
-    void sampleLightPollution(lat, lon).then((sample) => {
+    void sampleLightPollution(lat, lon, {
+      observerElevM: sceneGroundElevM,
+    }).then((sample) => {
       if (disposed || !sample) return
       lightPollutionBortleFactorRef.current = bortlePollutionFactor(
         sample.bortle,
@@ -1414,7 +1369,6 @@ export function ImmersiveView({
       }
       sky.mesh.visible = diag.showSky
       sky.lightPollutionMesh.visible = diag.showSky
-      sky.auroraMesh.visible = diag.showSky
       sky.zodiacalMesh.visible = diag.showSky
       nightSky.root.visible = diag.showNightSky
       if (terrainNearObj) terrainNearObj.visible = diag.showTerrainNear
@@ -1430,17 +1384,21 @@ export function ImmersiveView({
       }
 
       sky.mesh.position.copy(camera.position)
-      sky.lightPollutionMesh.position.copy(camera.position)
-      sky.auroraMesh.position.copy(camera.position)
       sky.zodiacalMesh.position.copy(camera.position)
-      // Drift airglow / aurora phase each frame (living folds / mist).
+      // Drift airglow phase each frame (living folds / mist).
       const skyPhaseSec = performance.now() * 0.001
       sky.material.uniforms.uAirglowTime.value = skyPhaseSec
-      sky.auroraMaterial.uniforms.uAuroraTime.value = skyPhaseSec
       adaptTerrain?.(camera.position.x, camera.position.y, camera.position.z)
       const skyToggles = skyTogglesRef.current
       const lpAmt = skyToggles.lightPollutionAmount
       const lpBortle = lightPollutionBortleFactorRef.current
+      // LP uniforms every frame (slider + site) — don't wait for applySky.
+      const lpMat = sky.lightPollutionMaterial
+      lpMat.uniforms.uLightPollution.value = clampLightPollutionAmount(lpAmt)
+      lpMat.uniforms.uLpBortle.value = lpBortle
+      lpMat.uniforms.uLpIntensity.value = lightPollutionPeakIntensityRef.current
+      lpMat.uniforms.uLpMean.value = lightPollutionMeanRef.current
+      lpMat.uniforms.uSunAltitude.value = latestSunAltDeg
       nightSky.update({
         utcMs: latestSkyUtc,
         lat,
@@ -1514,14 +1472,16 @@ export function ImmersiveView({
         stereoPass.setAtlasPreview(atlasOn)
         const stage = Number(camera.userData.stageVfovDeg) || stageFov
         stereoPass.render(renderer, scene, camera, stage)
-        renderDiagLiveRef.current.stats.passes = 7
+        renderImmersiveLightPollution(sky, renderer, camera)
+        renderDiagLiveRef.current.stats.passes = 8
         renderDiagLiveRef.current.stats.path = atlasOn
           ? 'cubemap-atlas'
           : 'cubemap'
       } else {
         stereoPass.setAtlasPreview(false)
         renderer.render(scene, camera)
-        renderDiagLiveRef.current.stats.passes = 1
+        renderImmersiveLightPollution(sky, renderer, camera)
+        renderDiagLiveRef.current.stats.passes = 2
         renderDiagLiveRef.current.stats.path = 'direct'
       }
       const info = renderer.info.render
@@ -1560,10 +1520,11 @@ export function ImmersiveView({
       apiRef.current = null
       nightSkyApiRef.current = null
       sky.geometry.dispose()
-      sky.auroraGeometry.dispose()
+      if (sky.lightPollutionMesh.geometry !== sky.geometry) {
+        sky.lightPollutionMesh.geometry.dispose()
+      }
       sky.material.dispose()
       sky.lightPollutionMaterial.dispose()
-      sky.auroraMaterial.dispose()
       sky.zodiacalMaterial.dispose()
       sky.lightPollutionProfile.dispose()
       nightSky.dispose()
@@ -1587,10 +1548,6 @@ export function ImmersiveView({
     airglowAmount,
     airglowHue,
     airglowWaves,
-    auroraKp,
-    auroraAmount,
-    auroraSpeed,
-    auroraHeight,
     zodiacalAmount,
     lightPollutionAmount,
     groundNightBrightness,
@@ -1669,9 +1626,17 @@ export function ImmersiveView({
     return () => window.clearInterval(id)
   }, [loaderVisible])
 
+  const timelapsePreviewApiRef = useRef(timelapsePreview)
+  timelapsePreviewApiRef.current = timelapsePreview
+  const timelapsePlanRef = useRef(timelapse)
+  timelapsePlanRef.current = timelapse
+  const frameRollForPreviewRef = useRef(frameRollDeg)
+  frameRollForPreviewRef.current = frameRollDeg
+
   useEffect(() => {
     const api: QaImmersiveApi = {
-      setLook: (yaw, pitch) => apiRef.current?.setLook(yaw, pitch),
+      setLook: (yaw, pitch, rollDeg = 0) =>
+        apiRef.current?.setLook(yaw, pitch, rollDeg),
       setStageFov: (vfovDeg) => apiRef.current?.setStageFov(vfovDeg),
       setProjection: (mode) => {
         setStageProjection(mode)
@@ -1693,19 +1658,45 @@ export function ImmersiveView({
         )
       },
       getStageVfovDeg: () => stageVfovLiveRef.current,
-      getProjection: () => projection,
-      setAuroraKp: (kp) => setAuroraKpRef.current(clampAuroraKp(kp)),
-      getAuroraKp: () => auroraKpRef.current,
+      getProjection: () => getStageProjection(),
+      getLook: () => ({ ...lookRef.current }),
+      startTimelapsePreview: (plan) => {
+        const next = normalizeTimelapsePlan({
+          ...timelapsePlanRef.current,
+          ...plan,
+        })
+        setTimelapse(next)
+        if (frameMode !== 'dslr') applyFrameMode('dslr')
+        setFramesLocked(false)
+        const fromSettings = clampFrameRollDeg(frameRollForPreviewRef.current)
+        savedFrameRollRef.current = fromSettings
+        previewSceneRollRef.current = fromSettings
+        setFrameRollDeg(0)
+        setTimelapseFrameRollDeg(0)
+        const look = lookRef.current
+        apiRef.current?.setLook(look.yaw, look.pitch, fromSettings)
+        timelapsePreviewApiRef.current.start(next)
+      },
+      seekTimelapse: (shotIndex) => {
+        timelapsePreviewApiRef.current.seek(shotIndex)
+      },
+      pauseTimelapse: () => {
+        timelapsePreviewApiRef.current.pause()
+      },
+      getTimelapseStatus: () => ({ ...timelapsePreviewApiRef.current.status }),
+      exitTimelapsePreview: () => endTimelapsePreviewRef.current(),
     }
     window.__astroQaImmersive = api
     return () => {
       if (window.__astroQaImmersive === api) delete window.__astroQaImmersive
     }
-  }, [terrainReady, terrainUnlocked, terrainPhase, terrainProgress, projection])
+  }, [terrainReady, terrainUnlocked, terrainPhase, terrainProgress, projection, frameMode])
 
   // Sync only when the PARENT bearing prop changes. Including pitchDeg here
   // re-applied the stale map bearing and wiped __astroSetLook / drag yaw.
+  // Skip while EQ/fixed timelapse owns the look — parent bearing is stale.
   useEffect(() => {
+    if (timelapsePreviewLookLockedRef.current) return
     lookRef.current = {
       yaw: bearingDeg,
       pitch: lookRef.current.pitch,
@@ -1717,8 +1708,11 @@ export function ImmersiveView({
 
   useLayoutEffect(() => {
     setStageProjection(projection)
+  }, [projection])
+
+  useLayoutEffect(() => {
     apiRef.current?.setStageFov(stageVfovDeg)
-  }, [projection, stageVfovDeg])
+  }, [stageVfovDeg])
 
   useEffect(() => {
     apiRef.current?.setEyeHeight(eyeHeightM)
@@ -2362,10 +2356,6 @@ export function ImmersiveView({
           airglowAmount={airglowAmount}
           airglowHue={airglowHue}
           airglowWaves={airglowWaves}
-          auroraKp={auroraKp}
-          auroraAmount={auroraAmount}
-          auroraSpeed={auroraSpeed}
-          auroraHeight={auroraHeight}
           zodiacalAmount={zodiacalAmount}
           lightPollutionAmount={lightPollutionAmount}
           starMagDepth={starMagDepth}
@@ -2376,10 +2366,6 @@ export function ImmersiveView({
           onAirglowAmountChange={setAirglowAmount}
           onAirglowHueChange={setAirglowHue}
           onAirglowWavesChange={setAirglowWaves}
-          onAuroraKpChange={setAuroraKp}
-          onAuroraAmountChange={setAuroraAmount}
-          onAuroraSpeedChange={setAuroraSpeed}
-          onAuroraHeightChange={setAuroraHeight}
           onZodiacalAmountChange={setZodiacalAmount}
           onLightPollutionAmountChange={setLightPollutionAmount}
           onStarMagDepthChange={setStarMagDepth}

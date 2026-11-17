@@ -896,8 +896,17 @@ export function ImmersiveView({
         })
         .catch((error: unknown) => fail('error', error))
     }
-    reloadLocalHaloRef.current = loadLocalHalo
-    loadLocalHalo()
+    // Secondary feature: its DEM / VIIRS fetches must not compete with the
+    // terrain load, and once the relief is in, its DEM tiles are cache hits.
+    let localHaloStarted = false
+    const startLocalHaloOnce = () => {
+      if (localHaloStarted) return
+      localHaloStarted = true
+      loadLocalHalo()
+    }
+    reloadLocalHaloRef.current = () => {
+      if (localHaloStarted) loadLocalHalo()
+    }
     const localHaloTuning = (): LocalHaloTuning => {
       const c = localHaloRef.current
       return {
@@ -1277,6 +1286,7 @@ export function ImmersiveView({
       if (terrain.ready) {
         setTerrainReady(true)
         onTerrainReadyChangeRef.current?.(true)
+        startLocalHaloOnce()
         setTerrainLabel(
           isFlatTerrainHandle(terrain)
             ? 'Sol plat · sans DEM'

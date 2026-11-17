@@ -6869,6 +6869,179 @@ button.ov-capsule:hover {
     padding: 12px;
     gap: 8px;
   }
+
+  /* —— Immersive Three.js HUD densify (laptop) —— */
+  .immersive__chrome {
+    top: 10px;
+  }
+
+  .immersive__chrome--left {
+    left: 10px;
+  }
+
+  .immersive__chrome--right {
+    right: 10px;
+    gap: 5px;
+  }
+
+  .immersive-dock {
+    width: 188px;
+    max-width: min(188px, calc(100vw - 20px));
+    padding: 5px;
+    border-radius: 11px;
+  }
+
+  .immersive-dock__block {
+    gap: 5px;
+    padding: 3px 2px 5px;
+  }
+
+  .immersive-dock__label {
+    font-size: 0.54rem;
+  }
+
+  .immersive-dock__row {
+    min-height: 30px;
+    padding: 4px 7px;
+    border-radius: 7px;
+    gap: 7px;
+  }
+
+  .immersive-dock__row-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .vf-capture-capsule__bar {
+    min-height: 36px;
+    padding: 3px 5px;
+    gap: 4px;
+    border-radius: 11px;
+  }
+
+  .vf-capture-capsule__gear,
+  .vf-capture-capsule__mode,
+  .vf-capture-capsule__icon-btn,
+  .vf-capture-capsule__timelapse {
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    border-radius: 7px;
+  }
+
+  .vf-capture-capsule__mode svg,
+  .vf-capture-capsule__gear svg,
+  .vf-capture-capsule__icon-btn svg,
+  .vf-capture-capsule__timelapse svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .vf-capture-capsule__lens {
+    font-size: 0.7rem;
+  }
+
+  .vf-proj-control__trigger {
+    min-height: 36px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+
+  .immersive__exit,
+  .celestial-dock,
+  .celestial-dock__toggle {
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 11px;
+  }
+
+  .celestial-search,
+  .celestial-target {
+    width: min(270px, calc(100vw - 24px));
+  }
+
+  .celestial-target {
+    padding: 10px;
+  }
+
+  .celestial-target__name {
+    font-size: 0.95rem;
+  }
+
+  .celestial-target__lock,
+  .celestial-target__center {
+    min-height: 34px;
+  }
+
+  .celestial-target__lock {
+    width: 34px;
+  }
+
+  .vf-camera-panel__body {
+    width: min(270px, calc(100vw - 220px));
+    max-height: min(66vh, 480px);
+  }
+
+  .vf-camera-panel__row,
+  .moon-preview-focal-dock {
+    padding: 10px 12px;
+    border-radius: 14px;
+    gap: 8px;
+  }
+
+  .moon-preview-bearing-tape {
+    top: 14px;
+    width: min(240px, calc(100% - 180px));
+  }
+
+  .moon-preview-bearing-tape__window {
+    height: 26px;
+  }
+
+  .moon-preview-pitch-stack {
+    left: 10px;
+  }
+
+  .moon-preview-hud-tools {
+    right: 6px;
+    gap: 6px;
+  }
+
+  .moon-preview-hud-tool {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+  }
+
+  .immersive__loader {
+    width: min(380px, calc(100% - 32px));
+  }
+
+  .immersive__loader-card {
+    padding: 14px 16px 12px;
+    gap: 10px;
+  }
+
+  .immersive__loader-phase {
+    font-size: 0.95rem;
+  }
+
+  .immersive__loader-pct {
+    font-size: 1.35rem;
+  }
+
+  .immersive__hint {
+    left: 10px;
+    max-width: min(220px, 34vw);
+    font-size: 0.68rem;
+  }
+
+  .photo-frame__meta {
+    font-size: 0.68rem;
+  }
 }
 
 /* When rails squeeze the map stage, shrink left stack further. */
@@ -6989,6 +7162,114 @@ button.ov-capsule:hover {
       )
     );
     padding: 12px;
+  }
+
+  /* —— Immersive Three.js HUD densify (tablet) —— */
+  .immersive__chrome {
+    top: 10px;
+  }
+
+  .immersive__chrome--left {
+    left: 10px;
+  }
+
+  .immersive__chrome--right {
+    right: 10px;
+    gap: 5px;
+  }
+
+  .immersive-dock {
+    width: min(176px, calc(100vw - 20px));
+    max-width: min(176px, calc(100vw - 20px));
+    padding: 4px;
+    border-radius: 10px;
+  }
+
+  .immersive-dock__row {
+    min-height: 30px;
+    padding: 4px 6px;
+    gap: 6px;
+  }
+
+  .immersive-dock__row-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .vf-capture-capsule__bar {
+    min-height: 36px;
+    padding: 3px 5px;
+    gap: 4px;
+    flex-wrap: wrap;
+    max-width: min(100%, calc(100vw - 20px));
+  }
+
+  .vf-capture-capsule__divider {
+    display: none;
+  }
+
+  .vf-capture-capsule__gear,
+  .vf-capture-capsule__mode,
+  .vf-capture-capsule__icon-btn,
+  .vf-capture-capsule__timelapse {
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 0.68rem;
+  }
+
+  .immersive__exit,
+  .celestial-dock,
+  .celestial-dock__toggle {
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 10px;
+  }
+
+  .celestial-search,
+  .celestial-target {
+    width: min(260px, calc(100vw - 20px));
+  }
+
+  .vf-camera-panel__body {
+    left: 0;
+    top: calc(100% + 6px);
+    width: min(260px, calc(100vw - 24px));
+    max-height: min(60vh, 440px);
+  }
+
+  .moon-preview-bearing-tape {
+    top: 12px;
+    width: min(220px, calc(100% - 160px));
+  }
+
+  .moon-preview-pitch-stack {
+    left: 8px;
+  }
+
+  .moon-preview-hud-tools {
+    right: 6px;
+  }
+
+  .moon-preview-hud-tool {
+    width: 26px;
+    height: 26px;
+  }
+
+  .moon-preview-focal-pills {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .immersive__loader {
+    width: min(340px, calc(100% - 28px));
+  }
+
+  .immersive__hint {
+    left: 10px;
+    max-width: min(200px, 40vw);
+    font-size: 0.66rem;
   }
 }
 

@@ -27,11 +27,7 @@ export function SpotSaveCard({
 
   return (
     <div
-      className={
-        mode === 'edit'
-          ? 'spot-save-card-backdrop spot-save-card-backdrop--map-pass'
-          : 'spot-save-card-backdrop'
-      }
+      className="spot-save-card-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
@@ -40,7 +36,7 @@ export function SpotSaveCard({
       <form
         className="spot-save-card"
         role="dialog"
-        aria-modal={mode === 'save'}
+        aria-modal="true"
         aria-labelledby="spot-save-card-title"
         onSubmit={(event) => {
           event.preventDefault()

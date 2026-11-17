@@ -159,11 +159,14 @@
 
 .moon-timeline-dock {
   position: fixed;
-  left: 50%;
+  left: calc((100vw - var(--map-rail-width, 0px)) / 2);
   bottom: 16px;
   z-index: 30;
   transform: translateX(-50%);
-  width: min(var(--timeline-dock-max, 720px), calc(100vw - 24px));
+  width: min(
+    var(--timeline-dock-max, 720px),
+    calc(100vw - var(--map-rail-width, 0px) - 24px)
+  );
   display: grid;
   gap: 8px;
   padding: 12px 14px 11px;
@@ -311,7 +314,7 @@
 
 .moon-timeline-dock__collapsed {
   position: fixed;
-  left: 50%;
+  left: calc((100vw - var(--map-rail-width, 0px)) / 2);
   bottom: 16px;
   z-index: 30;
   transform: translateX(-50%);

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type CelestialObject } from './celestialObjects'
 import { ImmersiveView } from './ImmersiveView'
 import { MapCanvas, type CameraMode, type SpotState } from './MapCanvas'
+import { ConfirmCard } from './ConfirmCard'
+import { FolderSaveCard } from './FolderSaveCard'
 import { MySpotsRail } from './MySpotsCard'
 import { OverviewCard } from './OverviewCard'
 import { SpotSaveCard } from './SpotSaveCard'
@@ -15,11 +17,18 @@ import type { BasemapMode } from './basemapMode'
 import { loadAppSettings, patchAppSettings } from './appSettings'
 import {
   createPersonalSpot,
-  loadPersonalSpots,
+  createPersonalSpotFolder,
+  loadPersonalSpotsState,
+  movePersonalSpotToFolder,
   removePersonalSpot,
-  savePersonalSpots,
+  removePersonalSpotFolder,
+  savePersonalSpotsState,
+  setPersonalSpotFolderVisible,
+  setPersonalSpotVisible,
   upsertPersonalSpot,
+  upsertPersonalSpotFolder,
   type PersonalSpot,
+  type PersonalSpotFolder,
 } from './personalSpots'
 import { DEFAULT_MAP_VIEW } from './presets'
 import {
@@ -55,9 +64,13 @@ export default function App() {
   const [spot, setSpot] = useState<SpotState | null>(null)
 
   const [mySpotsOpen, setMySpotsOpen] = useState(false)
-  const [personalSpots, setPersonalSpots] = useState<PersonalSpot[]>(() =>
-    loadPersonalSpots(),
+  const [initialPersonalSpots] = useState(loadPersonalSpotsState)
+  const [personalSpots, setPersonalSpots] = useState<PersonalSpot[]>(
+    initialPersonalSpots.spots,
   )
+  const [personalSpotFolders, setPersonalSpotFolders] = useState<
+    PersonalSpotFolder[]
+  >(initialPersonalSpots.folders)
   const [selectedPersonalSpotId, setSelectedPersonalSpotId] = useState<
     string | null
   >(null)
@@ -72,6 +85,16 @@ export default function App() {
   const [pendingSaveName, setPendingSaveName] = useState('')
   const [editingSpot, setEditingSpot] = useState<PersonalSpot | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [folderDialog, setFolderDialog] = useState<{
+    mode: 'create' | 'edit'
+    folder: PersonalSpotFolder | null
+  } | null>(null)
+  const [folderDialogName, setFolderDialogName] = useState('')
+  const [confirmDialog, setConfirmDialog] = useState<{
+    kind: 'spot' | 'folder'
+    id: string
+    name: string
+  } | null>(null)
 
   const observer = useMemo(() => {
     if (spot) {
@@ -116,8 +139,11 @@ export default function App() {
   const [timelapsePreviewPlaying, setTimelapsePreviewPlaying] = useState(false)
 
   useEffect(() => {
-    savePersonalSpots(personalSpots)
-  }, [personalSpots])
+    savePersonalSpotsState({
+      spots: personalSpots,
+      folders: personalSpotFolders,
+    })
+  }, [personalSpots, personalSpotFolders])
 
   useEffect(() => {
     installThreeGameTestHooks()
@@ -202,6 +228,15 @@ export default function App() {
     [timelineLon],
   )
 
+  const findSpotAt = useCallback(
+    (lat: number, lon: number) =>
+      personalSpots.find(
+        (row) =>
+          Math.abs(row.lat - lat) < 1e-6 && Math.abs(row.lon - lon) < 1e-6,
+      ) ?? null,
+    [personalSpots],
+  )
+
   const selectPersonalSpot = useCallback((saved: PersonalSpot) => {
     setSelectedPersonalSpotId(saved.id)
     setSpot({
@@ -214,15 +249,6 @@ export default function App() {
     setMode('orbit')
     setFlyToPersonalSpotId(saved.id)
   }, [])
-
-  const findSpotAt = useCallback(
-    (lat: number, lon: number) =>
-      personalSpots.find(
-        (row) =>
-          Math.abs(row.lat - lat) < 1e-6 && Math.abs(row.lon - lon) < 1e-6,
-      ) ?? null,
-    [personalSpots],
-  )
 
   const openSaveDialog = useCallback(
     (input: PendingSave) => {
@@ -319,37 +345,116 @@ export default function App() {
     setEditingName('')
   }, [editingSpot, editingName])
 
-  const deleteEditingSpot = useCallback(() => {
+  const requestDeleteEditingSpot = useCallback(() => {
     if (!editingSpot) return
-    const ok =
-      typeof window === 'undefined'
-        ? true
-        : window.confirm(`Supprimer « ${editingSpot.name} » ?`)
-    if (!ok) return
-    const id = editingSpot.id
-    setPersonalSpots((prev) => removePersonalSpot(prev, id))
-    if (selectedPersonalSpotId === id) setSelectedPersonalSpotId(null)
-    setEditingSpot(null)
-    setEditingName('')
-  }, [editingSpot, selectedPersonalSpotId])
+    setConfirmDialog({
+      kind: 'spot',
+      id: editingSpot.id,
+      name: editingSpot.name,
+    })
+  }, [editingSpot])
 
-  const onDeletePersonalSpot = useCallback(
-    (spotId: string) => {
-      const target = personalSpots.find((row) => row.id === spotId)
-      if (!target) return
-      const ok =
-        typeof window === 'undefined'
-          ? true
-          : window.confirm(`Supprimer « ${target.name} » ?`)
-      if (!ok) return
-      setPersonalSpots((prev) => removePersonalSpot(prev, spotId))
-      if (selectedPersonalSpotId === spotId) setSelectedPersonalSpotId(null)
-      if (editingSpot?.id === spotId) {
+  const onToggleSpotVisible = useCallback((spotId: string) => {
+    setPersonalSpots((prev) => {
+      const target = prev.find((row) => row.id === spotId)
+      if (!target) return prev
+      return setPersonalSpotVisible(prev, spotId, !target.visible)
+    })
+  }, [])
+
+  const onCreateFolder = useCallback(() => {
+    setFolderDialog({ mode: 'create', folder: null })
+    setFolderDialogName(`Dossier ${personalSpotFolders.length + 1}`)
+  }, [personalSpotFolders.length])
+
+  const onRenameFolder = useCallback((folder: PersonalSpotFolder) => {
+    setFolderDialog({ mode: 'edit', folder })
+    setFolderDialogName(folder.name)
+  }, [])
+
+  const commitFolderDialog = useCallback(() => {
+    if (!folderDialog) return
+    const fallback =
+      folderDialog.mode === 'create'
+        ? `Dossier ${personalSpotFolders.length + 1}`
+        : (folderDialog.folder?.name ?? 'Dossier')
+    const name = folderDialogName.trim() || fallback
+    if (folderDialog.mode === 'create') {
+      const folder = createPersonalSpotFolder({ name })
+      setPersonalSpotFolders((prev) => upsertPersonalSpotFolder(prev, folder))
+    } else if (folderDialog.folder) {
+      setPersonalSpotFolders((prev) =>
+        upsertPersonalSpotFolder(prev, {
+          ...folderDialog.folder!,
+          name,
+        }),
+      )
+    }
+    setFolderDialog(null)
+    setFolderDialogName('')
+  }, [folderDialog, folderDialogName, personalSpotFolders.length])
+
+  const requestDeleteFolderFromDialog = useCallback(() => {
+    if (!folderDialog?.folder) return
+    setConfirmDialog({
+      kind: 'folder',
+      id: folderDialog.folder.id,
+      name: folderDialog.folder.name,
+    })
+  }, [folderDialog])
+
+  const commitConfirmDialog = useCallback(() => {
+    if (!confirmDialog) return
+    if (confirmDialog.kind === 'spot') {
+      const id = confirmDialog.id
+      setPersonalSpots((prev) => removePersonalSpot(prev, id))
+      if (selectedPersonalSpotId === id) setSelectedPersonalSpotId(null)
+      if (editingSpot?.id === id) {
         setEditingSpot(null)
         setEditingName('')
       }
+    } else {
+      const next = removePersonalSpotFolder(
+        personalSpots,
+        personalSpotFolders,
+        confirmDialog.id,
+      )
+      setPersonalSpots(next.spots)
+      setPersonalSpotFolders(next.folders)
+      if (folderDialog?.folder?.id === confirmDialog.id) {
+        setFolderDialog(null)
+        setFolderDialogName('')
+      }
+    }
+    setConfirmDialog(null)
+  }, [
+    confirmDialog,
+    selectedPersonalSpotId,
+    editingSpot,
+    personalSpots,
+    personalSpotFolders,
+    folderDialog,
+  ])
+
+  const onToggleFolderVisible = useCallback((folderId: string) => {
+    setPersonalSpotFolders((prev) => {
+      const target = prev.find((row) => row.id === folderId)
+      if (!target) return prev
+      return setPersonalSpotFolderVisible(prev, folderId, !target.visible)
+    })
+  }, [])
+
+  const onMoveSpotToFolder = useCallback(
+    (spotId: string, folderId: string | null) => {
+      if (folderId != null) {
+        const exists = personalSpotFolders.some((row) => row.id === folderId)
+        if (!exists) return
+      }
+      setPersonalSpots((prev) =>
+        movePersonalSpotToFolder(prev, spotId, folderId),
+      )
     },
-    [personalSpots, selectedPersonalSpotId, editingSpot],
+    [personalSpotFolders],
   )
 
   const immersive = mode === 'ground' && spot != null
@@ -380,6 +485,9 @@ export default function App() {
   const mountImmersive = immersive || keepImmersiveMounted
   const showTimeline =
     (!immersive || immersiveTerrainReady) && !timelapsePreviewPlaying
+  const weatherLocation = spot
+    ? { lat: spot.lat, lon: spot.lon }
+    : null
 
   return (
     <div className="app">
@@ -404,16 +512,21 @@ export default function App() {
             setMode(next)
           }}
           onSpotChange={(next) => {
+            const moved =
+              !spot ||
+              Math.abs(spot.lat - next.lat) >= 1e-6 ||
+              Math.abs(spot.lon - next.lon) >= 1e-6
             setSpot(next)
-            setSelectedPersonalSpotId((currentId) => {
-              if (!currentId) return null
-              const saved = personalSpots.find((row) => row.id === currentId)
-              if (!saved) return null
-              const same =
-                Math.abs(saved.lat - next.lat) < 1e-6 &&
-                Math.abs(saved.lon - next.lon) < 1e-6
-              return same ? currentId : null
-            })
+            // Height-only DEM updates must not clear a saved selection.
+            if (!moved) return
+            const saved = selectedPersonalSpotId
+              ? personalSpots.find((row) => row.id === selectedPersonalSpotId)
+              : null
+            const same =
+              saved != null &&
+              Math.abs(saved.lat - next.lat) < 1e-6 &&
+              Math.abs(saved.lon - next.lon) < 1e-6
+            if (!same) setSelectedPersonalSpotId(null)
           }}
           onThreeDimensionalChange={setThreeDimensional}
           onBasemapModeChange={setBasemapMode}
@@ -426,6 +539,7 @@ export default function App() {
             if (open) setAddressSearchOpen(false)
           }}
           personalSpots={personalSpots}
+          personalSpotFolders={personalSpotFolders}
           selectedPersonalSpotId={selectedPersonalSpotId}
           personalSpotPicking={personalSpotPicking}
           onPlacePersonalSpot={onPlacePersonalSpot}
@@ -496,9 +610,7 @@ export default function App() {
             <WeatherCard
               date={date}
               playheadUtcMs={playheadUtcMs}
-              location={
-                spot ? { lat: spot.lat, lon: spot.lon } : null
-              }
+              location={weatherLocation}
               onHourSelect={(utcMs) => onPlayheadChange(utcMs)}
             />
           </div>
@@ -513,16 +625,15 @@ export default function App() {
             setPersonalSpotPicking(false)
           }}
           spots={personalSpots}
+          folders={personalSpotFolders}
           selectedId={selectedPersonalSpotId}
-          picking={personalSpotPicking}
-          onStartAdd={() => {
-            setPersonalSpotPicking(true)
-            setMySpotsOpen(true)
-          }}
-          onCancelAdd={() => setPersonalSpotPicking(false)}
           onSelect={selectPersonalSpot}
           onRename={openEditDialog}
-          onDelete={onDeletePersonalSpot}
+          onToggleSpotVisible={onToggleSpotVisible}
+          onCreateFolder={onCreateFolder}
+          onRenameFolder={onRenameFolder}
+          onToggleFolderVisible={onToggleFolderVisible}
+          onMoveSpotToFolder={onMoveSpotToFolder}
           onShowAll={() =>
             setShowAllPersonalSpotsToken((token) => token + 1)
           }
@@ -556,7 +667,42 @@ export default function App() {
             setEditingName('')
           }}
           onSubmit={commitEditingSpot}
-          onDelete={deleteEditingSpot}
+          onDelete={requestDeleteEditingSpot}
+        />
+      ) : null}
+
+      {!immersive && folderDialog ? (
+        <FolderSaveCard
+          mode={folderDialog.mode}
+          name={folderDialogName}
+          onNameChange={setFolderDialogName}
+          onClose={() => {
+            setFolderDialog(null)
+            setFolderDialogName('')
+          }}
+          onSubmit={commitFolderDialog}
+          onDelete={
+            folderDialog.mode === 'edit'
+              ? requestDeleteFolderFromDialog
+              : undefined
+          }
+        />
+      ) : null}
+
+      {!immersive && confirmDialog ? (
+        <ConfirmCard
+          title={
+            confirmDialog.kind === 'spot'
+              ? 'Supprimer le spot'
+              : 'Supprimer le dossier'
+          }
+          message={
+            confirmDialog.kind === 'spot'
+              ? `Supprimer « ${confirmDialog.name} » ? Cette action est définitive.`
+              : `Supprimer « ${confirmDialog.name} » ? Les spots seront conservés hors dossier.`
+          }
+          onConfirm={commitConfirmDialog}
+          onClose={() => setConfirmDialog(null)}
         />
       ) : null}
 

@@ -170,19 +170,25 @@
   overflow: hidden;
   color: var(--ui-text);
   font-family: var(--font-ui);
+  background: #0a0b10;
 }
 
-/* Stay laid out at full size while Three.js covers it. `display: none`
-   (`hidden`) collapses MapLibre to 0×0 and the enter/exit camera ease then
-   leaves spot markers off-screen. */
+/* Map shrinks for the right spots rail — same behavior as Photo Sightline.
+   Stay laid out at full size while Three.js covers it (`is-covered`):
+   `display: none` / `hidden` collapses MapLibre to 0×0. */
 .map-host {
   position: absolute;
-  inset: 0;
+  inset: 0 var(--map-rail-width) 0 0;
+  z-index: 1;
+  overflow: hidden;
+  transition: inset var(--motion-panel, 220ms) var(--motion-ease-out, ease);
 }
 
 .map-host.is-covered {
+  inset: 0;
   visibility: hidden;
   pointer-events: none;
+  transition: none;
 }
 
 .hud-btn {
@@ -901,7 +907,7 @@
   position: absolute;
   z-index: 3;
   top: var(--map-control-stack-inset);
-  right: calc(var(--map-control-stack-inset) + var(--map-rail-width));
+  right: var(--map-control-stack-inset);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1346,9 +1352,10 @@
   transition-delay: 0ms;
 }
 
+/* 3 actions on the top arc; save/edit alone at the bottom. */
 .spot-action-marker__spoke--street {
-  --x: -56.6px;
-  --y: -56.6px;
+  --x: -69.3px;
+  --y: -40px;
 }
 
 .spot-action-marker__spoke--sky-flat {
@@ -1358,8 +1365,8 @@
 }
 
 .spot-action-marker__spoke--immersive {
-  --x: 56.6px;
-  --y: -56.6px;
+  --x: 69.3px;
+  --y: -40px;
   --delay: 45ms;
 }
 
@@ -1477,6 +1484,21 @@
 .spot-action-marker__camera {
   opacity: 0;
   transform: rotate(-105deg) scale(0.4);
+}
+
+/* Working pin = active spot: camera chrome (no viewpoint toggle). */
+.spot-action-marker--active .spot-action-marker__center {
+  background-color: var(--ui-primary);
+}
+
+.spot-action-marker--active .spot-action-marker__pin {
+  opacity: 0;
+  transform: rotate(105deg) scale(0.3);
+}
+
+.spot-action-marker--active .spot-action-marker__camera {
+  opacity: 1;
+  transform: rotate(0) scale(1);
 }
 
 .spot-action-marker__close {
@@ -1624,6 +1646,7 @@
   z-index: 4;
   width: var(--map-rail-width);
   pointer-events: none;
+  background: #0a0b10;
 }
 
 .my-spots-rail__sheet {
@@ -1633,12 +1656,10 @@
   width: 100%;
   height: 100%;
   border-left: 1px solid var(--ov-stroke);
-  background: var(--surface-rail);
+  background: #12141a;
   box-shadow:
     -18px 0 48px rgba(0, 0, 0, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(22px) saturate(1.08);
-  -webkit-backdrop-filter: blur(22px) saturate(1.08);
   color: #f5f5f7;
   overflow: hidden;
   font-family: var(--font-ui);
@@ -1810,6 +1831,11 @@
   border-color: rgba(var(--ui-accent-rgb), 0.4);
 }
 
+.my-spots-tree {
+  display: grid;
+  gap: 10px;
+}
+
 .my-spots-list {
   list-style: none;
   margin: 0;
@@ -1818,20 +1844,168 @@
   gap: 6px;
 }
 
-.my-spots-row {
+.my-spots-list--nested {
+  margin-top: 6px;
+  padding-left: 8px;
+}
+
+.my-spots-folder {
+  margin: 0;
+  padding: 6px;
+  border: 1px dashed transparent;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.my-spots-folder--drop {
+  border-color: rgba(125, 222, 168, 0.45);
+  background: rgba(125, 222, 168, 0.1);
+}
+
+.my-spots-folder--hidden {
+  opacity: 0.72;
+}
+
+.my-spots-folder__row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 2px;
+  min-width: 0;
+}
+
+.my-spots-folder__toggle {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.my-spots-folder__toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.my-spots-folder__chevron {
+  width: 14px;
+  height: 14px;
+  color: rgba(255, 255, 255, 0.45);
+  transition: transform 120ms ease;
+}
+
+.my-spots-folder__chevron--open {
+  transform: rotate(90deg);
+}
+
+.my-spots-folder__icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.my-spots-folder__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.my-spots-folder__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.my-spots-folder__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.my-spots-folder__count {
+  flex-shrink: 0;
+  min-width: 1.4rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.my-spots-folder__empty {
+  margin: 6px 0 2px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.72rem;
+}
+
+.my-spots-root {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 4px;
+  border: 1px dashed transparent;
+  border-radius: 14px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.my-spots-root--drop {
+  border-color: rgba(125, 222, 168, 0.4);
+  background: rgba(125, 222, 168, 0.08);
+}
+
+.my-spots-root__label {
+  margin: 0;
+  padding: 0 6px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.my-spots-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px;
   margin: 0;
   padding: 4px 4px 4px 12px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   color: inherit;
+  cursor: grab;
   transition:
     background 120ms ease,
-    border-color 120ms ease;
+    border-color 120ms ease,
+    opacity 120ms ease;
+}
+
+.my-spots-row:active {
+  cursor: grabbing;
 }
 
 .my-spots-row:hover {
@@ -1842,6 +2016,10 @@
 .my-spots-row--selected {
   border-color: rgba(var(--ui-accent-rgb), 0.32);
   background: rgba(var(--ui-accent-rgb), 0.1);
+}
+
+.my-spots-row--hidden {
+  opacity: 0.55;
 }
 
 .my-spots-row__select {
@@ -1879,6 +2057,13 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
+.my-spots-row__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0;
+}
+
 .my-spots-row__edit {
   display: grid;
   place-items: center;
@@ -1890,19 +2075,16 @@
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.28);
-  opacity: 0;
+  color: rgba(255, 255, 255, 0.45);
+  opacity: 1;
   cursor: pointer;
   transition:
-    opacity 120ms ease,
     color 120ms ease,
     background 120ms ease;
 }
 
-.my-spots-row:hover .my-spots-row__edit,
-.my-spots-row--selected .my-spots-row__edit,
-.my-spots-row__edit:focus-visible {
-  opacity: 1;
+.my-spots-row__edit--off {
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .my-spots-row__edit svg {
@@ -2065,6 +2247,7 @@
   font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: -0.01em;
+  text-transform: none;
   color: #f5f5f7;
 }
 
@@ -2233,18 +2416,53 @@
 }
 
 .spot-save-card__delete:focus-visible,
+.spot-save-card__cancel:focus-visible,
 .spot-save-card__actions .control-panel__primary:focus-visible {
   outline: 2px solid var(--ui-focus-ring);
   outline-offset: 2px;
 }
 
+.spot-save-card__cancel {
+  min-height: 40px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--ov-stroke-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.spot-save-card__cancel:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.spot-save-card__delete--solid {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: var(--ui-action-danger-hover-bg);
+  color: var(--ui-action-danger-hover-text);
+}
+
+.spot-save-card__delete--solid:hover {
+  border-color: rgba(244, 63, 94, 0.5);
+  background: rgba(244, 63, 94, 0.28);
+  color: #ffe4e6;
+}
+
 @media (max-width: 720px) {
   .my-spots-rail {
     width: min(100vw, 320px);
-  }
-
-  .my-spots-row__edit {
-    opacity: 1;
   }
 }
 
@@ -5329,7 +5547,10 @@ html[data-qa-hide-chrome='1'] .render-diag {
   bottom: calc(16px + 7.5rem);
   left: 14px;
   z-index: 2;
-  width: min(var(--map-ui-reserve), calc(100% - 38px));
+  width: min(
+    var(--map-ui-reserve),
+    calc(100% - var(--map-rail-width) - 38px)
+  );
   display: flex;
   flex-direction: column;
   gap: 10px;

@@ -28,9 +28,11 @@ import { ensureNightShadeProtocol } from './nightShadeProtocol'
 import { ensureLightPollutionProtocol } from './lightPollution/lightPollutionProtocol'
 import { MapControlsStack } from './MapControlsStack'
 import {
+  filterMapVisiblePersonalSpots,
   fitPersonalSpots,
   renderPersonalSpotMarkers,
   type PersonalSpot,
+  type PersonalSpotFolder,
 } from './personalSpots'
 import { DEFAULT_MAP_VIEW } from './presets'
 import { skyPaletteFromSunAltitude } from './skyLighting'
@@ -120,6 +122,7 @@ type MapCanvasProps = {
   mySpotsOpen: boolean
   onMySpotsOpenChange: (open: boolean) => void
   personalSpots: PersonalSpot[]
+  personalSpotFolders: PersonalSpotFolder[]
   selectedPersonalSpotId: string | null
   personalSpotPicking: boolean
   onPlacePersonalSpot: (input: {
@@ -283,6 +286,7 @@ export function MapCanvas({
   mySpotsOpen,
   onMySpotsOpenChange,
   personalSpots,
+  personalSpotFolders,
   selectedPersonalSpotId,
   personalSpotPicking,
   onPlacePersonalSpot,
@@ -306,6 +310,7 @@ export function MapCanvas({
   const basemapModeRef = useRef(basemapMode)
   const personalSpotPickingRef = useRef(personalSpotPicking)
   const personalSpotsRef = useRef(personalSpots)
+  const personalSpotFoldersRef = useRef(personalSpotFolders)
   const selectedPersonalSpotIdRef = useRef(selectedPersonalSpotId)
   const onModeChangeRef = useRef(onModeChange)
   const onSpotChangeRef = useRef(onSpotChange)
@@ -325,6 +330,7 @@ export function MapCanvas({
   basemapModeRef.current = basemapMode
   personalSpotPickingRef.current = personalSpotPicking
   personalSpotsRef.current = personalSpots
+  personalSpotFoldersRef.current = personalSpotFolders
   selectedPersonalSpotIdRef.current = selectedPersonalSpotId
   onModeChangeRef.current = onModeChange
   onSpotChangeRef.current = onSpotChange
@@ -406,6 +412,14 @@ export function MapCanvas({
     if (import.meta.env.DEV) {
       ;(window as unknown as { __astroMap?: maplibregl.Map }).__astroMap = map
     }
+
+    const containerResizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            map.resize()
+          })
+        : null
+    containerResizeObserver?.observe(container)
 
     const readElevation = (lng: number, lat: number) => {
       if (!map.getTerrain()) return null
@@ -817,6 +831,8 @@ export function MapCanvas({
 
     return () => {
       window.clearInterval(elevTimer)
+      // Keep MapLibre in sync when the spots rail resizes the map stage.
+      containerResizeObserver?.disconnect()
       clearLongPressTimer()
       map.off('click', onMapClick)
       map.off('contextmenu', onMapContextMenu)
@@ -867,9 +883,13 @@ export function MapCanvas({
 
     const sync = () => {
       for (const marker of personalMarkersRef.current) marker.remove()
+      const mapVisible = filterMapVisiblePersonalSpots(
+        personalSpots,
+        personalSpotFolders,
+      )
       personalMarkersRef.current = renderPersonalSpotMarkers(
         map,
-        personalSpots,
+        mapVisible,
         selectedPersonalSpotId,
         (saved) => onSelectPersonalSpotRef.current(saved),
       )
@@ -887,25 +907,26 @@ export function MapCanvas({
       for (const marker of personalMarkersRef.current) marker.remove()
       personalMarkersRef.current = []
     }
-  }, [personalSpots, selectedPersonalSpotId])
+  }, [personalSpots, personalSpotFolders, selectedPersonalSpotId])
 
   useEffect(() => {
     const ui = markerUiRef.current
-    if (!ui) return
-    const current = spot
-    if (!current) {
-      ui.setSaved(false)
-      ui.setLabel(null)
+    if (!spot) {
+      ui?.destroy()
+      markerUiRef.current = null
+      markerRef.current?.remove()
+      markerRef.current = null
       return
     }
+    if (!ui) return
     const match =
       (selectedPersonalSpotId
         ? personalSpots.find((row) => row.id === selectedPersonalSpotId)
         : null) ??
       personalSpots.find(
         (row) =>
-          Math.abs(row.lat - current.lat) < 1e-6 &&
-          Math.abs(row.lon - current.lon) < 1e-6,
+          Math.abs(row.lat - spot.lat) < 1e-6 &&
+          Math.abs(row.lon - spot.lon) < 1e-6,
       ) ??
       null
     ui.setSaved(Boolean(match))
@@ -926,7 +947,12 @@ export function MapCanvas({
 
   useEffect(() => {
     if (showAllPersonalSpotsToken <= 0) return
-    apiRef.current?.showAllPersonalSpots(personalSpotsRef.current)
+    apiRef.current?.showAllPersonalSpots(
+      filterMapVisiblePersonalSpots(
+        personalSpotsRef.current,
+        personalSpotFoldersRef.current,
+      ),
+    )
   }, [showAllPersonalSpotsToken])
 
   useEffect(() => {

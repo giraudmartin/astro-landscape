@@ -1,4 +1,4 @@
-/** Radial spot-action marker — same chrome as Photo Sightline, Astro actions. */
+/** Radial spot-action marker — working pin is always the active spot. */
 
 export type SpotActionMarkerActions = {
   onMenuOpen?: () => void
@@ -91,7 +91,8 @@ export function createSpotActionMarkerElement(
 ): SpotActionMarkerController {
   let currentLabels = labels
   const element = document.createElement('div')
-  element.className = 'spot-action-marker'
+  // Working pin is always the active spot — camera chrome, no viewpoint toggle.
+  element.className = 'spot-action-marker spot-action-marker--active'
   element.setAttribute('role', 'group')
   element.setAttribute('aria-label', currentLabels.group)
   element.innerHTML = `

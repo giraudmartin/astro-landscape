@@ -931,4 +931,212 @@ button.moon-preview-timeline__mark--button:hover .moon-preview-timeline__mark-do
   background: var(--event-moonset-bright);
 }
 
+/* Laptop densify — keep one horizontal controls row. */
+@media (max-width: 1440px) and (min-width: 1025px) {
+  .moon-timeline-dock {
+    bottom: 12px;
+    gap: 8px;
+    padding: 10px 12px 9px;
+    border-radius: 16px;
+  }
+
+  .moon-timeline-dock__controls {
+    grid-template-columns: auto 1fr auto;
+    justify-items: stretch;
+    gap: 8px;
+  }
+
+  .moon-timeline-dock__controls-left,
+  .moon-timeline-dock__controls-right {
+    width: auto;
+    gap: 6px;
+  }
+
+  .moon-timeline-dock__datetime {
+    gap: 8px;
+  }
+
+  .moon-timeline-dock__date,
+  .moon-timeline-dock__time {
+    font-size: 0.9rem;
+  }
+
+  .moon-timeline-dock__time-main {
+    padding: 2px 8px;
+  }
+
+  .moon-timeline-dock__time-shot {
+    font-size: 0.6rem;
+  }
+
+  .moon-timeline-dock__icon-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 0.8rem;
+  }
+
+  .moon-timeline-dock__ephemeris {
+    gap: 4px 12px;
+    padding: 5px 10px;
+    border-radius: 10px;
+    font-size: 0.66rem;
+  }
+
+  .moon-preview-timeline {
+    gap: 5px;
+  }
+
+  .moon-preview-timeline__legend {
+    gap: 5px 10px;
+    font-size: 0.62rem;
+  }
+
+  .moon-preview-timeline__legend-mark {
+    width: 7px;
+    height: 7px;
+  }
+}
+
+@media (max-width: 1024px) and (min-width: 721px) {
+  .moon-timeline-dock {
+    bottom: 12px;
+    gap: 7px;
+    padding: 10px 12px 9px;
+    border-radius: 16px;
+    width: min(
+      var(--timeline-dock-max),
+      calc(100vw - var(--viewfinder-rail-width) - var(--map-rail-width) - 20px)
+    );
+  }
+
+  .moon-timeline-dock__controls {
+    grid-template-columns: auto 1fr auto;
+    justify-items: stretch;
+    gap: 8px;
+  }
+
+  .moon-timeline-dock__controls-left,
+  .moon-timeline-dock__controls-right {
+    width: auto;
+    gap: 6px;
+  }
+
+  .moon-timeline-dock__date,
+  .moon-timeline-dock__time {
+    font-size: 0.88rem;
+  }
+
+  .moon-timeline-dock__icon-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 0.82rem;
+  }
+
+  .moon-timeline-dock__ephemeris {
+    gap: 4px 10px;
+    padding: 5px 10px;
+    font-size: 0.64rem;
+  }
+
+  .moon-preview-timeline__legend {
+    gap: 5px 10px;
+    font-size: 0.6rem;
+  }
+}
+
+@container timeline-dock (max-width: 280px) {
+  .moon-timeline-dock__controls {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 8px;
+  }
+
+  .moon-timeline-dock__controls-left,
+  .moon-timeline-dock__controls-right {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .moon-timeline-dock__ephemeris span {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 720px) {
+  .moon-timeline-dock {
+    bottom: var(--mobile-dock-bottom, max(10px, env(safe-area-inset-bottom, 0px)));
+    left: 50%;
+    width: min(calc(100vw - 12px), 100%);
+    gap: 4px;
+    padding: 7px 10px 8px;
+    border-radius: 14px;
+  }
+
+  .moon-timeline-dock__controls {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 4px;
+  }
+
+  .moon-timeline-dock__controls-left,
+  .moon-timeline-dock__controls-right {
+    gap: 4px;
+  }
+
+  .moon-timeline-dock__datetime {
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .moon-timeline-dock__date,
+  .moon-timeline-dock__time {
+    font-size: 0.78rem;
+  }
+
+  .moon-timeline-dock__time-main {
+    padding: 2px 7px;
+  }
+
+  .moon-timeline-dock__icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .moon-timeline-dock__ephemeris {
+    gap: 4px 8px;
+    padding: 3px 8px;
+    font-size: 0.58rem;
+    justify-content: center;
+  }
+
+  .moon-preview-timeline--compact .moon-preview-timeline__viewport {
+    height: 52px;
+  }
+
+  .moon-preview-timeline--compact .moon-preview-timeline__mark-label {
+    top: 18px;
+    font-size: 0.58rem;
+  }
+
+  /* Scrub the bar — no side < > nudges on phone. */
+  .moon-preview-timeline__row {
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+  }
+
+  .moon-preview-timeline__row--no-zoom {
+    grid-template-columns: 1fr;
+  }
+
+  .moon-preview-timeline__chevron {
+    display: none;
+  }
+
+  .moon-preview-timeline__legend {
+    display: none;
+  }
+
+  .moon-timeline-dock__collapsed {
+    bottom: var(--mobile-dock-bottom, max(10px, env(safe-area-inset-bottom, 0px)));
+  }
+}
 

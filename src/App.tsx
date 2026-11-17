@@ -4,10 +4,12 @@ import { ImmersiveView } from './ImmersiveView'
 import { MapCanvas, type CameraMode, type SpotState } from './MapCanvas'
 import { ConfirmCard } from './ConfirmCard'
 import { FolderSaveCard } from './FolderSaveCard'
+import { MobileTopDrawer } from './MobileTopDrawer'
 import { MySpotsRail } from './MySpotsCard'
 import { OverviewCard } from './OverviewCard'
 import { SpotSaveCard } from './SpotSaveCard'
 import { TimelineDock } from './TimelineDock'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 import { WeatherCard } from './WeatherCard'
 import {
   civilDateFromUtc,
@@ -51,6 +53,7 @@ type PendingSave = {
 
 export default function App() {
   const savedMap = useMemo(() => loadAppSettings().map, [])
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const [mode, setMode] = useState<CameraMode>('orbit')
   /** Immersive without DEM — flat disc for fast sky testing. */
   const [flatTerrain, setFlatTerrain] = useState(false)
@@ -62,6 +65,7 @@ export default function App() {
   )
   const [addressSearchOpen, setAddressSearchOpen] = useState(false)
   const [spot, setSpot] = useState<SpotState | null>(null)
+  const [infoDrawerOpen, setInfoDrawerOpen] = useState(false)
 
   const [mySpotsOpen, setMySpotsOpen] = useState(false)
   const [initialPersonalSpots] = useState(loadPersonalSpotsState)
@@ -189,14 +193,19 @@ export default function App() {
 
   useEffect(() => {
     const root = document.documentElement
+    // Phone sheets overlay the map — do not inset the stage.
     root.style.setProperty(
       '--map-rail-width',
-      mySpotsOpen ? `${MAP_RAIL_WIDTH_PX}px` : '0px',
+      mySpotsOpen && !isPhone ? `${MAP_RAIL_WIDTH_PX}px` : '0px',
     )
     return () => {
       root.style.setProperty('--map-rail-width', '0px')
     }
-  }, [mySpotsOpen])
+  }, [mySpotsOpen, isPhone])
+
+  useEffect(() => {
+    if (!isPhone) setInfoDrawerOpen(false)
+  }, [isPhone])
 
   const onFlyToPersonalSpotHandled = useCallback(
     () => setFlyToPersonalSpotId(null),
@@ -458,6 +467,11 @@ export default function App() {
   )
 
   const immersive = mode === 'ground' && spot != null
+
+  useEffect(() => {
+    if (immersive) setInfoDrawerOpen(false)
+  }, [immersive])
+
   /**
    * Keep the last immersive Three.js scene mounted (hidden) while the user is
    * back on the map at the SAME spot — quit→relaunch must not rebuild terrain.
@@ -536,7 +550,10 @@ export default function App() {
           onMySpotsOpenChange={(open) => {
             setMySpotsOpen(open)
             if (!open) setPersonalSpotPicking(false)
-            if (open) setAddressSearchOpen(false)
+            if (open) {
+              setAddressSearchOpen(false)
+              setInfoDrawerOpen(false)
+            }
           }}
           personalSpots={personalSpots}
           personalSpotFolders={personalSpotFolders}
@@ -595,7 +612,45 @@ export default function App() {
         </div>
       ) : null}
 
-      {!immersive ? (
+      {!immersive && isPhone ? (
+        <MobileTopDrawer
+          open={infoDrawerOpen}
+          onOpenChange={(open) => {
+            setInfoDrawerOpen(open)
+            if (open) {
+              setMySpotsOpen(false)
+              setPersonalSpotPicking(false)
+              setAddressSearchOpen(false)
+            }
+          }}
+        >
+          <section className="mobile-top-drawer__section">
+            <h3 className="mobile-top-drawer__section-title">Overview</h3>
+            <OverviewCard
+              lat={observer.lat}
+              lon={observer.lon}
+              elevationM={observer.elevationM}
+              date={date}
+              playheadUtcMs={playheadUtcMs}
+              onDateChange={onDateChange}
+              onPlayheadChange={onPlayheadChange}
+              embedded
+            />
+          </section>
+          <section className="mobile-top-drawer__section mobile-top-drawer__section--weather">
+            <h3 className="mobile-top-drawer__section-title">Météo</h3>
+            <WeatherCard
+              date={date}
+              playheadUtcMs={playheadUtcMs}
+              location={weatherLocation}
+              embedded
+              onHourSelect={(utcMs) => onPlayheadChange(utcMs)}
+            />
+          </section>
+        </MobileTopDrawer>
+      ) : null}
+
+      {!immersive && !isPhone ? (
         <div className="map-ui" aria-label="Aperçu et météo">
           <div className="ov-anchor">
             <OverviewCard

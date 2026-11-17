@@ -1,4 +1,5 @@
 import { useMemo, useState, type DragEvent } from 'react'
+import { MobileRailChrome } from './MobileRailChrome'
 import type { PersonalSpot, PersonalSpotFolder } from './personalSpots'
 
 type MySpotsToggleProps = {
@@ -362,7 +363,7 @@ export function MySpotsRail({
       role="complementary"
       aria-label="Mes spots"
     >
-      <div className="my-spots-rail__sheet">
+      <MobileRailChrome onClose={onClose} sheetClassName="my-spots-rail__sheet">
         <header className="my-spots-rail__header">
           <div>
             <h2 className="my-spots-rail__title">
@@ -584,7 +585,7 @@ export function MySpotsRail({
             )}
           </div>
         </div>
-      </div>
+      </MobileRailChrome>
     </aside>
   )
 }

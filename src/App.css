@@ -181,6 +181,9 @@
   inset: 0 var(--map-rail-width) 0 0;
   z-index: 1;
   overflow: hidden;
+  /* inline-size only — `size` containment can leave a dead strip on the stage. */
+  container-type: inline-size;
+  container-name: map-stage;
   transition: inset var(--motion-panel, 220ms) var(--motion-ease-out, ease);
 }
 
@@ -2458,12 +2461,6 @@
   border-color: rgba(244, 63, 94, 0.5);
   background: rgba(244, 63, 94, 0.28);
   color: #ffe4e6;
-}
-
-@media (max-width: 720px) {
-  .my-spots-rail {
-    width: min(100vw, 320px);
-  }
 }
 
 /* —— Immersive Three viewfinder —— */
@@ -6694,19 +6691,621 @@ button.ov-capsule:hover {
   outline-offset: 2px;
 }
 
-@media (max-width: 900px) {
+/* Laptop desktop only (1025–1440): densify Operate chrome.
+   Wide (>1440) untouched; tablet/phone use their own bands below. */
+@media (max-width: 1440px) and (min-width: 1025px) {
   :root {
     --map-ui-reserve: 268px;
+    --map-fab-reserve: 64px;
+    --map-control-size: 44px;
+    --map-control-icon: 20px;
+    --map-control-stack-gap: 12px;
+    --map-control-stack-inset: 12px;
+    --timeline-dock-max: 640px;
   }
+
+  .map-quick-actions__3d {
+    font-size: 0.78rem;
+  }
+
+  .map-ui {
+    top: 12px;
+    left: 12px;
+    bottom: 86px;
+    gap: 8px;
+  }
+
+  .map-card {
+    padding: 10px 11px 9px;
+    border-radius: 14px;
+  }
+
+  .map-card--overview {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .map-card--overview .map-card__header {
+    margin-bottom: 10px;
+  }
+
+  .map-card--overview .map-card__title {
+    font-size: 0.82rem;
+  }
+
+  .map-card__title {
+    font-size: 0.65rem;
+  }
+
+  .map-card__toggle-icon,
+  .map-card__toggle-icon svg,
+  .weather-card__collapse,
+  .weather-card__collapse svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .ov {
+    gap: 8px;
+  }
+
+  .ov-hint {
+    font-size: 0.7rem;
+  }
+
+  .ov-capsule {
+    gap: 9px;
+    padding: 8px 11px;
+    border-radius: 12px;
+  }
+
+  .ov-capsule--date {
+    min-height: 40px;
+  }
+
+  .ov-capsule--phase {
+    padding: 9px 11px;
+  }
+
+  .ov-capsule__main {
+    font-size: 0.86rem;
+  }
+
+  .ov-capsule__meta {
+    font-size: 0.68rem;
+  }
+
+  .ov-capsule__action {
+    font-size: 0.64rem;
+  }
+
+  .ov-capsule--phase .moon-phase-disc {
+    width: 28px;
+    height: 28px;
+  }
+
+  .ov-schedule {
+    margin-top: 2px;
+    padding: 4px;
+    gap: 2px;
+    border-radius: 12px;
+  }
+
+  .ov-schedule__row,
+  .ov-schedule__row--button {
+    column-gap: 9px;
+    padding: 7px 9px;
+    border-radius: 8px;
+  }
+
+  .ov-schedule__time {
+    min-width: 2.8rem;
+    font-size: 0.78rem;
+  }
+
+  .ov-schedule__kind {
+    font-size: 0.72rem;
+  }
+
+  .weather-card {
+    padding: 6px;
+  }
+
+  .weather-card__header {
+    min-height: 26px;
+    padding: 3px 3px 4px;
+  }
+
+  .weather-card__title {
+    font-size: 12px;
+  }
+
+  .weather-card__header-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .weather-card__panel {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .weather-card__coverline strong {
+    font-size: 22px;
+    letter-spacing: -0.9px;
+  }
+
+  .weather-card__icon--large {
+    width: 34px;
+    height: 34px;
+  }
+
+  .weather-card__glyph {
+    width: 14px;
+    height: 14px;
+  }
+
+  .weather-card__hour {
+    gap: 6px;
+    padding: 6px 0;
+  }
+
+  .weather-card__description {
+    white-space: normal;
+  }
+
+  .weather-card__stack {
+    gap: 6px;
+  }
+
+  .map-address-search {
+    width: min(
+      240px,
+      calc(
+        100vw - var(--viewfinder-rail-width) - var(--map-rail-width) -
+          var(--map-ui-reserve) - var(--map-fab-reserve) - 24px
+      )
+    );
+    padding: 12px;
+    gap: 8px;
+  }
+}
+
+/* When rails squeeze the map stage, shrink left stack further. */
+@container map-stage (max-width: 900px) {
+  .map-ui {
+    width: min(280px, calc(100% - 32px));
+    bottom: 108px;
+  }
+}
+
+@container map-stage (max-width: 720px) {
+  .map-ui {
+    width: min(260px, calc(100% - 28px));
+  }
+
+  .map-address-search {
+    width: min(240px, calc(100cqw - var(--map-fab-reserve) - 16px));
+  }
+}
+
+/* Tablet Operate (721–1024): densify, keep left stack beside the map. */
+@media (max-width: 1024px) and (min-width: 721px) {
+  :root {
+    --map-ui-reserve: 248px;
+    --map-fab-reserve: 64px;
+    --map-control-size: 44px;
+    --map-control-icon: 20px;
+    --map-control-stack-gap: 12px;
+    --map-control-stack-inset: 10px;
+    --timeline-dock-max: 560px;
+  }
+
+  .map-quick-actions__3d {
+    font-size: 0.78rem;
+  }
+
+  .map-ui {
+    top: 10px;
+    left: 10px;
+    right: auto;
+    bottom: 100px;
+    width: min(var(--map-ui-reserve), calc(100% - 78px));
+    gap: 8px;
+  }
+
+  .map-card {
+    padding: 10px 11px 9px;
+    border-radius: 14px;
+  }
+
+  .map-card--overview {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .map-card--overview .map-card__header {
+    margin-bottom: 10px;
+  }
+
+  .map-card--overview .map-card__title {
+    font-size: 0.84rem;
+  }
+
+  .ov {
+    gap: 8px;
+  }
+
+  .ov-capsule {
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+
+  .ov-capsule--date {
+    min-height: 42px;
+  }
+
+  .ov-capsule__main {
+    font-size: 0.84rem;
+  }
+
+  .ov-capsule__action {
+    font-size: 0.64rem;
+  }
+
+  .ov-schedule__row,
+  .ov-schedule__row--button {
+    column-gap: 8px;
+    padding: 8px 9px;
+  }
+
+  .ov-schedule__time {
+    font-size: 0.8rem;
+  }
+
+  .ov-schedule__kind {
+    font-size: 0.74rem;
+  }
+
+  .weather-card {
+    padding: 6px;
+  }
+
+  .weather-card__title {
+    font-size: 12px;
+  }
+
+  .weather-card__description {
+    white-space: normal;
+  }
+
+  .map-address-search {
+    width: min(
+      220px,
+      calc(
+        100vw - var(--viewfinder-rail-width) - var(--map-rail-width) -
+          var(--map-ui-reserve) - var(--map-fab-reserve) - 20px
+      )
+    );
+    padding: 12px;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 721px) {
+  .moon-timeline-dock__icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .weather-card__header {
+    min-height: 44px;
+  }
+
+  .weather-card__collapse {
+    width: 44px;
+    height: 44px;
+    place-items: center;
+  }
+}
+
+.u-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* —— Phone info drawer (ported from Photo Sightline) —— */
+.mobile-top-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 86;
+  pointer-events: none;
+  --mtd-open-h: 72dvh;
+  --mtd-offset: -72dvh;
+}
+
+.mobile-top-drawer__backdrop {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #04080c;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.mobile-top-drawer__panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--mtd-open-h);
+  transform: translateY(var(--mtd-offset));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--ov-stroke);
+  border-top: 0;
+  border-radius: 0 0 18px 18px;
+  background: var(--surface-float-glass, rgba(14, 18, 24, 0.94));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(22px) saturate(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  color: #f5f5f7;
+  pointer-events: auto;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-bottom: 26px;
+}
+
+.mobile-top-drawer__panel.is-dragging {
+  transition: none;
+}
+
+.mobile-top-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 10px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-top-drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mobile-top-drawer__section-title {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.weather-card--embedded {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+}
+
+.mobile-top-drawer__section--weather .weather-card--embedded {
+  margin: 0;
+}
+
+.mobile-top-drawer .ov {
+  gap: 12px;
+}
+
+.mobile-top-drawer .ov-capsule {
+  padding: 13px 16px;
+}
+
+.mobile-top-drawer .ov-capsule--date {
+  min-height: 52px;
+}
+
+.mobile-top-drawer .ov-capsule--phase {
+  padding: 14px 16px;
+}
+
+.mobile-top-drawer .ov-schedule {
+  margin-top: 2px;
+  padding: 8px;
+  gap: 5px;
+}
+
+.mobile-top-drawer .ov-schedule__row,
+.mobile-top-drawer .ov-schedule__row--button {
+  padding: 12px 13px;
+  column-gap: 14px;
+}
+
+.mobile-top-drawer .weather-card--embedded .weather-card__panel,
+.mobile-top-drawer .weather-card--embedded .weather-card__message {
+  padding: 14px 16px;
+}
+
+.mobile-top-drawer .weather-card--embedded .weather-card__content-inner {
+  padding: 4px 0 2px;
+}
+
+.mobile-top-drawer__tab {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--mtd-open-h) + var(--mtd-offset) - 2px);
+  transform: translateX(-50%);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 10px 18px 8px;
+  border: 0;
+  border-radius: 0 0 12px 12px;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.mobile-top-drawer__tab:active {
+  cursor: grabbing;
+}
+
+.mobile-top-drawer:not(.is-open) .mobile-top-drawer__tab {
+  top: max(0px, env(safe-area-inset-top, 0px));
+  padding: 4px 16px 10px;
+  background: rgba(14, 16, 22, 0.82);
+  border: 1px solid var(--ui-border);
+  border-top: 0;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.mobile-top-drawer__tab-bar {
+  display: block;
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.mobile-rail-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(4, 8, 12, 0.45);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.mobile-rail-handle {
+  touch-action: none;
+  cursor: grab;
+  padding: 8px 12px 6px;
+  flex: 0 0 auto;
+}
+
+.mobile-rail-handle:active {
+  cursor: grabbing;
+}
+
+.mobile-rail-handle__bar {
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 @media (max-width: 720px) {
   :root {
     --map-ui-reserve: 0px;
+    --timeline-dock-max: 100%;
+    --map-fab-reserve: 56px;
+    --map-control-size: 42px;
+    --map-control-icon: 19px;
+    --map-control-stack-gap: 18px;
+    --map-control-stack-inset: max(14px, env(safe-area-inset-right, 0px));
+    --mobile-dock-bottom: max(10px, env(safe-area-inset-bottom, 0px));
   }
 
   .map-ui {
     display: none;
+  }
+
+  .map-controls-stack {
+    top: max(14px, env(safe-area-inset-top, 0px));
+    right: var(--map-control-stack-inset);
+    z-index: 30;
+  }
+
+  .map-quick-actions {
+    border-radius: 999px;
+  }
+
+  .map-quick-actions__button {
+    width: var(--map-control-size);
+    height: var(--map-control-size);
+  }
+
+  /* Full-bleed bottom sheet over the map (PS phone rails). */
+  .my-spots-rail {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    width: 100%;
+    pointer-events: none;
+    background: transparent;
+  }
+
+  .my-spots-rail__sheet {
+    pointer-events: auto;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    z-index: 1;
+    height: min(92dvh, calc(100dvh - 8px));
+    max-height: min(92dvh, calc(100dvh - 8px));
+    border-left: 0;
+    border-top: 1px solid var(--ov-stroke);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    padding-top: 0;
+    animation: none;
+  }
+
+  .my-spots-rail__sheet.is-dragging {
+    transition: none !important;
+  }
+
+  .my-spots-rail__close {
+    display: none !important;
+  }
+
+  html.info-drawer-open .map-compass,
+  html.info-drawer-open .map-quick-actions-cluster,
+  html.info-drawer-open .map-controls-stack .my-spots-control,
+  html.info-drawer-open .moon-timeline-dock,
+  html.info-drawer-open .moon-timeline-dock__collapsed {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .immersive__chrome--left {
+    top: max(12px, env(safe-area-inset-top, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+  }
+
+  .immersive-dock {
+    width: min(188px, calc(100vw - 20px));
   }
 }
 

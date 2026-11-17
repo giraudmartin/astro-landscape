@@ -19,6 +19,8 @@ type OverviewCardProps = {
   playheadUtcMs: number
   onDateChange: (date: string) => void
   onPlayheadChange: (utcMs: number) => void
+  /** Phone info drawer: bare body without the MapCard chrome. */
+  embedded?: boolean
 }
 
 function formatOverviewDate(isoDate: string): string {
@@ -43,6 +45,7 @@ export function OverviewCard({
   playheadUtcMs,
   onDateChange,
   onPlayheadChange,
+  embedded = false,
 }: OverviewCardProps) {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const dateBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -92,64 +95,69 @@ export function OverviewCard({
     onPlayheadChange(utcMs)
   }
 
+  const body = (
+    <div className="ov">
+      {dateCapsule}
+      <div className="ov-capsule ov-capsule--phase">
+        <MoonPhaseDisc
+          illuminationFraction={dayInfo.illuminationPercent / 100}
+          waxing={dayInfo.waxing}
+          label={`${dayInfo.phaseLabel}, ${illuminatedLabel}`}
+        />
+        <div className="ov-capsule__copy">
+          <p className="ov-capsule__main">{dayInfo.phaseLabel}</p>
+          <p className="ov-capsule__meta">{illuminatedLabel}</p>
+          <p className="ov-capsule__meta">{moonInNightLabel}</p>
+        </div>
+      </div>
+      {schedule.length === 0 ? (
+        <p className="ov-hint">
+          Aucun lever/coucher soleil ou Lune pour cette date.
+        </p>
+      ) : (
+        <ol className="ov-schedule" aria-label="Horaires du jour">
+          {schedule.map((row) => {
+            const active = activeKind === row.kind
+            return (
+              <li key={`${row.kind}-${row.datetimeUtc}`}>
+                <button
+                  type="button"
+                  className={
+                    active
+                      ? 'ov-schedule__row ov-schedule__row--button ov-schedule__row--active'
+                      : 'ov-schedule__row ov-schedule__row--button'
+                  }
+                  onClick={() => selectEvent(row.datetimeUtc)}
+                >
+                  <time className="ov-schedule__time">
+                    {row.datetimeLocal}
+                  </time>
+                  <span className="ov-schedule__kind">{row.label}</span>
+                  <span className="ov-schedule__chip-spacer" aria-hidden />
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+    </div>
+  )
+
   return (
     <>
-      <MapCard
-        title="Overview"
-        className="map-card--overview"
-        collapsible
-        glow
-        collapsedSummary={dateCapsule}
-      >
-        <div className="ov">
-          {dateCapsule}
-          <div className="ov-capsule ov-capsule--phase">
-            <MoonPhaseDisc
-              illuminationFraction={dayInfo.illuminationPercent / 100}
-              waxing={dayInfo.waxing}
-              label={`${dayInfo.phaseLabel}, ${illuminatedLabel}`}
-            />
-            <div className="ov-capsule__copy">
-              <p className="ov-capsule__main">{dayInfo.phaseLabel}</p>
-              <p className="ov-capsule__meta">{illuminatedLabel}</p>
-              <p className="ov-capsule__meta">{moonInNightLabel}</p>
-            </div>
-          </div>
-          {schedule.length === 0 ? (
-            <p className="ov-hint">
-              Aucun lever/coucher soleil ou Lune pour cette date.
-            </p>
-          ) : (
-            <ol className="ov-schedule" aria-label="Horaires du jour">
-              {schedule.map((row) => {
-                const active = activeKind === row.kind
-                return (
-                  <li key={`${row.kind}-${row.datetimeUtc}`}>
-                    <button
-                      type="button"
-                      className={
-                        active
-                          ? 'ov-schedule__row ov-schedule__row--button ov-schedule__row--active'
-                          : 'ov-schedule__row ov-schedule__row--button'
-                      }
-                      onClick={() => selectEvent(row.datetimeUtc)}
-                    >
-                      <time className="ov-schedule__time">
-                        {row.datetimeLocal}
-                      </time>
-                      <span className="ov-schedule__kind">{row.label}</span>
-                      <span
-                        className="ov-schedule__chip-spacer"
-                        aria-hidden
-                      />
-                    </button>
-                  </li>
-                )
-              })}
-            </ol>
-          )}
-        </div>
-      </MapCard>
+      {embedded ? (
+        body
+      ) : (
+        <MapCard
+          title="Overview"
+          className="map-card--overview"
+          collapsible
+          glow
+          collapsedSummary={dateCapsule}
+        >
+          {body}
+        </MapCard>
+      )}
 
       <CalendarPopover
         open={calendarOpen}

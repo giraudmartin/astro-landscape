@@ -566,12 +566,13 @@ export function createAstroSkyDome(): AstroSkyDome {
   mesh.renderOrder = 10
 
   // Fullscreen overlay — never in the main scene (stereo sphere = tuiles).
+  // depthTest against the kept terrain buffer so mountains stay in front.
   const lpGeometry = new THREE.PlaneGeometry(2, 2)
   const lightPollutionMaterial = new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
     transparent: true,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true,
     fog: false,
     toneMapped: false,
     blending: THREE.AdditiveBlending,
@@ -587,13 +588,26 @@ export function createAstroSkyDome(): AstroSkyDome {
       uLpResolution: { value: new THREE.Vector2(1, 1) },
       uLpNdcScale: { value: new THREE.Vector2(1, 1) },
       uLpInvMv: { value: new THREE.Matrix3() },
+      uLpCameraFar: { value: 450_000 },
     },
     vertexShader: /* glsl */ `
+      uniform float uLpCameraFar;
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        varying float vFragDepth;
+      #endif
       void main() {
-        gl_Position = vec4(position.xy, 0.0, 1.0);
+        // NDC fullscreen; log-depth forced to camera far so terrain wins.
+        gl_Position = vec4(position.xy, 1.0, 1.0);
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          vFragDepth = 1.0 + max(uLpCameraFar, 1.0);
+        #endif
       }
     `,
     fragmentShader: /* glsl */ `
+      #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        uniform float logDepthBufFC;
+        varying float vFragDepth;
+      #endif
       uniform float uStelMode;
       uniform float uSunAltitude;
       uniform float uEyeElevM;
@@ -601,6 +615,9 @@ export function createAstroSkyDome(): AstroSkyDome {
       ${LIGHT_POLLUTION_GLSL}
 
       void main() {
+        #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+          gl_FragDepth = log2(vFragDepth) * logDepthBufFC * 0.5;
+        #endif
         vec3 v = lpDirFromScreen();
         float alt = uSunAltitude;
         float hEye = max(uEyeElevM, 0.0);
@@ -774,7 +791,7 @@ export const LP_IMMERSIVE_DOME_SIGMA_DEG = 16
 const _lpInvMv = new THREE.Matrix3()
 const _lpDrawSize = new THREE.Vector2()
 
-/** Sync screen-ray uniforms — call immediately before overlay draw. */
+/** Sync screen-ray + far-depth uniforms — call immediately before overlay draw. */
 export function syncImmersiveLpScreenUniforms(
   sky: AstroSkyDome,
   renderer: THREE.WebGLRenderer,
@@ -786,14 +803,20 @@ export function syncImmersiveLpScreenUniforms(
   camera.updateMatrixWorld(true)
   _lpInvMv.setFromMatrix4(camera.matrixWorld)
   ;(u.uLpInvMv.value as THREE.Matrix3).copy(_lpInvMv)
-  const p = (camera as THREE.PerspectiveCamera).projectionMatrix.elements
+  const persp = camera as THREE.PerspectiveCamera
+  const p = persp.projectionMatrix.elements
   const sx = Math.abs(p[0]!) > 1e-8 ? 1 / p[0]! : 1
   const sy = Math.abs(p[5]!) > 1e-8 ? 1 / p[5]! : 1
   ;(u.uLpNdcScale.value as THREE.Vector2).set(sx, sy)
+  u.uLpCameraFar.value =
+    typeof persp.far === 'number' && Number.isFinite(persp.far)
+      ? Math.max(persp.far, 1)
+      : 450_000
 }
 
 /**
- * Draw LP after the main/cubemap frame. Must not live in the warped scene.
+ * Draw LP after the main/cubemap frame. Keeps the color/depth buffers —
+ * terrain depth already written occludes the far-plane glow.
  */
 export function renderImmersiveLightPollution(
   sky: AstroSkyDome,
@@ -805,6 +828,7 @@ export function renderImmersiveLightPollution(
   if (!(amt > 0.0005)) return
   syncImmersiveLpScreenUniforms(sky, renderer, camera)
   const prevAutoClear = renderer.autoClear
+  // Color + depth stay; only add sodium where terrain did not write closer depth.
   renderer.autoClear = false
   renderer.render(sky._lpOverlay.scene, sky._lpOverlay.camera)
   renderer.autoClear = prevAutoClear

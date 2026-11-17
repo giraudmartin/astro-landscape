@@ -366,6 +366,9 @@ export function MapCanvas({
       sunAltitudeDeg: sun.altitudeDeg,
       zoom: map.getZoom(),
     })
+    if (import.meta.env.DEV) {
+      ;(window as unknown as { __astroMap?: maplibregl.Map }).__astroMap = map
+    }
   }
   if (import.meta.env.DEV) {
     ;(
@@ -669,11 +672,11 @@ export function MapCanvas({
       ensureNightShadeLayer(map, skyUtcMsRef.current)
       ensureCelestialBodyLayers(map, skyUtcMsRef.current)
       // Terminator + light before first paint settle — don't wait for a user pan.
-      applyPlayheadSky()
+      applyPlayheadSkyRef.current()
       setBasemapMode(basemapModeRef.current)
       // One re-apply after first tiles are in; never on every moveend (that
       // rewrote light/veil and looked like time jumping on drag-release).
-      map.once('idle', applyPlayheadSky)
+      map.once('idle', () => applyPlayheadSkyRef.current())
       // Permanent: spot-list fly sets React spot at globe zoom (day paint). The
       // spot-effect zoomend can miss the landing; this always re-dims on settle.
       map.on('zoomend', () => {
@@ -872,10 +875,15 @@ export function MapCanvas({
       )
     }
 
+    // Prefer style.load over load: another load handler throwing must not
+    // leave Mes spots without markers (applyPlayheadSky bare-name burn).
     if (map.isStyleLoaded()) sync()
-    else map.once('load', sync)
+    map.on('load', sync)
+    map.on('style.load', sync)
 
     return () => {
+      map.off('load', sync)
+      map.off('style.load', sync)
       for (const marker of personalMarkersRef.current) marker.remove()
       personalMarkersRef.current = []
     }
@@ -968,11 +976,13 @@ export function MapCanvas({
       return
     }
     let cancelled = false
-    const { lat, lon } = spot
-    void sampleLightPollution(lat, lon).then((sample) => {
-      if (cancelled) return
-      setBortleSample(sample)
-    })
+    const { lat, lon, heightM } = spot
+    void sampleLightPollution(lat, lon, { observerElevM: heightM }).then(
+      (sample) => {
+        if (cancelled) return
+        setBortleSample(sample)
+      },
+    )
     return () => {
       cancelled = true
     }
@@ -1001,10 +1011,13 @@ export function MapCanvas({
           lat={spot.lat}
           lon={spot.lon}
           elevM={spot.heightM}
+          skyBrightnessMag={bortleSample.skyBrightnessMag}
           sourceHint={
             bortleSample.source === 'viirs-cog'
-              ? 'VIIRS COG · Indice estimé'
-              : 'Black Marble · Indice estimé'
+              ? bortleSample.terrainApplied
+                ? 'VIIRS · First Rig · DEM · estimé'
+                : 'VIIRS · First Rig · estimé'
+              : 'Black Marble · First Rig · estimé'
           }
           onOpenSkyBrightness={() => setSkyBrightnessOpen(true)}
         />

@@ -34,6 +34,34 @@ import {
   clampZodiacalAmount,
 } from './skyLighting'
 import { ChevronDownIcon, SettingsSlidersIcon } from './psIcons'
+import {
+  clampLocalHaloHaze,
+  clampLocalHaloHeightKm,
+  clampLocalHaloIntensity,
+  clampLocalHaloTempK,
+  clampLocalHaloViirsOpacity,
+  LOCAL_HALO_HAZE_MAX,
+  LOCAL_HALO_HAZE_MIN,
+  LOCAL_HALO_HEIGHT_KM_MAX,
+  LOCAL_HALO_HEIGHT_KM_MIN,
+  LOCAL_HALO_INTENSITY_MAX,
+  LOCAL_HALO_INTENSITY_MIN,
+  LOCAL_HALO_TEMP_K_MAX,
+  LOCAL_HALO_TEMP_K_MIN,
+  LOCAL_HALO_VIIRS_OPACITY_MAX,
+  LOCAL_HALO_VIIRS_OPACITY_MIN,
+} from './lightPollution/localHalo/localHaloSettings'
+
+export type LocalHaloControls = {
+  enabled: boolean
+  blocking: boolean
+  intensity: number
+  heightKm: number
+  haze: number
+  tempK: number
+  viirsGround: boolean
+  viirsOpacity: number
+}
 
 type ViewfinderSkyControlProps = {
   atmosphereAmount: number
@@ -42,6 +70,7 @@ type ViewfinderSkyControlProps = {
   airglowWaves: number
   zodiacalAmount: number
   lightPollutionAmount: number
+  localHalo: LocalHaloControls
   starMagDepth: number
   starZoomSpan: number
   starBrightness: number
@@ -52,6 +81,7 @@ type ViewfinderSkyControlProps = {
   onAirglowWavesChange: (value: number) => void
   onZodiacalAmountChange: (value: number) => void
   onLightPollutionAmountChange: (value: number) => void
+  onLocalHaloChange: (patch: Partial<LocalHaloControls>) => void
   onStarMagDepthChange: (value: number) => void
   onStarZoomSpanChange: (value: number) => void
   onStarBrightnessChange: (value: number) => void
@@ -68,6 +98,7 @@ export function ViewfinderSkyControl({
   airglowWaves,
   zodiacalAmount,
   lightPollutionAmount,
+  localHalo,
   starMagDepth,
   starZoomSpan,
   starBrightness,
@@ -78,6 +109,7 @@ export function ViewfinderSkyControl({
   onAirglowWavesChange,
   onZodiacalAmountChange,
   onLightPollutionAmountChange,
+  onLocalHaloChange,
   onStarMagDepthChange,
   onStarZoomSpanChange,
   onStarBrightnessChange,
@@ -340,6 +372,201 @@ export function ViewfinderSkyControl({
                 }
               />
             </label>
+          </div>
+
+          <div className="vf-landscape-menu__group">
+            <div className="vf-landscape-menu__group-title">
+              Halos lumineux locaux
+            </div>
+            <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
+              <span className="vf-landscape-menu__label">
+                <span>Afficher les halos</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={localHalo.enabled}
+                title="Lumière VIIRS diffusée dans l’air au-dessus des émissions (zone 24 × 24 km). Visible la nuit."
+                onChange={(event) =>
+                  onLocalHaloChange({ enabled: event.target.checked })
+                }
+              />
+            </label>
+            <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
+              <span className="vf-landscape-menu__label">
+                <span>Le relief fait écran</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={localHalo.blocking}
+                title="Les crêtes cachent les émissions à l’air situé derrière elles."
+                onChange={(event) =>
+                  onLocalHaloChange({ blocking: event.target.checked })
+                }
+              />
+            </label>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Intensité</span>
+                <span className="vf-landscape-menu__value">
+                  {Math.round(localHalo.intensity * 100)} %
+                </span>
+              </span>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={LOCAL_HALO_INTENSITY_MIN}
+                max={LOCAL_HALO_INTENSITY_MAX}
+                step={0.01}
+                value={localHalo.intensity}
+                style={rangeProgressStyle(
+                  localHalo.intensity,
+                  LOCAL_HALO_INTENSITY_MIN,
+                  LOCAL_HALO_INTENSITY_MAX,
+                )}
+                aria-label="Intensité des halos locaux"
+                onChange={(event) =>
+                  onLocalHaloChange({
+                    intensity: clampLocalHaloIntensity(
+                      Number(event.target.value),
+                    ),
+                  })
+                }
+              />
+            </label>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Hauteur du halo</span>
+                <span className="vf-landscape-menu__value">
+                  {localHalo.heightKm.toFixed(1)} km
+                </span>
+              </span>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={LOCAL_HALO_HEIGHT_KM_MIN}
+                max={LOCAL_HALO_HEIGHT_KM_MAX}
+                step={0.1}
+                value={localHalo.heightKm}
+                style={rangeProgressStyle(
+                  localHalo.heightKm,
+                  LOCAL_HALO_HEIGHT_KM_MIN,
+                  LOCAL_HALO_HEIGHT_KM_MAX,
+                )}
+                aria-label="Hauteur des halos locaux"
+                onChange={(event) =>
+                  onLocalHaloChange({
+                    heightKm: clampLocalHaloHeightKm(Number(event.target.value)),
+                  })
+                }
+              />
+            </label>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Brume</span>
+                <span className="vf-landscape-menu__value">
+                  {Math.round(localHalo.haze * 100)} %
+                </span>
+              </span>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={LOCAL_HALO_HAZE_MIN}
+                max={LOCAL_HALO_HAZE_MAX}
+                step={0.01}
+                value={localHalo.haze}
+                style={rangeProgressStyle(
+                  localHalo.haze,
+                  LOCAL_HALO_HAZE_MIN,
+                  LOCAL_HALO_HAZE_MAX,
+                )}
+                aria-label="Brume des halos locaux"
+                onChange={(event) =>
+                  onLocalHaloChange({
+                    haze: clampLocalHaloHaze(Number(event.target.value)),
+                  })
+                }
+              />
+            </label>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Teinte</span>
+                <span className="vf-landscape-menu__value">
+                  {Math.round(localHalo.tempK)} K
+                </span>
+              </span>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={LOCAL_HALO_TEMP_K_MIN}
+                max={LOCAL_HALO_TEMP_K_MAX}
+                step={100}
+                value={localHalo.tempK}
+                style={rangeProgressStyle(
+                  localHalo.tempK,
+                  LOCAL_HALO_TEMP_K_MIN,
+                  LOCAL_HALO_TEMP_K_MAX,
+                )}
+                aria-label="Teinte des halos locaux"
+                title="Réglage artistique de couleur, pas une conversion physique."
+                onChange={(event) =>
+                  onLocalHaloChange({
+                    tempK: clampLocalHaloTempK(Number(event.target.value)),
+                  })
+                }
+              />
+            </label>
+            <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
+              <span className="vf-landscape-menu__label">
+                <span>VIIRS au sol · vérification</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={localHalo.viirsGround}
+                title="Pixels VIIRS natifs sur le relief (diagnostic) — survol : radiance en nW/cm²/sr."
+                onChange={(event) =>
+                  onLocalHaloChange({ viirsGround: event.target.checked })
+                }
+              />
+            </label>
+            <label className="vf-landscape-menu__field">
+              <span className="vf-landscape-menu__label">
+                <span>Opacité VIIRS</span>
+                <span className="vf-landscape-menu__value">
+                  {Math.round(localHalo.viirsOpacity * 100)} %
+                </span>
+              </span>
+              <input
+                type="range"
+                className="vf-landscape-menu__range"
+                min={LOCAL_HALO_VIIRS_OPACITY_MIN}
+                max={LOCAL_HALO_VIIRS_OPACITY_MAX}
+                step={0.01}
+                value={localHalo.viirsOpacity}
+                style={rangeProgressStyle(
+                  localHalo.viirsOpacity,
+                  LOCAL_HALO_VIIRS_OPACITY_MIN,
+                  LOCAL_HALO_VIIRS_OPACITY_MAX,
+                )}
+                aria-label="Opacité de la couche VIIRS au sol"
+                onChange={(event) =>
+                  onLocalHaloChange({
+                    viirsOpacity: clampLocalHaloViirsOpacity(
+                      Number(event.target.value),
+                    ),
+                  })
+                }
+              />
+            </label>
+            {localHalo.viirsGround ? (
+              <div className="vf-landscape-menu__legend">
+                <div className="vf-landscape-menu__legend-ramp" />
+                <p className="vf-landscape-menu__legend-note">
+                  0,5 → 1 → 5 → 10 → 35 nW/cm²/sr · échelle log · pixels natifs
+                  <br />
+                  Gris sombre : zéro · gris clair : sans données
+                </p>
+              </div>
+            ) : null}
           </div>
 
           <div className="vf-landscape-menu__group">

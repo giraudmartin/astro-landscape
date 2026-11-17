@@ -145,6 +145,8 @@ describe('parked local terrain', () => {
       adaptToEye: () => {},
       groundYAt: () => 0,
       groundElevationMslAt: () => 0,
+      baseElevationM: 0,
+      verticalExaggeration: 1,
       ready,
       stats: {
         minH: 0,

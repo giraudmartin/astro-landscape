@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -80,7 +81,10 @@ import {
 } from './ViewfinderCaptureCapsule'
 import { ViewfinderLandscapeControl } from './ViewfinderLandscapeControl'
 import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
-import { ViewfinderSkyControl } from './ViewfinderSkyControl'
+import {
+  ViewfinderSkyControl,
+  type LocalHaloControls,
+} from './ViewfinderSkyControl'
 import { ViewPitchHud } from './ViewPitchHud'
 import {
   AzimuthGridIcon,
@@ -106,9 +110,29 @@ import {
   lightPollutionStarMagPenalty,
 } from './lightPollution/lpVisual'
 import {
+  loadAppHaloDataset,
+  loadReferenceHaloDataset,
+  prepareHalo,
+  type HaloDataSourceId,
+  type HaloDataset,
+} from './lightPollution/localHalo/haloData'
+import { requestHaloField } from './lightPollution/localHalo/haloFieldClient'
+import {
+  createLocalHaloPass,
+  type LocalHaloField,
+  type LocalHaloTuning,
+} from './lightPollution/localHalo/localHaloPass'
+import { ENU_M_PER_DEG } from './lightPollution/localHalo/haloFieldCore'
+import { localHaloNight } from './lightPollution/localHalo/localHaloSettings'
+import {
+  formatLocalHaloProbe,
+  probeLocalHalo,
+} from './lightPollution/localHalo/localHaloProbe'
+import {
   applyStageProjection,
   getStageProjection,
   setStageProjection,
+  stelModeUniform,
   type StageProjection,
 } from './stelProjector'
 import { createStereoCubemapPass } from './stereoCubemapPass'
@@ -131,6 +155,36 @@ import { sampleLightPollution } from './lightPollution/sampleLightPollution'
 import type { QaImmersiveApi } from './qaTestHooks'
 
 type MoveDir = 'up' | 'down' | 'left' | 'right'
+
+type LocalHaloDebug = {
+  source: HaloDataSourceId
+  status: string
+  label: string
+  sources: number
+  referenceAltitudeKm: number
+  yMinKm: number
+  yMaxKm: number
+  progress: number
+  cacheKey: string
+  readyMs: number
+  centerScene: { x: number; z: number }
+  active: boolean
+}
+
+const LOCAL_HALO_DEBUG_IDLE: LocalHaloDebug = {
+  source: 'app',
+  status: 'idle',
+  label: '',
+  sources: 0,
+  referenceAltitudeKm: 0,
+  yMinKm: 0,
+  yMaxKm: 0,
+  progress: 0,
+  cacheKey: '',
+  readyMs: 0,
+  centerScene: { x: 0, z: 0 },
+  active: false,
+}
 
 const MOVE_DIRS: MoveDir[] = ['up', 'down', 'left', 'right']
 const MOVE_STEP_MS = 160
@@ -381,6 +435,41 @@ export function ImmersiveView({
   const [lightPollutionAmount, setLightPollutionAmount] = useState(() =>
     clampLightPollutionAmount(savedImmersive.lightPollutionAmount),
   )
+  const [localHalo, setLocalHalo] = useState<LocalHaloControls>(() => ({
+    enabled: savedImmersive.localHaloEnabled,
+    blocking: savedImmersive.localHaloBlocking,
+    intensity: savedImmersive.localHaloIntensity,
+    heightKm: savedImmersive.localHaloHeightKm,
+    haze: savedImmersive.localHaloHaze,
+    tempK: savedImmersive.localHaloTempK,
+    viirsGround: savedImmersive.localHaloViirsGround,
+    viirsOpacity: savedImmersive.localHaloViirsOpacity,
+  }))
+  const localHaloRef = useRef(localHalo)
+  localHaloRef.current = localHalo
+  const patchLocalHalo = useCallback(
+    (patch: Partial<LocalHaloControls>) =>
+      setLocalHalo((prev) => ({ ...prev, ...patch })),
+    [],
+  )
+  const [localHaloSource, setLocalHaloSource] = useState<HaloDataSourceId>(
+    () =>
+      new URLSearchParams(window.location.search).get('localHalo') ===
+      'reference'
+        ? 'reference'
+        : 'app',
+  )
+  const localHaloSourceRef = useRef(localHaloSource)
+  localHaloSourceRef.current = localHaloSource
+  const reloadLocalHaloRef = useRef<(() => void) | null>(null)
+  const localHaloDebugRef = useRef<LocalHaloDebug>({ ...LOCAL_HALO_DEBUG_IDLE })
+  const localHaloProbeRef = useRef<
+    ((u: number, v: number) => string | null) | null
+  >(null)
+  const [localHaloProbe, setLocalHaloProbe] = useState<string | null>(null)
+  useEffect(() => {
+    reloadLocalHaloRef.current?.()
+  }, [localHaloSource])
   const [showConstellations, setShowConstellations] = useState(
     savedImmersive.showConstellations,
   )
@@ -457,12 +546,21 @@ export function ImmersiveView({
         airglowWaves,
         zodiacalAmount,
         lightPollutionAmount,
+        localHaloEnabled: localHalo.enabled,
+        localHaloBlocking: localHalo.blocking,
+        localHaloIntensity: localHalo.intensity,
+        localHaloHeightKm: localHalo.heightKm,
+        localHaloHaze: localHalo.haze,
+        localHaloTempK: localHalo.tempK,
+        localHaloViirsGround: localHalo.viirsGround,
+        localHaloViirsOpacity: localHalo.viirsOpacity,
         showConstellations,
         showCelestialGrid,
         showAzimuthGrid,
       },
     })
   }, [
+    localHalo,
     focalMm,
     orientation,
     frameRollDeg,
@@ -719,6 +817,123 @@ export function ImmersiveView({
       | null = null
     let latestSkyUtc = skyUtcMs
     let latestSunAltDeg = 0
+
+    const localHaloPass = createLocalHaloPass()
+    let localHaloField: LocalHaloField | null = null
+    let localHaloGen = 0
+    const loadLocalHalo = () => {
+      const gen = ++localHaloGen
+      localHaloField = null
+      localHaloPass.setField(null)
+      const source = localHaloSourceRef.current
+      if (flatTerrain) {
+        localHaloDebugRef.current = { ...LOCAL_HALO_DEBUG_IDLE, source, status: 'flat-terrain' }
+        return
+      }
+      localHaloDebugRef.current = { ...LOCAL_HALO_DEBUG_IDLE, source, status: 'loading' }
+      const started = performance.now()
+      const fail = (status: string, error?: unknown) => {
+        if (disposed || gen !== localHaloGen) return
+        if (error) console.warn('[local-halo]', error)
+        localHaloDebugRef.current = { ...localHaloDebugRef.current, status }
+      }
+      const datasetPromise: Promise<HaloDataset | null> =
+        source === 'reference'
+          ? loadReferenceHaloDataset()
+          : loadAppHaloDataset(lat, lon)
+      void datasetPromise
+        .then(async (dataset) => {
+          if (disposed || gen !== localHaloGen) return
+          if (!dataset) return fail('no-viirs')
+          const prepared = prepareHalo(dataset)
+          localHaloDebugRef.current = {
+            ...localHaloDebugRef.current,
+            status: 'computing',
+            label: dataset.label,
+            sources: prepared.sources.length,
+            referenceAltitudeKm: prepared.referenceAltitudeKm,
+            yMinKm: prepared.bounds.yMinKm,
+            yMaxKm: prepared.bounds.yMaxKm,
+          }
+          const request = requestHaloField(
+            {
+              raster: dataset.raster,
+              ground: dataset.ground,
+              projector: dataset.projector,
+              input: prepared.input,
+            },
+            (done01) => {
+              if (gen === localHaloGen) {
+                localHaloDebugRef.current.progress = done01
+              }
+            },
+          )
+          const field = await request.field
+          if (disposed || gen !== localHaloGen) return
+          const cos0 = Math.cos((lat * Math.PI) / 180)
+          localHaloField = {
+            field,
+            raster: dataset.raster,
+            ground: dataset.ground,
+            projector: dataset.projector,
+            yMinKm: prepared.bounds.yMinKm,
+            yMaxKm: prepared.bounds.yMaxKm,
+            referenceAltitudeKm: prepared.referenceAltitudeKm,
+            centerScene: {
+              x: (dataset.center.lon - lon) * ENU_M_PER_DEG * cos0,
+              z: -(dataset.center.lat - lat) * ENU_M_PER_DEG,
+            },
+          }
+          localHaloPass.setField(localHaloField)
+          localHaloDebugRef.current = {
+            ...localHaloDebugRef.current,
+            status: 'ready',
+            progress: 1,
+            cacheKey: request.key,
+            readyMs: Math.round(performance.now() - started),
+            centerScene: { ...localHaloField.centerScene },
+          }
+        })
+        .catch((error: unknown) => fail('error', error))
+    }
+    reloadLocalHaloRef.current = loadLocalHalo
+    loadLocalHalo()
+    const localHaloTuning = (): LocalHaloTuning => {
+      const c = localHaloRef.current
+      return {
+        enabled: c.enabled,
+        blocking: c.blocking,
+        intensity: c.intensity,
+        heightKm: c.heightKm,
+        haze: c.haze,
+        tempK: c.tempK,
+        groundView: c.viirsGround,
+        groundAlpha: c.viirsOpacity,
+        night: localHaloNight(latestSunAltDeg),
+      }
+    }
+    const localHaloTerrainFrame = () => {
+      const t = activeTerrain
+      if (!t || isFlatTerrainHandle(t)) return null
+      return {
+        baseElevationM: t.baseElevationM,
+        verticalExaggeration: t.verticalExaggeration,
+      }
+    }
+    localHaloProbeRef.current = (u, v) => {
+      const terrain = localHaloTerrainFrame()
+      if (!localHaloField || !terrain || !groundYAt) return null
+      const hit = probeLocalHalo({
+        u,
+        v,
+        camera,
+        stelMode: stelModeUniform.value,
+        groundYAt,
+        terrain,
+        field: localHaloField,
+      })
+      return hit ? formatLocalHaloProbe(hit) : null
+    }
 
     // Heavy atlas / mesh uploads can OOM the GPU — stop fighting a dead context.
     renderer.domElement.addEventListener(
@@ -1187,7 +1402,21 @@ export function ImmersiveView({
       lastY = event.clientY
       host.setPointerCapture(event.pointerId)
     }
+    let lastHaloProbeMs = 0
+    const updateLocalHaloProbe = (event: PointerEvent) => {
+      if (!localHaloRef.current.viirsGround) return
+      const now = performance.now()
+      if (now - lastHaloProbeMs < 100) return
+      lastHaloProbeMs = now
+      const rect = renderer.domElement.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return
+      const u = (event.clientX - rect.left) / rect.width
+      const v = 1 - (event.clientY - rect.top) / rect.height
+      setLocalHaloProbe(localHaloProbeRef.current?.(u, v) ?? null)
+    }
+    const onPointerLeave = () => setLocalHaloProbe(null)
     const onPointerMove = (event: PointerEvent) => {
+      if (!dragging) updateLocalHaloProbe(event)
       if (!dragging || !terrainUnlockedRef.current) return
       if (timelapsePreviewLookLockedRef.current) return
       const dx = event.clientX - lastX
@@ -1328,6 +1557,7 @@ export function ImmersiveView({
     ro.observe(host)
     host.addEventListener('pointerdown', onPointerDown)
     host.addEventListener('pointermove', onPointerMove)
+    host.addEventListener('pointerleave', onPointerLeave)
     host.addEventListener('pointerup', onPointerUp)
     host.addEventListener('pointercancel', onPointerUp)
     host.addEventListener('wheel', onWheel, { passive: false })
@@ -1479,10 +1709,24 @@ export function ImmersiveView({
           : 'cubemap'
       } else {
         stereoPass.setAtlasPreview(false)
-        renderer.render(scene, camera)
-        renderImmersiveLightPollution(sky, renderer, camera)
-        renderDiagLiveRef.current.stats.passes = 2
-        renderDiagLiveRef.current.stats.path = 'direct'
+        const haloTuning = localHaloTuning()
+        const haloTerrain = localHaloTerrainFrame()
+        const haloActive =
+          haloTerrain != null && localHaloPass.isActive(haloTuning)
+        localHaloDebugRef.current.active = haloActive
+        if (haloActive) {
+          localHaloPass.begin(renderer)
+          renderer.render(scene, camera)
+          renderImmersiveLightPollution(sky, renderer, camera)
+          localHaloPass.end(renderer, camera, haloTerrain, haloTuning)
+          renderDiagLiveRef.current.stats.passes = 2
+          renderDiagLiveRef.current.stats.path = 'direct-local-halo'
+        } else {
+          renderer.render(scene, camera)
+          renderImmersiveLightPollution(sky, renderer, camera)
+          renderDiagLiveRef.current.stats.passes = 2
+          renderDiagLiveRef.current.stats.path = 'direct'
+        }
       }
       const info = renderer.info.render
       renderDiagLiveRef.current.stats.drawCalls = info.calls
@@ -1514,6 +1758,7 @@ export function ImmersiveView({
       ro.disconnect()
       host.removeEventListener('pointerdown', onPointerDown)
       host.removeEventListener('pointermove', onPointerMove)
+      host.removeEventListener('pointerleave', onPointerLeave)
       host.removeEventListener('pointerup', onPointerUp)
       host.removeEventListener('pointercancel', onPointerUp)
       host.removeEventListener('wheel', onWheel)
@@ -1529,6 +1774,10 @@ export function ImmersiveView({
       sky.lightPollutionProfile.dispose()
       nightSky.dispose()
       skyBodies.dispose()
+      localHaloGen += 1
+      reloadLocalHaloRef.current = null
+      localHaloProbeRef.current = null
+      localHaloPass.dispose()
       terrainDispose?.()
       stereoPass.dispose()
       renderer.dispose()
@@ -1685,12 +1934,30 @@ export function ImmersiveView({
       },
       getTimelapseStatus: () => ({ ...timelapsePreviewApiRef.current.status }),
       exitTimelapsePreview: () => endTimelapsePreviewRef.current(),
+      getLocalHaloDebug: () => ({
+        ...localHaloDebugRef.current,
+        controls: { ...localHaloRef.current },
+      }),
+      setLocalHalo: (patch) =>
+        patchLocalHalo(patch as Partial<LocalHaloControls>),
+      setLocalHaloSource: (source) => setLocalHaloSource(source),
+      setSkyLpAmount: (amount01) =>
+        setLightPollutionAmount(clampLightPollutionAmount(amount01)),
+      probeLocalHalo: (u, v) => localHaloProbeRef.current?.(u, v) ?? null,
     }
     window.__astroQaImmersive = api
     return () => {
       if (window.__astroQaImmersive === api) delete window.__astroQaImmersive
     }
-  }, [terrainReady, terrainUnlocked, terrainPhase, terrainProgress, projection, frameMode])
+  }, [
+    terrainReady,
+    terrainUnlocked,
+    terrainPhase,
+    terrainProgress,
+    projection,
+    frameMode,
+    patchLocalHalo,
+  ])
 
   // Sync only when the PARENT bearing prop changes. Including pitchDeg here
   // re-applied the stale map bearing and wiped __astroSetLook / drag yaw.
@@ -1914,6 +2181,18 @@ export function ImmersiveView({
               </div>
             ) : null}
           </div>
+        </div>
+      ) : null}
+      {localHalo.viirsGround && localHaloProbe ? (
+        <div className="local-halo-probe" role="status">
+          {localHaloProbe.split('\n').map((line, i) => (
+            <div
+              key={line}
+              className={i === 1 ? 'local-halo-probe__value' : undefined}
+            >
+              {line}
+            </div>
+          ))}
         </div>
       ) : null}
       <div className="moon-preview-pitch-stack">
@@ -2368,6 +2647,8 @@ export function ImmersiveView({
           onAirglowWavesChange={setAirglowWaves}
           onZodiacalAmountChange={setZodiacalAmount}
           onLightPollutionAmountChange={setLightPollutionAmount}
+          localHalo={localHalo}
+          onLocalHaloChange={patchLocalHalo}
           onStarMagDepthChange={setStarMagDepth}
           onStarZoomSpanChange={setStarZoomSpan}
           onStarBrightnessChange={setStarBrightness}

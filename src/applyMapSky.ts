@@ -66,9 +66,35 @@ export function mapImageryNightDim(
   const night = clamp01(nightAmount) * ground
   // Dusk ramps from sunset (0°) → 1 at −8°, before nightAmount alone is strong.
   const dusk = clamp01(-sunAltitudeDeg / 8) * ground
-  // Stronger than the old 0.55/0.45 (noon ortho stayed “day”), softer than the
-  // pitch-black experiment that stacked 0.62/0.5 with an 0.82 opacity crush.
-  return clamp01(night * 0.7 + dusk * 0.45)
+  // Night tint without void: shade is globe-only; ortho must carry spot night.
+  return clamp01(night * 0.48 + dusk * 0.35)
+}
+
+/**
+ * Imagery paint derived from dim (+ optional ground for globe Sahara soft-cap).
+ * Pure helper so mid-zoom readability stays under unit tests.
+ */
+export function mapImageryNightPaint(
+  dim: number,
+  groundView = 1,
+): {
+  brightnessMin: number
+  brightnessMax: number
+  saturation: number
+  hueRotate: number
+  opacity: number
+} {
+  const d = clamp01(dim)
+  const ground = clamp01(groundView)
+  const globeDayMax = 0.78 + 0.22 * ground
+  return {
+    brightnessMin: d * 0.06,
+    // Floor 0.42 — verified in-browser: ≤0.35 still reads as void over ocean.
+    brightnessMax: Math.max(0.42, (1 - d * 0.55) * globeDayMax),
+    saturation: 1 - d * 0.38,
+    hueRotate: d * 16,
+    opacity: 1 - d * 0.22,
+  }
 }
 
 export type ApplyMapSkyOptions = {
@@ -152,24 +178,20 @@ export function applyMapSky(
 
   if (map.getLayer('imagery')) {
     // Globe: soft day exposure so Sahara isn't chalk; night still from terminator.
-    // Ground: crush noon ortho enough to read as night, keep terrain readable.
+    // Ground: tint/dim noon ortho — never crush to void (mid-zoom must stay readable).
     const alt = options?.sunAltitudeDeg ?? 90
     const dim = mapImageryNightDim(localNight, alt, ground)
-    const globeDayMax = 0.78 + 0.22 * ground
-    const brightness = Math.max(0.08, (1 - dim * 0.95) * globeDayMax)
-    const saturation = 1 - dim * 0.7
+    const paint = mapImageryNightPaint(dim, ground)
     const twilight = ground * palette.twilightStrength
-    map.setPaintProperty('imagery', 'raster-brightness-min', dim * 0.06)
-    map.setPaintProperty('imagery', 'raster-brightness-max', brightness)
-    map.setPaintProperty('imagery', 'raster-saturation', saturation - 1)
-    // Soft cool shift into night / blue hour (degrees); day stays 0.
+    map.setPaintProperty('imagery', 'raster-brightness-min', paint.brightnessMin)
+    map.setPaintProperty('imagery', 'raster-brightness-max', paint.brightnessMax)
+    map.setPaintProperty('imagery', 'raster-saturation', paint.saturation - 1)
     map.setPaintProperty(
       'imagery',
       'raster-hue-rotate',
-      dim * 32 + twilight * 9,
+      paint.hueRotate + twilight * 8,
     )
-    // Deep night ~0.35 opacity — reads as night; not noon, not void.
-    map.setPaintProperty('imagery', 'raster-opacity', 1 - dim * 0.65)
+    map.setPaintProperty('imagery', 'raster-opacity', paint.opacity)
   }
 
   // City lights: globe-only. Hard layout visibility + zoom expression + maxzoom.

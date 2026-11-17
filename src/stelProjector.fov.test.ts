@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   EQUIRECT_VFOV_MAX_DEG,
-  ORTHOGRAPHIC_VFOV_MAX_DEG,
   PERSPECTIVE_CAMERA_VFOV_MAX_DEG,
   RECTILINEAR_VFOV_MAX_DEG,
   STEREOGRAPHIC_VFOV_MAX_DEG,
@@ -30,7 +29,6 @@ describe('stage FOV clamps', () => {
     { id: 'stereographic', stageCap: STEREOGRAPHIC_VFOV_MAX_DEG },
     { id: 'rectilinear', stageCap: RECTILINEAR_VFOV_MAX_DEG },
     { id: 'equirectangular', stageCap: EQUIRECT_VFOV_MAX_DEG },
-    { id: 'orthographic', stageCap: ORTHOGRAPHIC_VFOV_MAX_DEG },
   ]
 
   for (const { id, stageCap } of modes) {

@@ -1,34 +1,36 @@
+/**
+ * Estimated zenith Bortle at lon/lat.
+ *
+ * First Rig / Duriscoe zenith sum on the VIIRS 500 m COG (default), with
+ * Black Marble rings as degraded fallback. See docs/LIGHT_POLLUTION.md.
+ */
+
 import {
-  bortleFromBlackMarbleRgb,
+  bortleFromSkyBrightnessMag,
   bortleLabelFr,
   clampBortle,
   glowFromBlackMarbleRgb,
-  radianceFromBlackMarbleGlow,
-  skyBrightnessMagFromRadiance,
+  radianceFromSkyBrightnessMag,
 } from './bortleFromRadiance'
-import { lightPollutionCogUrl } from './cogConfig'
-import { sampleBortleFromCog } from './sampleFromCog'
+import { preferTrueViirsCog } from './cogConfig'
 import {
   LIGHT_POLLUTION_MAX_ZOOM,
   lightPollutionTileUrl,
   lonLatToTile,
 } from './tiles'
 import type { LightPollutionSample } from './types'
+import { sampleZenithSurroundings } from './zenithFromSurroundings'
 
 export type { LightPollutionSample }
 
 const cache = new Map<string, Promise<ImageData | null>>()
-
-function tileCacheKey(z: number, x: number, y: number): string {
-  return `${z}/${x}/${y}`
-}
 
 async function loadTileImageData(
   z: number,
   x: number,
   y: number,
 ): Promise<ImageData | null> {
-  const key = tileCacheKey(z, x, y)
+  const key = `${z}/${x}/${y}`
   const hit = cache.get(key)
   if (hit) return hit
 
@@ -58,83 +60,59 @@ async function loadTileImageData(
   return pending
 }
 
-function pixelRgb01(
-  data: ImageData,
-  px: number,
-  py: number,
-): { r: number; g: number; b: number; luma: number } {
-  const w = data.width
-  const h = data.height
-  const x = Math.min(w - 1, Math.max(0, px))
-  const y = Math.min(h - 1, Math.max(0, py))
-  const i = (y * w + x) * 4
-  const r = data.data[i]! / 255
-  const g = data.data[i + 1]! / 255
-  const b = data.data[i + 2]! / 255
-  return {
-    r,
-    g,
-    b,
-    luma: 0.2126 * r + 0.7152 * g + 0.0722 * b,
-  }
-}
-
-async function sampleFromBlackMarble(
-  lat: number,
-  lon: number,
-): Promise<LightPollutionSample | null> {
+async function localLuminance01(lat: number, lon: number): Promise<number> {
   const { z, x, y } = lonLatToTile(lon, lat, LIGHT_POLLUTION_MAX_ZOOM)
   const image = await loadTileImageData(z, x, y)
-  if (!image) return null
-
+  if (!image) return 0
   const n = 2 ** z
   const worldX = ((lon + 180) / 360) * n
   const latRad = (lat * Math.PI) / 180
   const worldY =
     ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n
-  const fracX = worldX - x
-  const fracY = worldY - y
-  const px = Math.floor(fracX * image.width)
-  const py = Math.floor(fracY * image.height)
-
-  // Center pixel only — max-of-3×3 made town pins (El Chaltén, Windhoek)
-  // read as inner-city zenith. LPM models sky brightness, not “brightest
-  // neighbour upward radiance”.
-  const center = pixelRgb01(image, px, py)
-  const glow = glowFromBlackMarbleRgb(center.r, center.g, center.b)
-  const radianceNwCm2Sr = radianceFromBlackMarbleGlow(glow)
-  const skyBrightnessMag = skyBrightnessMagFromRadiance(radianceNwCm2Sr)
-  const bortle = clampBortle(
-    bortleFromBlackMarbleRgb(center.r, center.g, center.b),
+  const px = Math.floor((worldX - x) * image.width)
+  const py = Math.floor((worldY - y) * image.height)
+  const i = (py * image.width + px) * 4
+  return glowFromBlackMarbleRgb(
+    image.data[i]! / 255,
+    image.data[i + 1]! / 255,
+    image.data[i + 2]! / 255,
   )
+}
 
-  return {
-    lat,
-    lon,
-    luminance01: center.luma,
-    radianceNwCm2Sr,
-    skyBrightnessMag,
-    bortle,
-    bortleLabel: bortleLabelFr(bortle),
-    source: 'black-marble',
-  }
+export type SampleLightPollutionOptions = {
+  observerElevM?: number
 }
 
 /**
- * Estimated Bortle at lon/lat.
- * Prefers EOG VIIRS COG (true radiance) when present; else Black Marble proxy.
+ * Estimated zenith Bortle at lon/lat (First Rig regional sum).
  */
 export async function sampleLightPollution(
   lat: number,
   lon: number,
+  options?: SampleLightPollutionOptions,
 ): Promise<LightPollutionSample | null> {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
 
-  const cogUrl = lightPollutionCogUrl()
-  if (cogUrl) {
-    const fromCog = await sampleBortleFromCog(lat, lon, cogUrl)
-    if (fromCog) return fromCog
-  }
+  const [zenith, luminance01] = await Promise.all([
+    sampleZenithSurroundings(lat, lon, {
+      observerElevM: options?.observerElevM,
+    }),
+    localLuminance01(lat, lon),
+  ])
 
-  return sampleFromBlackMarble(lat, lon)
+  const skyBrightnessMag = zenith.skyBrightnessMag
+  const bortle = clampBortle(bortleFromSkyBrightnessMag(skyBrightnessMag))
+  const radianceNwCm2Sr = radianceFromSkyBrightnessMag(skyBrightnessMag)
+
+  return {
+    lat,
+    lon,
+    luminance01,
+    radianceNwCm2Sr,
+    skyBrightnessMag,
+    bortle,
+    bortleLabel: bortleLabelFr(bortle),
+    source: preferTrueViirsCog() ? 'viirs-cog' : 'black-marble',
+    terrainApplied: zenith.terrainApplied,
+  }
 }

@@ -1,32 +1,30 @@
 # Light pollution
 
+Full method, licences, and resolution audit: **`docs/LIGHT_POLLUTION.md`**.
+
 ## Map / globe overlay
 
 NASA GIBS `VIIRS_Black_Marble` (commercial-OK, zero self-hosting).  
 Terminator-masked via `astro-lightpollution` protocol.
 
-## Bortle at selected spot (preferred)
+## Bortle / zenith SQM at selected spot
 
-Hosted **radiance COG** → mag/arcsec² → Bortle. The app auto-uses
-`public/light-pollution/viirs-vnl-average-masked.cog.tif` when present.
+**Formula:** First Rig zenith re-fit of Duriscoe 2018  
+(`α = 2.47·(d/350)^0.158`, `ZLR = S/66.89`, natural floor **21.83**).  
+No PlanAstro mean-P, no elev mag hacks.
+
+**Data (default):** EOG VIIRS VNL 2024 ~500 m COG  
+`public/light-pollution/viirs-vnl-2024-500m.cog.tif`  
+(Zenodo [10.5281/zenodo.17294744](https://doi.org/10.5281/zenodo.17294744), CC BY 4.0).
 
 ```bash
-# Default (no EOG login): NASA GIBS Black Marble → radiance-proxy COG
-npm run build:viirs-bortle
-
-# Best accuracy: EOG VIIRS VNL average_masked (free account + manual download)
-# https://eogdata.mines.edu/products/vnl/ → then:
-python scripts/build-viirs-bortle-cog-rasterio.py --input path/to/average_masked.tif
+# Override COG URL if hosted elsewhere:
+VITE_LIGHT_POLLUTION_COG_URL=https://your-cdn/.../viirs-vnl-2024-500m.cog.tif
 ```
 
-Or host the COG and set:
+If the COG is missing, the app falls back to live Black Marble ring samples
+with the **same** First Rig kernel (degraded — BM is a visualization).
 
-```
-VITE_LIGHT_POLLUTION_COG_URL=https://your-cdn/.../viirs-vnl-average-masked.cog.tif
-```
-
-If the COG is missing, the app falls back to live Black Marble tile sampling.
-
-Do **not** use World Atlas 2015 (CC BY-NC) or scrape lightpollutionmap.info tiles.
+Do **not** use World Atlas 2015 (CC BY-NC) or scrape lightpollutionmap.info.
 
 Credits: Settings gear on the map + `docs/THIRD_PARTY_ATTRIBUTIONS.md`.

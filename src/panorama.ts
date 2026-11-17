@@ -4,21 +4,18 @@
  * How each shot is projected onto the landscape:
  * - optical: real tripod model — each shot = camera FOV frustum at that aim
  * - spherical: constant-yaw / constant-pitch patch on the sky sphere
- * - opticalDense: optical frustum with tessellated edges (better near-clip)
  */
-export type PanoramaProjectionMode = 'optical' | 'spherical' | 'opticalDense'
+export type PanoramaProjectionMode = 'optical' | 'spherical'
 
 export const PANORAMA_PROJECTION_MODES: readonly PanoramaProjectionMode[] = [
   'optical',
   'spherical',
-  'opticalDense',
 ] as const
 
 export const PANORAMA_PROJECTION_LABELS: Record<PanoramaProjectionMode, string> =
   {
     optical: 'Optique (trépied)',
     spherical: 'Sphérique (az/alt)',
-    opticalDense: 'Optique dense',
   }
 
 export type PanoramaPlan = {
@@ -58,6 +55,8 @@ export const PANORAMA_VERTICAL_COVERAGE_MAX_DEG = 180
 export function normalizePanoramaProjectionMode(
   value: unknown,
 ): PanoramaProjectionMode {
+  // Legacy « optique dense » was the same frustum path after mesh densify.
+  if (value === 'opticalDense') return 'optical'
   return PANORAMA_PROJECTION_MODES.includes(value as PanoramaProjectionMode)
     ? (value as PanoramaProjectionMode)
     : DEFAULT_PANORAMA_PLAN.projectionMode

@@ -1,0 +1,63 @@
+{
+  "description": "Reference data decoded from chamonix-viirs-2025.html (local halo prototype). Do not edit.",
+  "center": {
+    "lon": 6.8694,
+    "lat": 45.9237
+  },
+  "projector": {
+    "kind": "mercator",
+    "mercator": [
+      0.5190816666666667,
+      0.3560666722538731
+    ],
+    "unit": 0.0000358721097392457
+  },
+  "dem": {
+    "file": "dem.u16",
+    "size": 512,
+    "extentKm": 32,
+    "encoding": "uint16 LE, km = value / 10000",
+    "source": "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
+    "tileZoom": 11,
+    "attribution": "Mapterhorn · https://mapterhorn.com/attribution"
+  },
+  "viirs": {
+    "file": "viirs.f32",
+    "year": 2025,
+    "provider": "Light Pollution Map",
+    "producer": "Earth Observation Group (VIIRS DNB)",
+    "url": "https://www2.lightpollutionmap.info/data/v2/viirs_2025_raw.zip",
+    "units": "nW/cm²/sr",
+    "geotransform": [
+      6.650000000000006,
+      0.004166666666666667,
+      0,
+      46.08333333333333,
+      0,
+      -0.004166666666666667
+    ],
+    "width": 106,
+    "height": 74,
+    "nodata": -999.9000244140625,
+    "sourceCount": 446,
+    "maxRadiance": 33.68214416503906,
+    "sha256": "49865f21ad72c4449e943e433e955f6e02ff190b01ddc0cd2515bb9e5de367c3"
+  },
+  "volume": {
+    "size": [
+      96,
+      48,
+      96
+    ],
+    "bounds": [
+      -12,
+      0.3,
+      -12,
+      12,
+      8.3,
+      12
+    ],
+    "kernelRadiusKm": 3,
+    "normalization": 10
+  }
+}

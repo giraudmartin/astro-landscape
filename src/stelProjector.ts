@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import {
   EQUIRECT_VFOV_MAX_DEG,
-  ORTHOGRAPHIC_VFOV_MAX_DEG,
   PERSPECTIVE_CAMERA_VFOV_MAX_DEG,
   RECTILINEAR_VFOV_MAX_DEG,
   STAGE_VFOV_MAX_DEG,
@@ -18,13 +17,11 @@ import {
  * - stereographic: Stellarium default, r = 2·tan(θ/2)
  * - equirectangular: λ = azimuth, φ = altitude, both in radians
  * - rectilinear: r = tan(θ), same stretch as a real lens
- * - orthographic: r = sin(θ), hemisphere as a disk
  */
 export type StageProjection =
   | 'stereographic'
   | 'equirectangular'
   | 'rectilinear'
-  | 'orthographic'
 
 export const STAGE_PROJECTIONS: readonly {
   id: StageProjection
@@ -50,15 +47,9 @@ export const STAGE_PROJECTIONS: readonly {
     shortLabel: 'Recti',
     title: "Ce que voit l'objectif. Les bords s'étirent, comme sur la photo",
   },
-  {
-    id: 'orthographic',
-    label: 'Orthographique',
-    shortLabel: 'Ortho',
-    title: "Tout le ciel au-dessus de l'horizon dans un disque",
-  },
 ]
 
-/** Shared by every projected material. 0 stereo, 1 equirect, 2 recti, 3 ortho. */
+/** Shared by every projected material. 0 stereo, 1 equirect, 2 recti. */
 export const stelModeUniform = { value: 0 }
 
 let activeProjection: StageProjection = 'stereographic'
@@ -69,19 +60,14 @@ function modeUniformValue(mode: StageProjection): number {
       return 1
     case 'rectilinear':
       return 2
-    case 'orthographic':
-      return 3
     default:
       return 0
   }
 }
 
 export function normalizeStageProjection(value: unknown): StageProjection {
-  if (
-    value === 'equirectangular' ||
-    value === 'rectilinear' ||
-    value === 'orthographic'
-  ) {
+  // Legacy « orthographic » removed — fall back to stereo.
+  if (value === 'equirectangular' || value === 'rectilinear') {
     return value
   }
   return 'stereographic'
@@ -110,9 +96,6 @@ export function framedStageVfov(stageDeg: number): number {
   if (activeProjection === 'rectilinear') {
     return Math.min(fov, RECTILINEAR_VFOV_MAX_DEG)
   }
-  if (activeProjection === 'orthographic') {
-    return Math.min(fov, ORTHOGRAPHIC_VFOV_MAX_DEG)
-  }
   return Math.min(fov, STEREOGRAPHIC_VFOV_MAX_DEG)
 }
 
@@ -130,9 +113,6 @@ export function perspectiveFovDeg(stageDeg: number): number {
   if (activeProjection === 'rectilinear') {
     // Warp is already tan(θ); the camera FOV matches the stage.
     camFov = fov
-  } else if (activeProjection === 'orthographic') {
-    // Edge of the disk is sin(θ/2).
-    camFov = (2 * Math.atan(Math.sin(fovy / 2)) * 180) / Math.PI
   } else {
     // Equirectangular is linear in angle.
     camFov = (2 * Math.atan(fovy / 2) * 180) / Math.PI
@@ -192,10 +172,6 @@ function warpEye(
     if (z < 1e-4) return null
     return { x: x / z, y: y / z }
   }
-  if (activeProjection === 'orthographic') {
-    if (z < -1e-4) return null
-    return { x, y }
-  }
   // Stereographic (eye z forward): same as GLSL h = 0.5*(1 - n.z) with n.z = -z.
   const nz = -z
   const h = 0.5 * (1 - nz)
@@ -216,7 +192,7 @@ uniform float uStelMode;
 varying vec3 vStelRay;
 varying vec2 vStelSt;
 varying float vStelBad;
-// Mild azimuth park for equirect/ortho singularities ONLY.
+// Mild azimuth park for equirect singularities ONLY.
 // NEVER *50 full-screen park, NEVER shared-radius clamp (that = hublot disk).
 vec2 stelOffscreenSt(vec3 n) {
   float pl = length(n.xy);
@@ -249,19 +225,11 @@ vec4 stelProject(vec4 mv) {
     float az = atan(n.x, -n.z);
     st = vec2(az, asin(clamp(n.y, -1.0, 1.0)));
     vStelBad = abs(az) > 2.85 ? 1.0 : 0.0;
-  } else if (uStelMode < 2.5) {
+  } else {
     // Rectilinear = native perspective — no second tan-warp.
     vStelSt = n.xy / max(-n.z, 1e-4);
     vStelBad = 0.0;
     return projectionMatrix * mv;
-  } else {
-    if (n.z > 0.0) {
-      st = stelOffscreenSt(n);
-      vStelBad = 1.0;
-    } else {
-      st = n.xy;
-      vStelBad = 0.0;
-    }
   }
   vStelSt = st;
   vec3 warped = vec3(st, -1.0) * d;
@@ -310,18 +278,10 @@ vec4 stelProject(vec4 mv) {
     float az = atan(n.x, -n.z);
     st = vec2(az, asin(clamp(n.y, -1.0, 1.0)));
     vStelBad = abs(az) > 2.85 ? 1.0 : 0.0;
-  } else if (uStelMode < 2.5) {
+  } else {
     vStelSt = n.xy / max(-n.z, 1e-4);
     vStelBad = 0.0;
     return projectionMatrix * mv;
-  } else {
-    if (n.z > 0.0) {
-      st = stelOffscreenSt(n);
-      vStelBad = 1.0;
-    } else {
-      st = n.xy;
-      vStelBad = 0.0;
-    }
   }
   vStelSt = st;
   vec3 warped = vec3(st, -1.0) * d;

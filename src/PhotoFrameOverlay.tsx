@@ -147,17 +147,17 @@ function eyeToScreen(
 /**
  * Near-plane floor matching what `stelProjectEye` / `warpEye` can still map.
  *
- * A fixed +0.08 (≈85° from look) falsely frustum-cut outer panorama tiles that
- * remain on-screen under stereographic / equirect / ortho wide stage FOV.
+ * Must stay strictly inside the warp singularity so clipped samples still
+ * project (skipped nulls used to join distant neighbours → wrap splits /
+ * unfinished white strokes). Equirect has no singularity — skip near clip.
  */
 function nearClipMinZForStage(): number {
   const mode = getStageProjection()
-  if (mode === 'rectilinear') return 1e-4
-  if (mode === 'orthographic') return -1e-4
-  // Equirect covers the full sphere; skip near clip.
+  // Rectilinear r=x/z. Keep low so frame edges near the view rim still draw.
+  if (mode === 'rectilinear') return 1e-3
   if (mode === 'equirectangular') return Number.NEGATIVE_INFINITY
-  // Stereographic: valid until the antipode (h → 0).
-  return -1 + 2e-4
+  // Stereographic: h = 0.5*(1+z) must stay ≥ 1e-4 (warpEye). z ≥ -1+4e-4.
+  return -1 + 4e-4
 }
 
 /** Drop the part of a tile that sits past the projection singularity. */
@@ -255,29 +255,6 @@ function projectEyePolyToScreen(
   return poly
     .map((p) => eyeToScreen(p, stageW, stageH, stageVfovDeg))
     .filter((p): p is Pt2 => p != null)
-}
-
-/**
- * Project world directions with projection-aware near clip (no stage rect clip).
- * Partially visible tiles stay drawn — never all-or-nothing cull / fake frustum.
- */
-function projectDirsToScreen(
-  dirs: Vec3[],
-  look: { forward: Vec3; right: Vec3; up: Vec3 },
-  stageW: number,
-  stageH: number,
-  stageVfovDeg: number,
-): Pt2[] {
-  if (dirs.length < 3) return []
-  const poly = clipEyeNear(
-    dirs.map((d) => dirToEye(d, look)),
-    nearClipMinZForStage(),
-  )
-  if (poly.length < 3) return []
-  const out = poly
-    .map((p) => eyeToScreen(p, stageW, stageH, stageVfovDeg))
-    .filter((p): p is Pt2 => p != null && isFinitePt(p))
-  return out.length >= 3 ? out : []
 }
 
 /** Soft stage pad (±25 %) keeps SVG/mask stable for edge tiles. */
@@ -424,6 +401,18 @@ type LockedPanoTile = {
   index: number
   col: number
   row: number
+  /** Shot aim (deg) — used to build angular overlap bands. */
+  yaw: number
+  pitch: number
+  /**
+   * Densified on-stage cells (mask + coverage). A single outline polygon
+   * self-intersects / false-wraps under stereographic pan and drops the
+   * left side — mesh cells keep every projectable patch.
+   */
+  cells: Pt2[][]
+  /** Outer boundary stroke pieces (broken at singularity jumps). */
+  strokes: Pt2[][]
+  /** Any cell flattened for envelope / legacy consumers. */
   polygon: Pt2[]
   center: Pt2 | null
   badge: Pt2 | null
@@ -431,42 +420,23 @@ type LockedPanoTile = {
 
 type LockedPanoOverlap = {
   key: string
-  polygon: Pt2[]
+  cells: Pt2[][]
 }
 
-/** Convex polygon ∩ convex clip via AABB when possible, else sequential SH. */
-function intersectConvexPolygons(subject: Pt2[], clip: Pt2[]): Pt2[] {
-  if (subject.length < 3 || clip.length < 3) return []
-  // Fast path: axis-aligned clip rect (our overlap + stage clips).
-  if (clip.length === 4) {
-    const xs = clip.map((p) => p.x)
-    const ys = clip.map((p) => p.y)
-    const left = Math.min(...xs)
-    const right = Math.max(...xs)
-    const top = Math.min(...ys)
-    const bottom = Math.max(...ys)
-    const isAxisAligned = clip.every(
-      (p) =>
-        (Math.abs(p.x - left) < 1e-6 || Math.abs(p.x - right) < 1e-6) &&
-        (Math.abs(p.y - top) < 1e-6 || Math.abs(p.y - bottom) < 1e-6),
-    )
-    if (isAxisAligned) {
-      return clipPolygonToRect(subject, left, top, right, bottom)
-    }
+function polygonSignedArea(poly: Pt2[]): number {
+  let area = 0
+  for (let i = 0; i < poly.length; i += 1) {
+    const a = poly[i]!
+    const b = poly[(i + 1) % poly.length]!
+    area += a.x * b.y - b.x * a.y
   }
-  return clipPolygonToRect(
-    subject,
-    Math.min(...clip.map((p) => p.x)),
-    Math.min(...clip.map((p) => p.y)),
-    Math.max(...clip.map((p) => p.x)),
-    Math.max(...clip.map((p) => p.y)),
-  )
+  return area * 0.5
 }
 
 /** Pitch clamp for panorama aim points (stay clear of gimbal poles). */
 const PANO_PITCH_MAX_DEG = 89
 /** Samples per edge — curved spherical / dense optical boundaries. */
-const PANO_EDGE_SAMPLES = 16
+const PANO_EDGE_SAMPLES = 32
 
 function shotAimYawPitch(
   lockYawDeg: number,
@@ -562,44 +532,772 @@ function sphericalRectDirs(
   return dirs
 }
 
+/** Far outside the stage (stereographic balloon / antipode ring). */
+function isFarOffstage(
+  p: Pt2,
+  stageW: number,
+  stageH: number,
+  margin = 0.6,
+): boolean {
+  return (
+    p.x < -stageW * margin ||
+    p.x > stageW * (1 + margin) ||
+    p.y < -stageH * margin ||
+    p.y > stageH * (1 + margin)
+  )
+}
+
 /**
- * Drop a cell whose outline jumps across the view (wrap / behind-camera chord).
- * Outer stereographic tiles may balloon far past the optical frame — size is
- * handled by softClipToStage; only a discontinuous wrap chord rejects here.
+ * True when a screen segment is a fake chord across a projection singularity:
+ * stereographic antipode (both ends far off-stage, opposite sides) or
+ * equirect ±180° azimuth seam (huge horizontal jump between dense samples).
  */
-function tileFootprintSane(
+function segmentIsProjectionWrap(
+  a: Pt2,
+  b: Pt2,
+  stageW: number,
+  stageH: number,
+): boolean {
+  const span = Math.max(stageW, stageH, 48)
+  const len = Math.hypot(a.x - b.x, a.y - b.y)
+  // Equirect seam: atan2 jumps ±π → chord across most of the stage width.
+  // Dense edge samples never span this much unless the azimuth unwraps.
+  if (
+    getStageProjection() === 'equirectangular' &&
+    Math.abs(a.x - b.x) > stageW * 0.45 &&
+    len > span * 0.4
+  ) {
+    return true
+  }
+  if (!isFarOffstage(a, stageW, stageH) || !isFarOffstage(b, stageW, stageH)) {
+    return false
+  }
+  if (len < span * 0.8) return false
+  const midX = stageW * 0.5
+  const midY = stageH * 0.5
+  const crossX =
+    (a.x - midX) * (b.x - midX) < 0 && Math.abs(a.x - b.x) > span * 0.8
+  const crossY =
+    (a.y - midY) * (b.y - midY) < 0 && Math.abs(a.y - b.y) > span * 0.8
+  return crossX || crossY
+}
+
+/** Polygon has a fake wrap chord (stereo antipode or equirect seam). */
+function hasAntipodeWrapChord(
   points: Pt2[],
-  frameW: number,
-  frameH: number,
   stageW: number,
   stageH: number,
 ): boolean {
   if (points.length < 3) return false
-  const edges: number[] = []
   for (let i = 0; i < points.length; i += 1) {
     const a = points[i]!
     const b = points[(i + 1) % points.length]!
-    if (!isFinitePt(a) || !isFinitePt(b)) return false
-    edges.push(Math.hypot(a.x - b.x, a.y - b.y))
+    if (!isFinitePt(a) || !isFinitePt(b)) return true
+    if (segmentIsProjectionWrap(a, b, stageW, stageH)) return true
   }
-  const longest = Math.max(...edges)
-  const ordered = [...edges].sort((a, b) => a - b)
-  const median = ordered[Math.floor(ordered.length / 2)] ?? 0
-  // Wrap chord: one edge spans a large fraction of the stage while the rest
-  // of the outline stays fine-grained (tessellated sensor edge).
-  const stageSpan = Math.max(stageW, stageH, frameW, frameH, 48)
-  if (longest > stageSpan * 0.55 && longest > median * 5) return false
-  return true
+  return false
 }
 
-function projectTileDirs(
+/**
+ * Soft-clip a projected fill. Wrap chords (stereo antipode / equirect seam)
+ * are dropped — keeping them paints a full-stage fan; splitting without a
+ * seam-edge close reintroduces the same chord on polygon close.
+ * Recti near-plane runaways are dropped too (soft-clip alone left huge green
+ * pad-filling blotches).
+ */
+function finalizeProjectedFill(
+  screen: Pt2[],
+  stageW: number,
+  stageH: number,
+): Pt2[][] {
+  if (screen.length < 3) return []
+  if (hasAntipodeWrapChord(screen, stageW, stageH)) return []
+  // Reject only extreme runaways (recti singularity). Soft-clip handles the rest.
+  const lim = Math.max(stageW, stageH) * 4
+  for (const p of screen) {
+    if (
+      !isFinitePt(p) ||
+      Math.abs(p.x - stageW * 0.5) > lim ||
+      Math.abs(p.y - stageH * 0.5) > lim
+    ) {
+      return []
+    }
+  }
+  const clipped = softClipToStage(screen, stageW, stageH)
+  if (clipped.length < 3) return []
+  let anyOnstage = false
+  for (const p of clipped) {
+    if (p.x >= -1 && p.x <= stageW + 1 && p.y >= -1 && p.y <= stageH + 1) {
+      anyOnstage = true
+      break
+    }
+  }
+  if (!anyOnstage) return []
+  // Bowtie / runaway fill (stereo zenith or recti near-plane chord).
+  const area = Math.abs(polygonSignedArea(clipped))
+  const mode = getStageProjection()
+  // Recti zenith "boule" was ~9–10% of stage; keep thin optical bands under that.
+  const areaCap =
+    mode === 'equirectangular' ? 0.35 : mode === 'rectilinear' ? 0.07 : 0.22
+  if (area > stageW * stageH * areaCap) return []
+  // Recti: near-plane salvage projects as a tall central oval under N.
+  if (mode === 'rectilinear') {
+    let minX = Infinity
+    let maxX = -Infinity
+    let minY = Infinity
+    let maxY = -Infinity
+    for (const p of clipped) {
+      minX = Math.min(minX, p.x)
+      maxX = Math.max(maxX, p.x)
+      minY = Math.min(minY, p.y)
+      maxY = Math.max(maxY, p.y)
+    }
+    const bw = maxX - minX
+    const bh = maxY - minY
+    if (bh > stageH * 0.42 && bh >= bw * 0.9) return []
+  }
+  return [clipped]
+}
+
+/** Subdivisions per tile axis — enough to survive stereographic pan warp. */
+const PANO_MESH_DIV = 10
+/**
+ * Extra samples along each mesh-cell edge so fills track the same curves as
+ * frame strokes (PANO_EDGE_SAMPLES). Quads alone cut corners under stereo.
+ */
+const PANO_MESH_EDGE_SAMPLES = 4
+
+function projectOneDir(
+  dir: Vec3,
+  look: { forward: Vec3; right: Vec3; up: Vec3 },
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+): Pt2 | null {
+  const eye = dirToEye(dir, look)
+  if (eye.z < nearClipMinZForStage()) return null
+  return eyeToScreen(eye, stageW, stageH, stageVfovDeg)
+}
+
+/** Project a closed dir loop with the same eye near-clip as strokes. */
+function projectDirsToScreenPoly(
   dirs: Vec3[],
   look: { forward: Vec3; right: Vec3; up: Vec3 },
   stageW: number,
   stageH: number,
   stageVfovDeg: number,
 ): Pt2[] {
-  return projectDirsToScreen(dirs, look, stageW, stageH, stageVfovDeg)
+  if (dirs.length < 3) return []
+  const eyes: EyePt[] = []
+  for (const d of dirs) {
+    const n = normalize(d)
+    if (!n) return []
+    eyes.push(dirToEye(n, look))
+  }
+  const clippedEyes = clipEyeNear(eyes, nearClipMinZForStage())
+  if (clippedEyes.length < 3) return []
+  const screen: Pt2[] = []
+  for (const e of clippedEyes) {
+    const pt = eyeToScreen(e, stageW, stageH, stageVfovDeg)
+    if (!pt || !isFinitePt(pt)) return []
+    screen.push(pt)
+  }
+  return screen
+}
+
+function finalizeMeshCell(
+  corners: Pt2[],
+  stageW: number,
+  stageH: number,
+): Pt2[] {
+  const parts = finalizeProjectedFill(corners, stageW, stageH)
+  return parts[0] ?? []
+}
+
+/**
+ * Spherical-rect cell outline with edge tessellation (matches stroke density).
+ * Order: top L→R, right T→B, bottom R→L, left B→T.
+ */
+function sphericalCellDirs(
+  yA: number,
+  yB: number,
+  pA: number,
+  pB: number,
+  edgeSamples: number,
+): Vec3[] {
+  const n = Math.max(1, edgeSamples)
+  const dirs: Vec3[] = []
+  for (let i = 0; i <= n; i += 1) {
+    const t = i / n
+    dirs.push(lookDirection(yA + (yB - yA) * t, pB))
+  }
+  for (let i = 1; i <= n; i += 1) {
+    const t = i / n
+    dirs.push(lookDirection(yB, pB + (pA - pB) * t))
+  }
+  for (let i = 1; i <= n; i += 1) {
+    const t = i / n
+    dirs.push(lookDirection(yB + (yA - yB) * t, pA))
+  }
+  for (let i = 1; i < n; i += 1) {
+    const t = i / n
+    dirs.push(lookDirection(yA, pA + (pB - pA) * t))
+  }
+  return dirs
+}
+
+type SphericalMeshDiv = { divYaw: number; divPitch: number; edgeSamples?: number }
+
+/**
+ * Densify a spherical (yaw×pitch) patch into projectable screen cells.
+ * Prefer mesh over outline hacks — outline polygons lose left coverage on pan.
+ * Anisotropic div keeps thin overlap bands smooth along the long curved axis.
+ */
+function projectSphericalPatchMesh(
+  yaw0: number,
+  yaw1: number,
+  pitchBottom: number,
+  pitchTop: number,
+  look: { forward: Vec3; right: Vec3; up: Vec3 },
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+  div: number | SphericalMeshDiv = PANO_MESH_DIV,
+): Pt2[][] {
+  if (!(yaw1 > yaw0 + 1e-4) || !(pitchTop > pitchBottom + 1e-4)) return []
+  const divYaw =
+    typeof div === 'number' ? div : Math.max(1, Math.floor(div.divYaw))
+  const divPitch =
+    typeof div === 'number' ? div : Math.max(1, Math.floor(div.divPitch))
+  const edgeSamples =
+    typeof div === 'number'
+      ? PANO_MESH_EDGE_SAMPLES
+      : Math.max(1, Math.floor(div.edgeSamples ?? PANO_MESH_EDGE_SAMPLES))
+  const cells: Pt2[][] = []
+  for (let i = 0; i < divYaw; i += 1) {
+    const u0 = i / divYaw
+    const u1 = (i + 1) / divYaw
+    for (let j = 0; j < divPitch; j += 1) {
+      const v0 = j / divPitch
+      const v1 = (j + 1) / divPitch
+      const yA = yaw0 + (yaw1 - yaw0) * u0
+      const yB = yaw0 + (yaw1 - yaw0) * u1
+      const pA = pitchBottom + (pitchTop - pitchBottom) * v0
+      const pB = pitchBottom + (pitchTop - pitchBottom) * v1
+      const dirs = sphericalCellDirs(yA, yB, pA, pB, edgeSamples)
+      const corners = projectDirsToScreenPoly(
+        dirs,
+        look,
+        stageW,
+        stageH,
+        stageVfovDeg,
+      )
+      if (corners.length < 3) continue
+      const cell = finalizeMeshCell(corners, stageW, stageH)
+      if (cell.length >= 3) cells.push(cell)
+    }
+  }
+  return cells
+}
+
+/** Sample optical image-plane rectangle edges (tan-space) like sphericalCellDirs. */
+function opticalCellDirs(
+  shot: { forward: Vec3; right: Vec3; up: Vec3 },
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  edgeSamples: number,
+): Vec3[] {
+  const n = Math.max(1, edgeSamples)
+  const dirs: Vec3[] = []
+  const push = (x: number, y: number) => {
+    dirs.push(lockLocalVec(shot, x, y))
+  }
+  for (let i = 0; i <= n; i += 1) {
+    const t = i / n
+    push(x0 + (x1 - x0) * t, y1)
+  }
+  for (let i = 1; i <= n; i += 1) {
+    const t = i / n
+    push(x1, y1 + (y0 - y1) * t)
+  }
+  for (let i = 1; i <= n; i += 1) {
+    const t = i / n
+    push(x1 + (x0 - x1) * t, y0)
+  }
+  for (let i = 1; i < n; i += 1) {
+    const t = i / n
+    push(x0, y0 + (y1 - y0) * t)
+  }
+  return dirs
+}
+
+type TanPt = { x: number; y: number }
+
+function scaleAdd(a: Vec3, sa: number, b: Vec3, sb: number): Vec3 {
+  return {
+    x: a.x * sa + b.x * sb,
+    y: a.y * sa + b.y * sb,
+    z: a.z * sa + b.z * sb,
+  }
+}
+
+/** Clip polygon by half-plane a + bx·x + by·y ≤ 0 (tan-space). */
+function clipTanPolyByHalfPlane(
+  poly: TanPt[],
+  a: number,
+  bx: number,
+  by: number,
+): TanPt[] {
+  if (poly.length === 0) return []
+  const dist = (p: TanPt) => a + bx * p.x + by * p.y
+  const out: TanPt[] = []
+  for (let i = 0; i < poly.length; i += 1) {
+    const s = poly[i]!
+    const e = poly[(i + 1) % poly.length]!
+    const ds = dist(s)
+    const de = dist(e)
+    const sIn = ds <= 1e-9
+    const eIn = de <= 1e-9
+    if (sIn && eIn) {
+      out.push(e)
+    } else if (sIn && !eIn) {
+      const denom = ds - de
+      if (Math.abs(denom) < 1e-12) continue
+      const t = Math.min(1, Math.max(0, ds / denom))
+      out.push({ x: s.x + (e.x - s.x) * t, y: s.y + (e.y - s.y) * t })
+    } else if (!sIn && eIn) {
+      const denom = ds - de
+      if (Math.abs(denom) < 1e-12) {
+        out.push(e)
+        continue
+      }
+      const t = Math.min(1, Math.max(0, ds / denom))
+      out.push({ x: s.x + (e.x - s.x) * t, y: s.y + (e.y - s.y) * t })
+      out.push(e)
+    }
+  }
+  return out
+}
+
+/**
+ * Exact optical overlap in shot A's image plane: sensor rectangle ∩ shot B's
+ * frustum. B's frustum sides are planes through the origin → straight half-planes
+ * in A's tan-space (no stair-step grid).
+ */
+function opticalOverlapTanPoly(
+  shotA: { forward: Vec3; right: Vec3; up: Vec3 },
+  shotB: { forward: Vec3; right: Vec3; up: Vec3 },
+  tanHalfH: number,
+  tanHalfV: number,
+): TanPt[] {
+  // CCW sensor rectangle in A.
+  let poly: TanPt[] = [
+    { x: -tanHalfH, y: tanHalfV },
+    { x: tanHalfH, y: tanHalfV },
+    { x: tanHalfH, y: -tanHalfV },
+    { x: -tanHalfH, y: -tanHalfV },
+  ]
+  // Inside B: |x_B|≤tH, |y_B|≤tV, z_B≥0 — homogeneous → linear in A's (x,y).
+  const normals: Vec3[] = [
+    scaleAdd(shotB.right, 1, shotB.forward, -tanHalfH),
+    scaleAdd(shotB.right, -1, shotB.forward, -tanHalfH),
+    scaleAdd(shotB.up, 1, shotB.forward, -tanHalfV),
+    scaleAdd(shotB.up, -1, shotB.forward, -tanHalfV),
+    { x: -shotB.forward.x, y: -shotB.forward.y, z: -shotB.forward.z },
+  ]
+  for (const n of normals) {
+    const a0 = dot(shotA.forward, n)
+    const bx = dot(shotA.right, n)
+    const by = dot(shotA.up, n)
+    poly = clipTanPolyByHalfPlane(poly, a0, bx, by)
+    if (poly.length < 3) return []
+  }
+  return poly
+}
+
+/**
+ * Densify a tan-space polygon, near-clip in eye space, project as ONE fill
+ * polygon — never a triangle fan (fans = visible ribs / chelou spikes).
+ */
+function projectTanPolyFill(
+  shot: { forward: Vec3; right: Vec3; up: Vec3 },
+  tanPoly: TanPt[],
+  look: { forward: Vec3; right: Vec3; up: Vec3 },
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+  edgeSamples = 24,
+): Pt2[][] {
+  if (tanPoly.length < 3) return []
+  const n = Math.max(4, edgeSamples)
+  const eyes: EyePt[] = []
+  for (let i = 0; i < tanPoly.length; i += 1) {
+    const a = tanPoly[i]!
+    const b = tanPoly[(i + 1) % tanPoly.length]!
+    const count = i === tanPoly.length - 1 ? n : n + 1
+    for (let s = 0; s < count; s += 1) {
+      const t = s / n
+      const p: TanPt = {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+      }
+      const dir = normalize(lockLocalVec(shot, p.x, p.y))
+      if (!dir) continue
+      eyes.push(dirToEye(dir, look))
+    }
+  }
+  if (eyes.length < 3) return []
+  // Recti: if any sample is behind the near plane, drop the fill instead of
+  // clipEyeNear-salvaging — that cut projects as the zenith "boule" oval.
+  const minZ = nearClipMinZForStage()
+  if (getStageProjection() === 'rectilinear') {
+    for (const e of eyes) {
+      if (e.z < minZ) return []
+    }
+  }
+  const clippedEyes = clipEyeNear(eyes, minZ)
+  if (clippedEyes.length < 3) return []
+  const screen: Pt2[] = []
+  for (const e of clippedEyes) {
+    const pt = eyeToScreen(e, stageW, stageH, stageVfovDeg)
+    if (pt && isFinitePt(pt)) screen.push(pt)
+  }
+  if (screen.length < 3) return []
+  return finalizeProjectedFill(screen, stageW, stageH)
+}
+
+/**
+ * Optical overlap = exact sensor-A ∩ frustum-B, one smooth fill polygon.
+ */
+function projectOpticalOverlapMesh(
+  yawA: number,
+  pitchA: number,
+  yawB: number,
+  pitchB: number,
+  halfHDeg: number,
+  halfVDeg: number,
+  tanHalfH: number,
+  tanHalfV: number,
+  look: { forward: Vec3; right: Vec3; up: Vec3 },
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+  _div?: SphericalMeshDiv,
+): Pt2[][] {
+  const shotA = cameraBasis(yawA, pitchA)
+  const shotB = cameraBasis(yawB, pitchB)
+  const tanPoly = opticalOverlapTanPoly(shotA, shotB, tanHalfH, tanHalfV)
+  if (tanPoly.length < 3) return []
+  const single = projectTanPolyFill(
+    shotA,
+    tanPoly,
+    look,
+    stageW,
+    stageH,
+    stageVfovDeg,
+    28,
+  )
+  if (single.length > 0) return single
+  // Recti: no spherical fallback — those cells stretch into junk fans.
+  if (getStageProjection() === 'rectilinear') return []
+  // Zenith stereo: single poly bowtied — spherical az/alt band instead.
+  const yaw0 = Math.max(yawA - halfHDeg, yawB - halfHDeg)
+  const yaw1 = Math.min(yawA + halfHDeg, yawB + halfHDeg)
+  const pitch0 = Math.max(pitchA - halfVDeg, pitchB - halfVDeg)
+  const pitch1 = Math.min(pitchA + halfVDeg, pitchB + halfVDeg)
+  return projectSphericalPatchMesh(
+    yaw0,
+    yaw1,
+    pitch0,
+    pitch1,
+    look,
+    stageW,
+    stageH,
+    stageVfovDeg,
+    { divYaw: 6, divPitch: 6, edgeSamples: 6 },
+  )
+}
+
+/**
+ * Optical sensor fill as a densified tan-space mesh.
+ *
+ * A single projected sensor poly looks smooth on the horizon but near zenith
+ * under stereographic it bowties into a screen-filling green fan — always mesh.
+ * Keep cells small + edge-sampled so the fill tracks the white stroke curves.
+ */
+function projectOpticalFrustumMesh(
+  shotYawDeg: number,
+  shotPitchDeg: number,
+  tanHalfH: number,
+  tanHalfV: number,
+  look: { forward: Vec3; right: Vec3; up: Vec3 },
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+  div = PANO_MESH_DIV,
+): Pt2[][] {
+  const shot = cameraBasis(shotYawDeg, shotPitchDeg)
+  // Denser under stereo: coarse quads = visible green triangle fans at zenith.
+  const meshDiv =
+    getStageProjection() === 'stereographic'
+      ? Math.max(div, 14)
+      : Math.max(div, 10)
+  const edgeSamples =
+    getStageProjection() === 'stereographic'
+      ? Math.max(PANO_MESH_EDGE_SAMPLES, 8)
+      : PANO_MESH_EDGE_SAMPLES
+  const cells: Pt2[][] = []
+  for (let i = 0; i < meshDiv; i += 1) {
+    const u0 = i / meshDiv
+    const u1 = (i + 1) / meshDiv
+    for (let j = 0; j < meshDiv; j += 1) {
+      const v0 = j / meshDiv
+      const v1 = (j + 1) / meshDiv
+      const x0 = -tanHalfH + 2 * tanHalfH * u0
+      const x1 = -tanHalfH + 2 * tanHalfH * u1
+      const y0 = -tanHalfV + 2 * tanHalfV * v0
+      const y1 = -tanHalfV + 2 * tanHalfV * v1
+      const tryDirs = [
+        opticalCellDirs(shot, x0, x1, y0, y1, edgeSamples),
+        opticalCellDirs(shot, x0, x1, y0, y1, 1),
+      ]
+      let cell: Pt2[] = []
+      for (const dirs of tryDirs) {
+        const corners = projectDirsToScreenPoly(
+          dirs,
+          look,
+          stageW,
+          stageH,
+          stageVfovDeg,
+        )
+        if (corners.length < 3) continue
+        cell = finalizeMeshCell(corners, stageW, stageH)
+        if (cell.length >= 3) break
+      }
+      if (cell.length >= 3) cells.push(cell)
+    }
+  }
+  return cells
+}
+
+/**
+ * Stereographic samples near the antipode land at huge screen radii. Keep them
+ * for smooth arcs that leave the viewBox (SVG clips), but drop the singularity
+ * neighbourhood — never clamp onto a pad box (that smashed curves into the
+ * unfinished / pinched white strokes).
+ */
+function isUsableStrokePt(p: Pt2, stageW: number, stageH: number): boolean {
+  if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return false
+  // Recti: drop only extreme singularity runaways. Stereo/équi: keep all.
+  if (getStageProjection() !== 'rectilinear') return true
+  const lim = Math.max(stageW, stageH) * 5
+  return (
+    Math.abs(p.x - stageW * 0.5) <= lim &&
+    Math.abs(p.y - stageH * 0.5) <= lim
+  )
+}
+
+function projectEyeSample(
+  eye: EyePt,
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+): Pt2 | null {
+  const pt = eyeToScreen(eye, stageW, stageH, stageVfovDeg)
+  if (!pt || !isFinitePt(pt) || !isUsableStrokePt(pt, stageW, stageH)) {
+    return null
+  }
+  return pt
+}
+
+function eyeNearIntersect(a: EyePt, b: EyePt, minZ: number): EyePt {
+  const denom = b.z - a.z
+  const t = Math.abs(denom) < 1e-8 ? 0 : (minZ - a.z) / denom
+  const clamped = Math.min(1, Math.max(0, t))
+  return {
+    x: a.x + (b.x - a.x) * clamped,
+    y: a.y + (b.y - a.y) * clamped,
+    z: minZ,
+  }
+}
+
+/**
+ * Rectilinear: draw each sensor edge on its own. A closed-loop walk + near
+ * clip was punching the concentric arcs in the middle of the Mano fan.
+ */
+function projectRectilinearOpticalStrokes(
+  shotYawDeg: number,
+  shotPitchDeg: number,
+  tanHalfH: number,
+  tanHalfV: number,
+  look: { forward: Vec3; right: Vec3; up: Vec3 },
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+  samples = 48,
+): Pt2[][] {
+  const shot = cameraBasis(shotYawDeg, shotPitchDeg)
+  const corners: [number, number][] = [
+    [-tanHalfH, tanHalfV],
+    [tanHalfH, tanHalfV],
+    [tanHalfH, -tanHalfV],
+    [-tanHalfH, -tanHalfV],
+  ]
+  const minZ = nearClipMinZForStage()
+  const strokes: Pt2[][] = []
+  const n = Math.max(8, samples)
+  for (let e = 0; e < 4; e += 1) {
+    const a = corners[e]!
+    const b = corners[(e + 1) % 4]!
+    let current: Pt2[] = []
+    const flush = () => {
+      if (current.length >= 2) strokes.push(current)
+      current = []
+    }
+    for (let i = 0; i <= n; i += 1) {
+      const t = i / n
+      const dir = normalize(
+        lockLocalVec(
+          shot,
+          a[0] + (b[0] - a[0]) * t,
+          a[1] + (b[1] - a[1]) * t,
+        ),
+      )
+      if (!dir) {
+        flush()
+        continue
+      }
+      const eye = dirToEye(dir, look)
+      if (eye.z < minZ) {
+        flush()
+        continue
+      }
+      const pt = eyeToScreen(eye, stageW, stageH, stageVfovDeg)
+      if (!pt || !isFinitePt(pt) || !isUsableStrokePt(pt, stageW, stageH)) {
+        flush()
+        continue
+      }
+      current.push(pt)
+    }
+    flush()
+  }
+  return strokes
+}
+
+/**
+ * Project a closed direction loop as continuous strokes (stereo / equi).
+ * Never draw a near-plane / antipode chord across the screen.
+ */
+function projectBoundaryStrokes(
+  dirs: Vec3[],
+  look: { forward: Vec3; right: Vec3; up: Vec3 },
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+): Pt2[][] {
+  if (dirs.length < 2) return []
+  const eyes: EyePt[] = []
+  for (const d of dirs) {
+    const n = normalize(d) ?? d
+    eyes.push(dirToEye(n, look))
+  }
+  return projectBoundaryStrokesSplit(eyes, stageW, stageH, stageVfovDeg)
+}
+
+/** Split-at-near-plane / wrap path used by stereo & equi (and recti fallback). */
+function projectBoundaryStrokesSplit(
+  eyes: EyePt[],
+  stageW: number,
+  stageH: number,
+  stageVfovDeg: number,
+): Pt2[][] {
+  const minZ = nearClipMinZForStage()
+  const strokes: Pt2[][] = []
+  let current: Pt2[] = []
+  const flush = () => {
+    if (current.length >= 2) strokes.push(current)
+    current = []
+  }
+  const push = (p: Pt2 | null) => {
+    if (!p) {
+      flush()
+      return
+    }
+    if (current.length > 0) {
+      const prev = current[current.length - 1]!
+      if (segmentIsProjectionWrap(prev, p, stageW, stageH)) {
+        flush()
+      }
+    }
+    current.push(p)
+  }
+
+  const eyeOk = (e: EyePt) => !Number.isFinite(minZ) || e.z >= minZ
+  const n = eyes.length
+  for (let i = 0; i < n; i += 1) {
+    const a = eyes[i]!
+    const b = eyes[(i + 1) % n]!
+    const aIn = eyeOk(a)
+    const bIn = eyeOk(b)
+    if (aIn && bIn) {
+      if (current.length === 0) {
+        push(projectEyeSample(a, stageW, stageH, stageVfovDeg))
+      }
+      push(projectEyeSample(b, stageW, stageH, stageVfovDeg))
+      continue
+    }
+    if (aIn && !bIn) {
+      if (current.length === 0) {
+        push(projectEyeSample(a, stageW, stageH, stageVfovDeg))
+      }
+      if (Number.isFinite(minZ)) {
+        const hit = projectEyeSample(
+          eyeNearIntersect(a, b, minZ),
+          stageW,
+          stageH,
+          stageVfovDeg,
+        )
+        if (hit) push(hit)
+      }
+      flush()
+      continue
+    }
+    if (!aIn && bIn) {
+      flush()
+      if (Number.isFinite(minZ)) {
+        const hit = projectEyeSample(
+          eyeNearIntersect(a, b, minZ),
+          stageW,
+          stageH,
+          stageVfovDeg,
+        )
+        if (hit) push(hit)
+      }
+      push(projectEyeSample(b, stageW, stageH, stageVfovDeg))
+      continue
+    }
+    flush()
+  }
+  flush()
+  // Drop tiny near-plane crumbs (Recti Mano shred) — keep real frame edges.
+  return strokes.filter((s) => s.length >= 8)
+}
+
+function flattenCells(cells: Pt2[][]): Pt2[] {
+  if (cells.length === 0) return []
+  // Representative poly for envelope: largest cell by |area|.
+  let best = cells[0]!
+  let bestA = Math.abs(polygonSignedArea(best))
+  for (let i = 1; i < cells.length; i += 1) {
+    const a = Math.abs(polygonSignedArea(cells[i]!))
+    if (a > bestA) {
+      best = cells[i]!
+      bestA = a
+    }
+  }
+  return best
 }
 
 /**
@@ -661,44 +1359,69 @@ function projectLockedPanorama(input: {
         input.stageVfovDeg,
       )
 
-      let dirs: Vec3[]
-      if (mode === 'spherical') {
-        dirs = sphericalRectDirs(
-          cyaw - halfHDeg,
-          cyaw + halfHDeg,
-          cpitch - halfVDeg,
-          cpitch + halfVDeg,
-        )
-      } else {
-        // Four corners joined by straight screen lines cut across the view
-        // as soon as a shot leaves the centre. Follow the sensor edge.
-        dirs = opticalFrustumEdgeDirs(
-          cyaw,
-          cpitch,
-          tanHalfH,
-          tanHalfV,
-          PANO_EDGE_SAMPLES,
-        )
-      }
+      const yaw0 = cyaw - halfHDeg
+      const yaw1 = cyaw + halfHDeg
+      const pitch0 = cpitch - halfVDeg
+      const pitch1 = cpitch + halfVDeg
 
-      const projected = projectTileDirs(
-        dirs,
-        look,
-        input.stageW,
-        input.stageH,
-        input.stageVfovDeg,
-      )
-      // Sanity on the raw footprint (wrap chords). Soft-clip afterwards so a
-      // stage-edge cut is not mistaken for a behind-camera jump.
-      const polygon = tileFootprintSane(
-        projected,
-        input.frameW,
-        input.frameH,
-        input.stageW,
-        input.stageH,
-      )
-        ? softClipToStage(projected, input.stageW, input.stageH)
-        : []
+      // Recti: hide only shots aimed clearly behind the camera.
+      const aimEyeZ = dirToEye(aim, look).z
+      const rectiHidden =
+        getStageProjection() === 'rectilinear' && aimEyeZ < 0.02
+
+      const cells = rectiHidden
+        ? []
+        : mode === 'spherical'
+          ? projectSphericalPatchMesh(
+              yaw0,
+              yaw1,
+              pitch0,
+              pitch1,
+              look,
+              input.stageW,
+              input.stageH,
+              input.stageVfovDeg,
+            )
+          : projectOpticalFrustumMesh(
+              cyaw,
+              cpitch,
+              tanHalfH,
+              tanHalfV,
+              look,
+              input.stageW,
+              input.stageH,
+              input.stageVfovDeg,
+            )
+
+      const strokes = rectiHidden
+        ? []
+        : getStageProjection() === 'rectilinear' && mode === 'optical'
+          ? projectRectilinearOpticalStrokes(
+              cyaw,
+              cpitch,
+              tanHalfH,
+              tanHalfV,
+              look,
+              input.stageW,
+              input.stageH,
+              input.stageVfovDeg,
+              48,
+            )
+          : projectBoundaryStrokes(
+              mode === 'spherical'
+                ? sphericalRectDirs(yaw0, yaw1, pitch0, pitch1)
+                : opticalFrustumEdgeDirs(
+                    cyaw,
+                    cpitch,
+                    tanHalfH,
+                    tanHalfV,
+                    PANO_EDGE_SAMPLES,
+                  ),
+              look,
+              input.stageW,
+              input.stageH,
+              input.stageVfovDeg,
+            )
 
       const shot = cameraBasis(cyaw, cpitch)
       const badgeDir =
@@ -716,7 +1439,11 @@ function projectLockedPanorama(input: {
         index,
         col,
         row,
-        polygon: polygon.length >= 3 ? polygon : [],
+        yaw: cyaw,
+        pitch: cpitch,
+        cells,
+        strokes,
+        polygon: flattenCells(cells),
         center,
         badge,
       })
@@ -724,22 +1451,78 @@ function projectLockedPanorama(input: {
     }
   }
 
+  /**
+   * Overlap bands follow the assemblage mode:
+   * - spherical → az/alt FOV ∩ FOV
+   * - optical → sky inside BOTH sensor frustums (must match white optical frames)
+   */
   const overlaps: LockedPanoOverlap[] = []
   const byKey = new Map(tiles.map((t) => [`${t.col},${t.row}`, t]))
+
+  const overlapMeshBetween = (
+    a: LockedPanoTile,
+    b: LockedPanoTile,
+    axis: 'h' | 'v',
+  ): Pt2[][] => {
+    if (mode === 'spherical') {
+      const div: SphericalMeshDiv =
+        axis === 'h'
+          ? {
+              divYaw: 3,
+              divPitch: Math.max(PANO_MESH_DIV, 14),
+              edgeSamples: PANO_MESH_EDGE_SAMPLES,
+            }
+          : {
+              divYaw: Math.max(PANO_MESH_DIV, 14),
+              divPitch: 3,
+              edgeSamples: PANO_MESH_EDGE_SAMPLES,
+            }
+      const yaw0 = Math.max(a.yaw - halfHDeg, b.yaw - halfHDeg)
+      const yaw1 = Math.min(a.yaw + halfHDeg, b.yaw + halfHDeg)
+      const pitch0 = Math.max(a.pitch - halfVDeg, b.pitch - halfVDeg)
+      const pitch1 = Math.min(a.pitch + halfVDeg, b.pitch + halfVDeg)
+      return projectSphericalPatchMesh(
+        yaw0,
+        yaw1,
+        pitch0,
+        pitch1,
+        look,
+        input.stageW,
+        input.stageH,
+        input.stageVfovDeg,
+        div,
+      )
+    }
+    // Optical: exact sensor-A ∩ frustum-B (no voxel stairs).
+    return projectOpticalOverlapMesh(
+      a.yaw,
+      a.pitch,
+      b.yaw,
+      b.pitch,
+      halfHDeg,
+      halfVDeg,
+      tanHalfH,
+      tanHalfV,
+      look,
+      input.stageW,
+      input.stageH,
+      input.stageVfovDeg,
+    )
+  }
+
   for (const tile of tiles) {
-    if (tile.polygon.length < 3) continue
     const right = byKey.get(`${tile.col + 1},${tile.row}`)
-    if (right && right.polygon.length >= 3) {
-      const hit = intersectConvexPolygons(tile.polygon, right.polygon)
-      if (hit.length >= 3) {
-        overlaps.push({ key: `h-${tile.col}-${tile.row}`, polygon: hit })
+    if (right) {
+      const cells = overlapMeshBetween(tile, right, 'h')
+      if (cells.length > 0) {
+        overlaps.push({ key: `h-${tile.col}-${tile.row}`, cells })
       }
     }
     const below = byKey.get(`${tile.col},${tile.row + 1}`)
-    if (below && below.polygon.length >= 3) {
-      const hit = intersectConvexPolygons(tile.polygon, below.polygon)
-      if (hit.length >= 3) {
-        overlaps.push({ key: `v-${tile.col}-${tile.row}`, polygon: hit })
+    if (below) {
+      const cells = overlapMeshBetween(tile, below, 'v')
+      if (cells.length > 0) {
+        overlaps.push({ key: `v-${tile.col}-${tile.row}`, cells })
       }
     }
   }
@@ -918,14 +1701,11 @@ export function PhotoFrameOverlay({
     lockedProj && lockedProj.polygon.length >= 3
       ? lockedProj.polygon
       : null
-  // Keep every tile that still has a clipped footprint — never drop half-in FOV.
+  // Keep every tile that still has at least one mesh cell — never drop half-in FOV.
   const panoTiles = (projectedPano?.tiles ?? []).filter(
-    (t) => t.polygon.length >= 3,
+    (t) => t.cells.length > 0 || t.strokes.length > 0,
   )
   const panoOverlaps = projectedPano?.overlaps ?? []
-  // Mask holes: keep raw quads (CSS overflow clips the SVG). Avoid screen-space
-  // polygon clip — it corrupts large side footprints into garbage verts.
-  const panoMaskPolys = panoTiles
 
   const showLockedFrame = !panoOn && lockedPoly != null
   const showProjectedPano = panoOn && canProjectAngles
@@ -955,7 +1735,12 @@ export function PhotoFrameOverlay({
   if (showProjectedPano && panoTiles.length > 0 && worldLock && stageVfovDeg != null) {
     let maxY = -Infinity
     for (const tile of panoTiles) {
-      for (const p of tile.polygon) maxY = Math.max(maxY, p.y)
+      for (const cell of tile.cells) {
+        for (const p of cell) maxY = Math.max(maxY, p.y)
+      }
+      for (const stroke of tile.strokes) {
+        for (const p of stroke) maxY = Math.max(maxY, p.y)
+      }
     }
     // Optical axis of the whole grid, not the first cell. An even
     // column or row count has no middle tile, so the corner cell
@@ -1017,13 +1802,15 @@ export function PhotoFrameOverlay({
             <mask id="photo-frame-mask">
               <rect width={stageW} height={stageH} fill="white" />
               {showProjectedPano
-                ? panoMaskPolys.map((tile) => (
-                    <polygon
-                      key={`mask-${tile.index}`}
-                      points={pointsToSvg(tile.polygon)}
-                      fill="black"
-                    />
-                  ))
+                ? panoTiles.flatMap((tile) =>
+                    tile.cells.map((cell, ci) => (
+                      <polygon
+                        key={`mask-${tile.index}-${ci}`}
+                        points={pointsToSvg(cell)}
+                        fill="black"
+                      />
+                    )),
+                  )
                 : showLockedFrame ? (
                     <polygon points={quadPoints} fill="black" />
                   ) : showFollowFrame ? (
@@ -1052,15 +1839,16 @@ export function PhotoFrameOverlay({
         ) : null}
 
         {showOverlap && showProjectedPano
-          ? panoOverlaps.map((band) => (
-              <polygon
-                key={`ov-${band.key}`}
-                points={pointsToSvg(band.polygon)}
-                fill={accentRgba(0.18)}
-                stroke={accentRgba(0.35)}
-                strokeWidth={0.8}
-              />
-            ))
+          ? panoOverlaps.flatMap((band) =>
+              band.cells.map((cell, ci) => (
+                <polygon
+                  key={`ov-${band.key}-${ci}`}
+                  points={pointsToSvg(cell)}
+                  fill={accentRgba(0.32)}
+                  stroke="none"
+                />
+              )),
+            )
           : null}
 
         {showFrames && showProjectedPano
@@ -1074,13 +1862,17 @@ export function PhotoFrameOverlay({
                 badge.y <= stageH + badgeR * 2
               return (
                 <g key={`shot-${tile.index}`}>
-                  <polygon
-                    points={pointsToSvg(tile.polygon)}
-                    fill="none"
-                    stroke="rgba(232, 244, 255, 0.88)"
-                    strokeWidth={1.6}
-                    strokeLinejoin="round"
-                  />
+                  {tile.strokes.map((stroke, si) => (
+                    <polyline
+                      key={`stroke-${tile.index}-${si}`}
+                      points={pointsToSvg(stroke)}
+                      fill="none"
+                      stroke="rgba(232, 244, 255, 0.88)"
+                      strokeWidth={1.6}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  ))}
                   {badgeOnStage ? (
                     <>
                       <circle

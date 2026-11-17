@@ -18,6 +18,7 @@ import type { ViewfinderOrientation } from './lensFov'
 import {
   CameraBodyIcon,
   ChevronDownIcon,
+  InfoIcon,
   PanoramaGridIcon,
 } from './psIcons'
 
@@ -55,6 +56,7 @@ export function ViewfinderPanoramaPanel({
   onEditCamera,
 }: ViewfinderPanoramaPanelProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const [assemblageInfoOpen, setAssemblageInfoOpen] = useState(false)
   const open = openProp ?? uncontrolledOpen
   const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
     const value = typeof next === 'function' ? next(open) : next
@@ -63,6 +65,7 @@ export function ViewfinderPanoramaPanel({
   }
   const rootRef = useRef<HTMLDivElement | null>(null)
   const panelId = useId()
+  const assemblageInfoId = `${panelId}-assemblage-info`
 
   const maxColumns = maxPanoramaCountForCoverage(
     opticalHFovDeg,
@@ -171,18 +174,21 @@ export function ViewfinderPanoramaPanel({
       </header>
 
       <div className="vf-pano-pop__summary">
-        <span className="vf-camera-pop__big">
-          {shots}
-          <span className="vf-camera-pop__unit"> vues</span>
-        </span>
+        <div className="vf-pano-pop__summary-main">
+          <span className="vf-camera-pop__big">
+            {shots}
+            <span className="vf-camera-pop__unit"> vues</span>
+          </span>
+          <span
+            className="vf-camera-pop__hint vf-pano-pop__cover"
+            title="Champ couvert par le panorama (largeur × hauteur)"
+          >
+            ≈ {coverH.toFixed(0)}° × {coverV.toFixed(0)}°
+          </span>
+        </div>
         {cameraPill ? (
           <span className="vf-pano-pop__pill">{cameraPill}</span>
-        ) : (
-          <span className="vf-camera-pop__hint vf-pano-pop__cover">
-            ≈ {coverH.toFixed(0)}° × {coverV.toFixed(0)}° ·{' '}
-            {plan.overlapPercent}%
-          </span>
-        )}
+        ) : null}
       </div>
 
       <div className="vf-camera-pop__twocol">
@@ -286,9 +292,29 @@ export function ViewfinderPanoramaPanel({
       </div>
 
       <div className="vf-camera-pop__field">
-        <label className="vf-camera-pop__label" htmlFor={`${panelId}-assemblage`}>
-          Assemblage
-        </label>
+        <div className="vf-pano-pop__assemblage-head">
+          <label
+            className="vf-camera-pop__label"
+            htmlFor={`${panelId}-assemblage`}
+          >
+            Assemblage
+          </label>
+          <button
+            type="button"
+            className={
+              assemblageInfoOpen
+                ? 'vf-pano-pop__info is-open'
+                : 'vf-pano-pop__info'
+            }
+            aria-expanded={assemblageInfoOpen}
+            aria-controls={assemblageInfoId}
+            title="Différence entre les modes d’assemblage"
+            aria-label="Expliquer les modes d’assemblage"
+            onClick={() => setAssemblageInfoOpen((value) => !value)}
+          >
+            <InfoIcon size={14} />
+          </button>
+        </div>
         <select
           id={`${panelId}-assemblage`}
           className="vf-pano-select"
@@ -307,6 +333,25 @@ export function ViewfinderPanoramaPanel({
             </option>
           ))}
         </select>
+        {assemblageInfoOpen ? (
+          <div id={assemblageInfoId} className="vf-pano-pop__assemblage-info">
+            <p>
+              <strong>Optique (trépied)</strong> — chaque cadre = ce que voit
+              vraiment l’appareil (le capteur). Utile pour vérifier où tombe
+              une photo. En stéréo, ça se tord sur les bords : normal, pas un
+              bug.
+            </p>
+            <p>
+              <strong>Sphérique (az/alt)</strong> — cases régulières sur la
+              boule ciel. Plus facile à lire pour régler colonnes, lignes et
+              overlap.
+            </p>
+            <p className="vf-pano-pop__assemblage-tip">
+              Astuce : règle le plan en sphérique, vérifie une zone en optique
+              si besoin.
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="vf-camera-pop__field">

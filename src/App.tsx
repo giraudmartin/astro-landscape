@@ -138,7 +138,7 @@ export default function App() {
           bearingDeg: opts.bearingDeg,
           pitchDeg: opts.pitchDeg,
         })
-        setFlatTerrain(false)
+        setFlatTerrain(Boolean(opts.flatTerrain))
         setMode('ground')
       },
       setPlayheadUtcMs,

@@ -204,11 +204,12 @@ function createTileMesh(input: {
   const u1 = (sphereX + 1) / cols
   const v0 = input.y / rows
   const v1 = (input.y + 1) / rows
-  const segs = Math.max(8, 24 >> Math.min(input.z, 3))
+  // Stereo chords shred coarse patches into visible sky “tuiles”.
+  const segs = Math.max(48, 128 >> Math.min(input.z, 2))
   const geometry = new THREE.SphereGeometry(
     input.radius,
     segs,
-    Math.max(6, segs >> 1),
+    Math.max(24, segs >> 1),
     u0 * Math.PI * 2,
     (u1 - u0) * Math.PI * 2,
     v0 * Math.PI,

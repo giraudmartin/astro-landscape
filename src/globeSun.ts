@@ -169,20 +169,21 @@ export function applyGlobeSunLighting(
       const az = ((opts.sunAzimuthDeg % 360) + 360) % 360
       map.setPaintProperty('hillshade', 'hillshade-illumination-direction', az)
       map.setPaintProperty('hillshade', 'hillshade-illumination-anchor', 'map')
+      // Deep night: near-zero hillshade — cool ridges on dim ortho read as a PL map.
       map.setPaintProperty(
         'hillshade',
         'hillshade-exaggeration',
-        0.22 * (1 - night * 0.7),
+        night > 0.55 ? 0.02 : 0.14 * (1 - night * 0.5),
       )
       map.setPaintProperty(
         'hillshade',
         'hillshade-highlight-color',
-        night <= 0.55 ? '#fff6e8' : '#c8d4f0',
+        night <= 0.55 ? '#fff6e8' : '#8a9099',
       )
       map.setPaintProperty(
         'hillshade',
         'hillshade-shadow-color',
-        night <= 0.55 ? '#1a1208' : '#05070e',
+        night <= 0.55 ? '#1a1208' : '#12151c',
       )
     }
   }
@@ -203,6 +204,48 @@ export const SUN_GLOW_LAYER_ID = 'astro-sun-marker-glow'
 export const MOON_LAYER_ID = 'astro-moon-marker'
 export const MOON_GLOW_LAYER_ID = 'astro-moon-marker-glow'
 
+/**
+ * Night-shade opacity at a map zoom (linear stops).
+ * Globe-only veil: must be ~0 by mid map zoom or overzoomed tiles black out
+ * land/ocean and show hard tile seams (seen on Atlantic mid-zoom).
+ */
+export function nightShadeOpacityAtZoom(zoom: number, strength = 1): number {
+  const s = Math.max(0, Math.min(1, strength))
+  const z = zoom
+  if (z <= 4.5) return s
+  if (z >= 7.5) return 0
+  if (z <= 6.5) {
+    // 4.5 → 6.5: s → 0.4*s
+    const t = (z - 4.5) / 2
+    return s * (1 - t * 0.6)
+  }
+  // 6.5 → 7.5: 0.4*s → 0
+  const t = (z - 6.5) / 1
+  return s * 0.4 * (1 - t)
+}
+
+function nightShadeOpacityExpression(strength: number) {
+  const s = Math.max(0, Math.min(1, strength))
+  return [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    0,
+    s,
+    4.5,
+    s,
+    6.5,
+    0.4 * s,
+    7.5,
+    0,
+  ] as [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    ...number[]
+  ]
+}
+
 /** Night-side raster veil over imagery (globe overview). */
 export function ensureNightShadeLayer(map: Map, utcMs: number): void {
   if (!map.isStyleLoaded()) return
@@ -221,7 +264,7 @@ export function ensureNightShadeLayer(map: Map, utcMs: number): void {
 
   if (!map.getLayer(NIGHT_SHADE_LAYER_ID)) {
     // Above satellite imagery, below hillshade / labels / markers.
-    // No layer maxzoom — source maxzoom 7 overzooms so spot framing keeps a soft veil.
+    // Hard maxzoom: never overzoom shade into map/spot framing (tile seams + void).
     const before =
       map.getLayer('hillshade') != null
         ? 'hillshade'
@@ -233,22 +276,9 @@ export function ensureNightShadeLayer(map: Map, utcMs: number): void {
         id: NIGHT_SHADE_LAYER_ID,
         type: 'raster',
         source: NIGHT_SHADE_SOURCE_ID,
+        maxzoom: 7.5,
         paint: {
-          'raster-opacity': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            0,
-            1,
-            4.5,
-            1,
-            8.5,
-            0.62,
-            14,
-            0.7,
-            18,
-            0.65,
-          ],
+          'raster-opacity': nightShadeOpacityExpression(1),
           'raster-fade-duration': 0,
           'raster-resampling': 'linear',
         },
@@ -281,29 +311,18 @@ export function updateNightShadeLayer(
     lastNightShadeByMap.set(map, { url: nextUrl, strength: s })
     return
   }
-  // Sessions that created the layer with maxzoom 7.5 would hide it on spots.
+  // Globe veil only — clamp maxzoom so HMR/old sessions cannot keep shade on spots.
   try {
-    map.setLayerZoomRange(NIGHT_SHADE_LAYER_ID, 0, 24)
+    map.setLayerZoomRange(NIGHT_SHADE_LAYER_ID, 0, 7.5)
   } catch {
     // older maplibre
   }
-  // Always rewrite opacity (curve + strength). Only setTiles above is URL-gated —
-  // skipping opacity when strength was unchanged left noon spots after HMR / land.
-  map.setPaintProperty(NIGHT_SHADE_LAYER_ID, 'raster-opacity', [
-    'interpolate',
-    ['linear'],
-    ['zoom'],
-    0,
-    s,
-    4.5,
-    s,
-    8.5,
-    0.62 * s,
-    14,
-    0.7 * s,
-    18,
-    0.65 * s,
-  ])
+  // Always rewrite opacity (curve + strength). Only setTiles above is URL-gated.
+  map.setPaintProperty(
+    NIGHT_SHADE_LAYER_ID,
+    'raster-opacity',
+    nightShadeOpacityExpression(s),
+  )
   lastNightShadeByMap.set(map, { url: nextUrl, strength: s })
 }
 

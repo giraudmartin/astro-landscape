@@ -20,7 +20,7 @@ export const QA_LOCAL_HOUR = 17
 export const QA_DATE = '2025-06-15'
 
 export type QaImmersiveApi = {
-  setLook: (yaw: number, pitch: number) => void
+  setLook: (yaw: number, pitch: number, rollDeg?: number) => void
   setStageFov: (vfovDeg: number) => void
   setProjection?: (mode: StageProjection) => void
   isTerrainReady: () => boolean
@@ -28,6 +28,35 @@ export type QaImmersiveApi = {
   isCaptureReady: () => boolean
   getStageVfovDeg: () => number
   getProjection: () => StageProjection
+  /** Live camera look (yaw / pitch / roll). */
+  getLook?: () => { yaw: number; pitch: number; roll: number }
+  /** Start timelapse preview (defaults: EQ, short window for QA). */
+  startTimelapsePreview?: (plan?: {
+    support?: 'fixed' | 'equatorial'
+    durationMin?: number
+    intervalS?: number
+    poseS?: number
+    playbackFps?: number
+  }) => void
+  seekTimelapse?: (shotIndex: number) => void
+  pauseTimelapse?: () => void
+  getTimelapseStatus?: () => {
+    phase: string
+    active: boolean
+    shotIndex: number
+    shotCount: number
+    support: string
+  }
+  exitTimelapsePreview?: () => void
+  /** Local VIIRS halo: load state, source count, volume bounds. */
+  getLocalHaloDebug?: () => Record<string, unknown>
+  /** Patch halo controls (same keys as the sky menu). */
+  setLocalHalo?: (patch: Record<string, number | boolean>) => void
+  /** 'reference' = Chamonix prototype data, 'app' = our VIIRS + relief. */
+  setLocalHaloSource?: (source: 'app' | 'reference') => void
+  setSkyLpAmount?: (amount01: number) => void
+  /** Hover readout of the VIIRS diagnostic at screen uv (0…1, v up). */
+  probeLocalHalo?: (u: number, v: number) => string | null
 }
 
 export type QaAppApi = {
@@ -39,6 +68,8 @@ export type QaAppApi = {
     pitchDeg: number
     date: string
     localHour: number
+    /** DEM-free flat disc — sky / EQ testing. */
+    flatTerrain?: boolean
   }) => void
   setPlayheadUtcMs: (utcMs: number) => void
   setDate: (date: string) => void

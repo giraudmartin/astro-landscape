@@ -63,6 +63,21 @@ import {
   normalizeStageProjection,
   type StageProjection,
 } from './stelProjector'
+import {
+  clampLocalHaloHaze,
+  clampLocalHaloHeightKm,
+  clampLocalHaloIntensity,
+  clampLocalHaloTempK,
+  clampLocalHaloViirsOpacity,
+  LOCAL_HALO_BLOCKING_DEFAULT,
+  LOCAL_HALO_ENABLED_DEFAULT,
+  LOCAL_HALO_HAZE_DEFAULT,
+  LOCAL_HALO_HEIGHT_KM_DEFAULT,
+  LOCAL_HALO_INTENSITY_DEFAULT,
+  LOCAL_HALO_TEMP_K_DEFAULT,
+  LOCAL_HALO_VIIRS_GROUND_DEFAULT,
+  LOCAL_HALO_VIIRS_OPACITY_DEFAULT,
+} from './lightPollution/localHalo/localHaloSettings'
 
 export const APP_SETTINGS_STORAGE_KEY = 'astro-landscape.settings.v1'
 
@@ -116,10 +131,25 @@ export type ImmersiveSettings = {
   /** Additive zodiacal light 0…1 (ecliptic dust glow). */
   zodiacalAmount: number
   /**
-   * Light-pollution display intensity 0…1 (horizon glow / sky wash).
+   * Sky light-pollution intensity 0…1 (horizon glow / sky wash).
    * Scales the spot’s estimated Bortle in immersive view.
    */
   lightPollutionAmount: number
+  /** Local volumetric halo above VIIRS emitters (24 × 24 km zone). */
+  localHaloEnabled: boolean
+  /** Relief screens the emitters from the air behind ridges. */
+  localHaloBlocking: boolean
+  /** Halo intensity 0…2.5 (slider %/100). */
+  localHaloIntensity: number
+  /** Halo scale height (km). */
+  localHaloHeightKm: number
+  /** Haze 0.05…1 (slider %/100). */
+  localHaloHaze: number
+  /** Artistic tint control (K), prototype mapping. */
+  localHaloTempK: number
+  /** Native VIIRS pixels drawn on the relief — diagnostic only. */
+  localHaloViirsGround: boolean
+  localHaloViirsOpacity: number
   showConstellations: boolean
   showCelestialGrid: boolean
   showAzimuthGrid: boolean
@@ -172,6 +202,14 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   airglowWaves: AIRGLOW_WAVES_DEFAULT,
   zodiacalAmount: ZODIACAL_AMOUNT_DEFAULT,
   lightPollutionAmount: LIGHT_POLLUTION_AMOUNT_DEFAULT,
+  localHaloEnabled: LOCAL_HALO_ENABLED_DEFAULT,
+  localHaloBlocking: LOCAL_HALO_BLOCKING_DEFAULT,
+  localHaloIntensity: LOCAL_HALO_INTENSITY_DEFAULT,
+  localHaloHeightKm: LOCAL_HALO_HEIGHT_KM_DEFAULT,
+  localHaloHaze: LOCAL_HALO_HAZE_DEFAULT,
+  localHaloTempK: LOCAL_HALO_TEMP_K_DEFAULT,
+  localHaloViirsGround: LOCAL_HALO_VIIRS_GROUND_DEFAULT,
+  localHaloViirsOpacity: LOCAL_HALO_VIIRS_OPACITY_DEFAULT,
   showConstellations: true,
   showCelestialGrid: false,
   showAzimuthGrid: false,
@@ -356,6 +394,40 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
       Number(
         row.lightPollutionAmount ??
           DEFAULT_IMMERSIVE_SETTINGS.lightPollutionAmount,
+      ),
+    ),
+    localHaloEnabled: readBoolean(
+      row.localHaloEnabled,
+      DEFAULT_IMMERSIVE_SETTINGS.localHaloEnabled,
+    ),
+    localHaloBlocking: readBoolean(
+      row.localHaloBlocking,
+      DEFAULT_IMMERSIVE_SETTINGS.localHaloBlocking,
+    ),
+    localHaloIntensity: clampLocalHaloIntensity(
+      Number(
+        row.localHaloIntensity ?? DEFAULT_IMMERSIVE_SETTINGS.localHaloIntensity,
+      ),
+    ),
+    localHaloHeightKm: clampLocalHaloHeightKm(
+      Number(
+        row.localHaloHeightKm ?? DEFAULT_IMMERSIVE_SETTINGS.localHaloHeightKm,
+      ),
+    ),
+    localHaloHaze: clampLocalHaloHaze(
+      Number(row.localHaloHaze ?? DEFAULT_IMMERSIVE_SETTINGS.localHaloHaze),
+    ),
+    localHaloTempK: clampLocalHaloTempK(
+      Number(row.localHaloTempK ?? DEFAULT_IMMERSIVE_SETTINGS.localHaloTempK),
+    ),
+    localHaloViirsGround: readBoolean(
+      row.localHaloViirsGround,
+      DEFAULT_IMMERSIVE_SETTINGS.localHaloViirsGround,
+    ),
+    localHaloViirsOpacity: clampLocalHaloViirsOpacity(
+      Number(
+        row.localHaloViirsOpacity ??
+          DEFAULT_IMMERSIVE_SETTINGS.localHaloViirsOpacity,
       ),
     ),
     showConstellations: readBoolean(

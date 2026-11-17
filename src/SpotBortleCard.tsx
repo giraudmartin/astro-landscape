@@ -8,6 +8,8 @@ type SpotBortleCardProps = {
   lat: number
   lon: number
   elevM: number
+  /** Zenith sky brightness (mag/arcsec²) when known. */
+  skyBrightnessMag?: number
   /** Shown in the footer — VIIRS COG vs Black Marble proxy. */
   sourceHint?: string
   onOpenSkyBrightness?: () => void
@@ -31,11 +33,16 @@ export function SpotBortleCard({
   lat,
   lon,
   elevM,
+  skyBrightnessMag,
   sourceHint = 'estimé · satellite',
   onOpenSkyBrightness,
 }: SpotBortleCardProps) {
   const n = clampBortle(bortle)
   const detailsId = useId()
+  const sqm =
+    typeof skyBrightnessMag === 'number' && Number.isFinite(skyBrightnessMag)
+      ? skyBrightnessMag.toFixed(2)
+      : null
 
   return (
     <div
@@ -53,6 +60,9 @@ export function SpotBortleCard({
           <div className="spot-bortle-card__head-text">
             <div className="spot-bortle-card__tag">Bortle estimé</div>
             <div className="spot-bortle-card__quality">{label}</div>
+            {sqm ? (
+              <div className="spot-bortle-card__sqm">{sqm} mag/arcsec²</div>
+            ) : null}
           </div>
           <ChevronDownIcon
             className="spot-bortle-card__chevron"
@@ -73,6 +83,12 @@ export function SpotBortleCard({
             <span>{Math.round(elevM)} m</span>
           </div>
           <div className="spot-bortle-card__source">Source : {sourceHint}</div>
+          {elevM >= 900 ? (
+            <div className="spot-bortle-card__source">
+              Site élevé : correction DEM approximative (ridges). Un écart
+              résiduel vs LPM reste possible (~0,2–0,4&nbsp;mag).
+            </div>
+          ) : null}
         </div>
       </details>
       {onOpenSkyBrightness ? (

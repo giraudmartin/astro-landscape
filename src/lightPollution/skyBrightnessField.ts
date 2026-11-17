@@ -2,22 +2,36 @@
  * Build an all-sky sky-brightness field (azimuth × altitude → mag/arcsec²)
  * from a directional horizon-glow profile + zenith sample.
  *
- * Visual language matches lightpollutionmap.info’s fisheye / panoramic charts
- * (city lobes on the horizon, darker zenith). Not Falchi World Atlas data.
+ * Real skyglow is a **dome** (wide near the horizon, fading up and sideways),
+ * not vertical pillars. We therefore:
+ * 1. Blur the azimuth profile into a wide mound (~30° FWHM at the horizon).
+ * 2. Widen that blur further with altitude (scatter / projection).
+ * 3. Mix a strong regional wash so the sky isn’t column-striped.
  *
- * Intensity must come from `profile.peak` (absolute). Normalizing shape to 1
- * and then applying a fixed ~1 mag drop made pristine sites (Spitzkoppe)
- * show fake yellow domes from tiny Black Marble noise.
+ * Intensity must come from `profile.peak` (absolute Duriscoe wedge S).
  */
 
 import type { HorizonGlowProfile } from './horizonGlowProfile'
-import { LP_AZIMUTH_BINS, peakIntensity01 } from './horizonGlowProfile'
+import {
+  HORIZON_MAX_MAG_DROP,
+  LP_AZIMUTH_BINS,
+  peakIntensity01,
+} from './horizonGlowProfile'
 
 export const SKY_BRIGHTNESS_AZ_BINS = LP_AZIMUTH_BINS
 export const SKY_BRIGHTNESS_ALT_BINS = 48
 
-/** Max mag drop (zenith → brightest horizon lobe) at intensity = 1. */
-export const MAX_HORIZON_MAG_DROP = 2.65
+/**
+ * Max mag drop (zenith → brightest horizon lobe) at intensity = 1.
+ * Calibrated with Duriscoe all-sky wedge S (Mer ~0.35, Paris ~1.2).
+ */
+export const MAX_HORIZON_MAG_DROP = HORIZON_MAX_MAG_DROP
+
+/** Horizon dome width (σ in degrees) — distinct city mound, not a wash. */
+export const DOME_AZ_SIGMA_HORIZON_DEG = 12
+
+/** Extra σ gained from horizon → mid-sky (spreading). */
+export const DOME_AZ_SIGMA_GROWTH_DEG = 14
 
 export type SkyBrightnessField = {
   /** Row-major: altIdx * azBins + azIdx. Higher mag = darker sky. */
@@ -53,21 +67,60 @@ export function sampleAzimuth(profile: Float32Array, azDeg: number): number {
 }
 
 /**
- * Horizon-weighted falloff: strong near 0° alt, ~0 by ~45–55°.
- * LPM city lobes hug the horizon; old 2.6-power still glowed at 60°.
+ * Circular Gaussian blur of an azimuth profile (σ in bins).
+ * Turns narrow city wedges into wide skyglow domes.
  */
-export function elevFalloff(altDeg: number): number {
+export function blurAzimuthCircular(
+  profile: Float32Array,
+  sigmaBins: number,
+): Float32Array {
+  const n = profile.length
+  const out = new Float32Array(n)
+  if (!(sigmaBins > 0.15) || n < 3) {
+    out.set(profile)
+    return out
+  }
+  const radius = Math.min(n >> 1, Math.max(1, Math.ceil(sigmaBins * 3)))
+  const twoS2 = 2 * sigmaBins * sigmaBins
+  for (let i = 0; i < n; i++) {
+    let sum = 0
+    let w = 0
+    for (let d = -radius; d <= radius; d++) {
+      const ww = Math.exp(-(d * d) / twoS2)
+      sum += profile[(i + d + n * 4) % n]! * ww
+      w += ww
+    }
+    out[i] = sum / w
+  }
+  // Renormalize peak to 1 so mag-drop calibration stays tied to intensity.
+  let peak = 0
+  for (let i = 0; i < n; i++) peak = Math.max(peak, out[i]!)
+  if (peak > 1e-6) {
+    for (let i = 0; i < n; i++) out[i] = out[i]! / peak
+  }
+  return out
+}
+
+/** σ (bins) for dome blur at a given altitude. */
+export function domeSigmaBins(altDeg: number, azBins: number): number {
   const elevN = Math.min(1, Math.max(0, altDeg / 90))
-  const airmass = Math.pow(1 - elevN, 1.55)
-  const dome = Math.pow(1 - elevN, 3.55)
-  return 0.12 * airmass + 0.88 * dome
+  // Wider higher up — avoids chimney pillars.
+  const sigmaDeg =
+    DOME_AZ_SIGMA_HORIZON_DEG + DOME_AZ_SIGMA_GROWTH_DEG * Math.pow(elevN, 0.85)
+  return (sigmaDeg / 360) * azBins
 }
 
 /**
- * Mag drop at the brightest horizon lobe vs zenith, from absolute peak.
- * No dark-site cap: LPM Mauna Kea / Joshua Tree / La Palma all show ≥1.5 mag
- * horizon lobes under a Bortle-1 zenith (the old 0.95 cap flattened them).
+ * Elevation falloff for artificial glow — soft mound to ~40–50°, not a spike.
  */
+export function elevFalloff(altDeg: number): number {
+  const elevN = Math.min(1, Math.max(0, altDeg / 90))
+  // Heavier airmass / diffuse term → broad dome, less “searchlight”.
+  const airmass = Math.pow(1 - elevN, 1.05)
+  const dome = Math.pow(1 - elevN, 2.1)
+  return 0.58 * airmass + 0.42 * dome
+}
+
 export function horizonMagDropFromPeak(
   peakAbs: number,
   _zenithMag = 21.9,
@@ -79,7 +132,7 @@ export function horizonMagDropFromPeak(
 /**
  * @param zenithMag Spot zenith sky brightness (mag/arcsec²) from satellite sample.
  * @param profile Directional 0…1 glow (peak city = 1) + absolute `peak`.
- * @param maxMagDrop Cap on horizon lobe drop at full intensity (default ~2.45).
+ * @param maxMagDrop Cap on horizon lobe drop at full intensity.
  */
 export function buildSkyBrightnessField(
   zenithMag: number,
@@ -92,6 +145,22 @@ export function buildSkyBrightnessField(
   const zMag = Number.isFinite(zenithMag) ? zenithMag : 21.9
   const intensity = peakIntensity01(profile.peak)
   const drop = horizonMagDropFromPeak(profile.peak, zMag, maxMagDrop)
+
+  // Base dome at horizon width; per-row we blur further with altitude.
+  const horizonDome =
+    intensity > 0
+      ? blurAzimuthCircular(
+          profile.azimuth,
+          (DOME_AZ_SIGMA_HORIZON_DEG / 360) * azBins,
+        )
+      : profile.azimuth
+
+  let meanDome = 0
+  if (intensity > 0) {
+    for (let i = 0; i < horizonDome.length; i++) meanDome += horizonDome[i]!
+    meanDome /= horizonDome.length
+  }
+
   let sum = 0
   let minMag = Infinity
   let maxMag = -Infinity
@@ -100,20 +169,33 @@ export function buildSkyBrightnessField(
   let maxAzDeg = 0
   let maxAltDeg = 0
 
+  // Cache blurred rows by rounded σ to avoid 48 full convolutions.
+  const blurCache = new Map<number, Float32Array>()
+
   for (let ai = 0; ai < altBins; ai++) {
     const altDeg = (ai / (altBins - 1)) * 90
     const elev = elevFalloff(altDeg)
+    let rowDome = horizonDome
+    if (intensity > 0) {
+      const sig = domeSigmaBins(altDeg, azBins)
+      const key = Math.round(sig * 4) // ~0.25 bin quantization
+      let cached = blurCache.get(key)
+      if (!cached) {
+        cached = blurAzimuthCircular(horizonDome, sig)
+        blurCache.set(key, cached)
+      }
+      rowDome = cached
+    }
+
     for (let zi = 0; zi < azBins; zi++) {
       const azDeg = (zi / azBins) * 360
-      const city = intensity > 0 ? sampleAzimuth(profile.azimuth, azDeg) : 0
-      // Directional contrast vs regional mean — urban flats (Paris/Tokyo) stay
-      // nearly isotropic; dark sites keep strong city lobes (LPM-like).
+      const city = intensity > 0 ? rowDome[zi]! : 0
+      // Domes first: keep azimuth contrast; wash is a thin floor only.
       const contrast =
-        intensity > 0 ? Math.max(0, city - profile.mean * 0.82) : 0
-      const wash = intensity > 0 ? profile.mean * 0.22 * intensity : 0
-      const excess = (contrast * 1.05 + wash * 0.35) * elev * drop
-      // Natural horizon brightening (airmass) even in dark sites — small.
-      const natural = 0.06 * elev
+        intensity > 0 ? Math.max(0, city - meanDome * 0.18) : 0
+      const wash = intensity > 0 ? meanDome * 0.28 * intensity : 0
+      const excess = (contrast * 1.15 + wash * 0.45) * elev * drop
+      const natural = 0.05 * elev
       const m = zMag - natural - excess
       mag[ai * azBins + zi] = m
       sum += m

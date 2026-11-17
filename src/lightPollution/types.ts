@@ -10,4 +10,6 @@ export type LightPollutionSample = {
   bortleLabel: string
   /** Prefer viirs-cog when the EOG asset is available. */
   source: LightPollutionDataSource
+  /** True when DEM near-field gates were applied (high sites). */
+  terrainApplied?: boolean
 }

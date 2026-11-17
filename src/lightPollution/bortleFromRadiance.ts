@@ -50,6 +50,13 @@ export function skyBrightnessMagFromRadiance(radianceNwCm2Sr: number): number {
   return Math.log10(total / 108_000_000) / -0.4
 }
 
+/** Inverse of {@link skyBrightnessMagFromRadiance} — for reporting / shaders. */
+export function radianceFromSkyBrightnessMag(magArcsec2: number): number {
+  if (!Number.isFinite(magArcsec2)) return 0
+  const total = 108_000_000 * Math.pow(10, -0.4 * magArcsec2)
+  return Math.max(0, (total - NATURAL_SKY_MCD) / RADIANCE_TO_ARTIFICIAL_MCD)
+}
+
 export function bortleFromSkyBrightnessMag(magArcsec2: number): number {
   for (const row of BORTLE_FROM_MAG) {
     if (magArcsec2 >= row.minMag) return row.bortle

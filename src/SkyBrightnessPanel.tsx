@@ -70,7 +70,7 @@ function assessmentBlurb(field: SkyBrightnessField): string {
     return 'Peu de contraste entre le zénith et l’horizon sur cet aperçu.'
   }
   if (field.minAltDeg <= 15) {
-    return 'Les zones les plus lumineuses restent proches de l’horizon sur cet aperçu.'
+    return 'Pic près de l’horizon (direction VIIRS), avec un voile diffus vers le haut.'
   }
   if (field.minAltDeg >= 60) {
     return 'La zone la plus lumineuse se situe haut dans le ciel sur cet aperçu.'
@@ -506,8 +506,9 @@ export function SkyBrightnessPanel({
               {chartNoteForMode(mode)}
             </p>
             <p className="sky-brightness-panel__disclaimer" role="note">
-              Estimation satellitaire : pas une mesure réelle au sol ni un
-              relevé terrain. Les valeurs et la carte sont approximatives.
+              Zénith : First Rig / VIIRS (+ DEM near-field si site élevé).
+              Dômes : Duriscoe all-sky + flou dôme (pas Falchi). Estimation
+              scout — pas une mesure SQM au sol.
             </p>
           </div>
 

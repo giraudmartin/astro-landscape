@@ -1,0 +1,32 @@
+---
+description: Local VIIRS light-pollution halo (immersive) — locked port of the Chamonix prototype
+globs: src/lightPollution/localHalo/**
+alwaysApply: false
+---
+
+# Local halo — faithful port of `chamonix-viirs-2025.html`
+
+The prototype is the visual and technical reference. Do not reinterpret it.
+
+## Locked baseline
+
+- Precomputed 3D field 96×48×96 RG half float (R occluded, G unoccluded), ±12 km, 0.3–8.3 km at Chamonix
+- Emitters = every positive native VIIRS pixel centred in the zone, at relief + 20 m, weight = radiance × area / 10
+- Screening: 360 samples per voxel/emitter, precomputed in a worker, cached by `haloFieldCacheKey`
+- Screen pass: depth-stopped ray march, 112 jittered steps, prototype density / opacity / tint formulas
+- Halo keeps the prototype curve `(1 − exp(−1.5c))^(1/2.2)`; the scene keeps its sRGB output
+- `src/__tests__/localHaloField.test.ts` must keep matching the embedded prototype volume
+
+## Forbidden
+
+| Hack | Why |
+|---|---|
+| Hemispheres, balls, veils, sprites, PointLights, horizon gradients, emissive terrain paint | Not the prototype's volume |
+| Invented cities, per-city normalisation, radiance thresholds, colours read back from maps | Must come from the native raster |
+| Running the 360-sample screening per pixel or per frame | Sliders only update uniforms |
+| Global exposure / tone-mapping changes to make the halo look right | Fix the halo instead |
+| Mesh raycasts for the hover probe | Height-field samples only |
+
+## Rule of landing
+
+Halos off and VIIRS diagnostic off → the frame must take the untouched `direct` path.

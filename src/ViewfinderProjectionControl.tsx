@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import {
   ChevronDownIcon,
   ProjectionEquirectIcon,
-  ProjectionOrthoIcon,
   ProjectionRectilinearIcon,
   ProjectionStereoIcon,
 } from './psIcons'
@@ -15,7 +14,6 @@ const PROJECTION_ICONS = {
   stereographic: ProjectionStereoIcon,
   equirectangular: ProjectionEquirectIcon,
   rectilinear: ProjectionRectilinearIcon,
-  orthographic: ProjectionOrthoIcon,
 } as const satisfies Record<
   StageProjection,
   (props: { size?: number; className?: string }) => ReactElement

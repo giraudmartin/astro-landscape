@@ -314,35 +314,6 @@ export function ProjectionRectilinearIcon({
   )
 }
 
-/** Stage projection — orthographic hemisphere disk. */
-export function ProjectionOrthoIcon({ size = 16, className }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-      className={className}
-    >
-      <circle cx="8" cy="8" r="5.4" stroke="currentColor" strokeWidth="1.3" />
-      <path
-        d="M2.6 8h10.8M8 2.6v10.8"
-        stroke="currentColor"
-        strokeWidth="1.15"
-        strokeLinecap="round"
-        opacity="0.55"
-      />
-      <path
-        d="M3.8 5.2c1.2 1 2.6 1.5 4.2 1.5s3-.5 4.2-1.5"
-        stroke="currentColor"
-        strokeWidth="1.15"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
 /** Frame overlay mode — no viewfinder rectangle. */
 export function FrameModeOffIcon({ size = 14, className }: IconProps) {
   return (
@@ -749,6 +720,29 @@ export function CameraLensIcon({ size = 14, className }: IconProps) {
 }
 
 /** Viewfinder dock — panorama grid. */
+/** Lucide info — circle with “i”, for short in-panel explanations. */
+export function InfoIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>
+  )
+}
+
 export function PanoramaGridIcon({ size = 14, className }: IconProps) {
   return (
     <svg

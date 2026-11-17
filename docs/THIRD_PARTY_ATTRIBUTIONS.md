@@ -2,16 +2,14 @@
 
 Keep in sync with `src/attributions.ts` (Settings panel on the map).
 
-## VIIRS radiance COG (Bortle)
+## VIIRS radiance COG (Bortle / zenith SQM)
 
-- **What**: Hosted radiance COG → estimated Bortle at selected spots.
-- **Default bake**: `npm run build:viirs-bortle` — NASA GIBS `VIIRS_Black_Marble` → radiance-proxy COG (no login).
-- **Preferred bake**: EOG VIIRS VNL `average_masked` ([products/vnl](https://eogdata.mines.edu/products/vnl/), free account) then  
-  `python scripts/build-viirs-bortle-cog-rasterio.py --input your.tif`  
-  → `public/light-pollution/viirs-vnl-average-masked.cog.tif`  
-  Or set `VITE_LIGHT_POLLUTION_COG_URL`.
-- **Terms**: NASA Black Marble — open with attribution, no endorsement. EOG VNL — public domain / unrestricted subsequent use as stated by EOG (cite Payne Institute / Elvidge et al.).
-- **Note**: Estimate from upward satellite radiance — not an on-site SQM.
+- **What**: Hosted VIIRS VNL radiance COG → First Rig zenith SQM → Bortle.
+- **Shipped**: `public/light-pollution/viirs-vnl-2024-500m.cog.tif` (~500 m, year 2024) from Zenodo [10.5281/zenodo.17294744](https://doi.org/10.5281/zenodo.17294744) (OpenLandMap / Hengl mirror of EOG VNL `average_masked`, **CC BY 4.0**).
+- **Cite**: Elvidge et al. 2021 (Remote Sensing 13(5):922); Earth Observation Group / Payne Institute; Hengl 2025 Zenodo mirror.
+- **Override**: `VITE_LIGHT_POLLUTION_COG_URL`.
+- **Legacy**: `npm run build:viirs-bortle` GIBS Black Marble ~0.05° proxy is **not** used for zenith (too coarse).
+- **Note**: Method + resolution audit in `docs/LIGHT_POLLUTION.md`. Not an on-site SQM.
 
 ## NASA Black Marble / VIIRS (map overlay)
 

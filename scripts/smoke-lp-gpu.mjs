@@ -103,6 +103,8 @@ const result = await (async () => {
       hasFullscreen: vert.includes('position.xy'),
       hasSphereProject: vert.includes('stelProject'),
       depthTest: mat.depthTest,
+      depthWrite: mat.depthWrite,
+      hasFarDepth: vert.includes('uLpCameraFar'),
       geo: 'PlaneGeometry',
     }
   })
@@ -119,6 +121,10 @@ if (!result.hasScreenRay || !result.hasFullscreen || result.hasSphereProject) {
   console.error('FAIL: expected fullscreen screen-ray LP', result)
   process.exit(1)
 }
+if (!result.depthTest || result.depthWrite || !result.hasFarDepth) {
+  console.error('FAIL: LP must depth-test at far plane (terrain occlusion)', result)
+  process.exit(1)
+}
 if (!result.anyYellow || result.maxR < 40) {
   console.error('FAIL: no visible sodium pixels', result)
   process.exit(1)
@@ -127,4 +133,4 @@ if (result.hotCount > 20 && result.maxStep > 45) {
   console.error('FAIL: hard tile steps still present', result)
   process.exit(1)
 }
-console.log('OK: LP GPU smoke — overlay sodium, no hard tile steps')
+console.log('OK: LP GPU smoke — overlay sodium, depth-tested, no hard tile steps')

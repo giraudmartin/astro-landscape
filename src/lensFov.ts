@@ -184,8 +184,7 @@ export function viewfinderFrameSizeForProjection(
   projection:
     | 'stereographic'
     | 'equirectangular'
-    | 'rectilinear'
-    | 'orthographic' = 'stereographic',
+    | 'rectilinear' = 'stereographic',
 ): { frameW: number; frameH: number } {
   const sensorAspect = viewfinderAspectRatio(orientation)
   const stageCap =
@@ -193,9 +192,7 @@ export function viewfinderFrameSizeForProjection(
       ? EQUIRECT_VFOV_MAX_DEG
       : projection === 'rectilinear'
         ? RECTILINEAR_VFOV_MAX_DEG
-        : projection === 'orthographic'
-          ? ORTHOGRAPHIC_VFOV_MAX_DEG
-          : 359
+        : 359
   const stage = Math.min(Math.max(stageVfovDeg, 1), stageCap)
   const optic = Math.max(opticalVfovDeg, 0.5)
   const toRad = Math.PI / 180
@@ -208,10 +205,6 @@ export function viewfinderFrameSizeForProjection(
     scale =
       Math.tan((optic / 2) * toRad) /
       Math.max(Math.tan((stage / 2) * toRad), 1e-6)
-  } else if (projection === 'orthographic') {
-    scale =
-      Math.sin((optic / 2) * toRad) /
-      Math.max(Math.sin((stage / 2) * toRad), 1e-6)
   } else {
     scale = optic / stage
   }
@@ -247,8 +240,6 @@ export const STEREOGRAPHIC_VFOV_MAX_DEG = STAGE_VFOV_MAX_DEG
 export const EQUIRECT_VFOV_MAX_DEG = 150
 /** Rectilinear / gnomonic blows up at 180°. Stay clear of the singularity. */
 export const RECTILINEAR_VFOV_MAX_DEG = 170
-/** Orthographic covers at most a hemisphere (disk of radius 1). */
-export const ORTHOGRAPHIC_VFOV_MAX_DEG = 180
 /**
  * Safety net for Three.PerspectiveCamera.fov (non-stereo projections).
  * Stereographic display uses a cubemap remap; HUD framing still uses

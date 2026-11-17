@@ -121,6 +121,46 @@ describe('timelapseFieldRollDeg (EQ field lock)', () => {
     expect(Math.abs(timelapseFieldRollDeg(q0, q1))).toBeGreaterThan(5)
   })
 
+  it('EQ preview look tracks lock RA/Dec exactly over a 2 h window', () => {
+    const lat = 28.7542
+    const lon = -17.8845
+    const elev = 740
+    const startUtc = Date.UTC(2025, 11, 15, 22, 0, 0)
+    const startYaw = 180
+    const startPitch = 35
+    const eq = horizontalToJ2000(
+      startPitch,
+      startYaw,
+      lat,
+      lon,
+      elev,
+      startUtc,
+    )
+    const q0 = parallacticAngleRad(startYaw, startPitch, lat)
+    const intervalS = 25
+    for (const idx of [0, 72, 143, 287]) {
+      const utc = startUtc + idx * intervalS * 1000
+      const hor = j2000ToHorizontal(
+        eq.raHours,
+        eq.decDeg,
+        lat,
+        lon,
+        elev,
+        utc,
+      )
+      const q = parallacticAngleRad(hor.azimuthDeg, hor.altitudeDeg, lat)
+      const fieldRoll = timelapseFieldRollDeg(q0, q)
+      // Same contract as useTimelapsePreview.applyShot (equatorial).
+      expect(hor.azimuthDeg).toBeGreaterThanOrEqual(0)
+      expect(Math.abs(fieldRoll)).toBeGreaterThanOrEqual(idx === 0 ? 0 : 5)
+      if (idx === 0) {
+        expect(hor.azimuthDeg).toBeCloseTo(startYaw, 5)
+        expect(hor.altitudeDeg).toBeCloseTo(startPitch, 5)
+        expect(fieldRoll).toBeCloseTo(0, 5)
+      }
+    }
+  })
+
   it('drops legacy eqRotation from saved plans', () => {
     const plan = normalizeTimelapsePlan({
       support: 'equatorial',

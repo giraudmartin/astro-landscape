@@ -14,16 +14,16 @@ const ESRI =
 const TILE_SIZE = 512
 const VERTICAL_EXAGGERATION = 1.1
 
-/** Parallel Esri/DEM fetches — MapLibre streams; we batch hard for first paint. */
+/** Parallel Esri/DEM fetches â MapLibre streams; we batch hard for first paint. */
 const FETCH_CONCURRENCY = 28
 
 /**
- * High-detail core. 6 km @ 4096 ˜ 3 m/px — summit FOV ridges stay readable.
+ * High-detail core. 6 km @ 4096 Ë 3 m/px â summit FOV ridges stay readable.
  * (12 km @ 4096 was ~6 m/px and read as muddy when filling the frame.)
  */
 export const NEAR_TERRAIN_RADIUS_M = 6_000
 /**
- * Outermost background relief radius — high-mountain clear-air silhouettes.
+ * Outermost background relief radius â high-mountain clear-air silhouettes.
  * Must stay inside the sky-dome / camera far plane, and inside the celestial
  * shell (CELESTIAL_SKY_DISTANCE_M) so the Milky Way stays behind all terrain.
  */
@@ -36,10 +36,10 @@ const FAR_TERRAIN_INNER_M = 30_000
 const DEM_MIN_FALLBACK_Z = 7
 
 /**
- * Detail annuli (own DEM + ortho) — MUST NOT cover the near disc again.
+ * Detail annuli (own DEM + ortho) â MUST NOT cover the near disc again.
  * Full stacked discs z-fought into glass shards on steep cliff pans.
- *   mid   ~5.4–14 km
- *   wide  ~12.6–32 km
+ *   mid   ~5.4â14 km
+ *   wide  ~12.6â32 km
  */
 const WIDE_DETAIL_RADIUS_M = 32_000
 const MID_DETAIL_RADIUS_M = 14_000
@@ -164,7 +164,7 @@ async function fetchDemBytes(
 
 const rawDemCache = new Map<string, Promise<ArrayBuffer | null>>()
 const esriCache = new Map<string, Promise<ArrayBuffer | null>>()
-/** Decoded terrarium tiles — same working-set lifetime as rawDemCache. */
+/** Decoded terrarium tiles â same working-set lifetime as rawDemCache. */
 const decodedDemCache = new Map<string, Promise<DemTile | null>>()
 
 /**
@@ -270,7 +270,7 @@ export function terrainTileCacheKeysForTests(): {
 }
 
 /**
- * Single-slot GPU terrain park — quit/re-enter the same spot remounts without
+ * Single-slot GPU terrain park â quit/re-enter the same spot remounts without
  * rebuild. A different spot disposes the parked handle first.
  */
 type ParkedTerrain = {
@@ -280,13 +280,13 @@ type ParkedTerrain = {
   handle: LocalTerrainHandle
 }
 
-/** ~0.1 m — same click / same personal spot. */
+/** ~0.1 m â same click / same personal spot. */
 const PARKED_SPOT_EPS_DEG = 1e-6
 
 let parkedTerrain: ParkedTerrain | null = null
 
 function sameParkedSpot(lat: number, lon: number, slot: ParkedTerrain): boolean {
-  // Match lat/lon only — DEM height often jumps >1 m when the map remounts,
+  // Match lat/lon only â DEM height often jumps >1 m when the map remounts,
   // and that must NOT miss the parked GPU mesh.
   return (
     Math.abs(slot.lat - lat) <= PARKED_SPOT_EPS_DEG &&
@@ -415,15 +415,15 @@ async function decodeTerrarium(bytes: ArrayBuffer): Promise<Uint8ClampedArray> {
 }
 
 /**
- * Mapterhorn planet archive tops out at z12 (~30 m). Regional z13–17 exist
- * only where high-res sources are published (Europe, … — not Namibia).
+ * Mapterhorn planet archive tops out at z12 (~30 m). Regional z13â17 exist
+ * only where high-res sources are published (Europe, â¦ â not Namibia).
  * Immersive mesh must NOT nearest-overzoom past native data: that paints
  * flat terraces ("dents de scie") at Spitzkoppe and similar sites.
  */
 export const PLANET_DEM_MAX_ZOOM = 12
 
 /**
- * Native DEM tile only. Missing high-z → null; elevationFromCache then
+ * Native DEM tile only. Missing high-z â null; elevationFromCache then
  * bilinear-samples a cached planet parent (see addDemTileKeys).
  * MapLibre's mapterhornSafeDem still nearest-overzooms for the 2D map.
  */
@@ -464,7 +464,7 @@ async function resolveDemTile(
   y: number,
 ): Promise<DemTile | null> {
   const key = `${z}/${x}/${y}`
-  // Decoded hit: no byte fetch — count here. Otherwise membership + hit/miss
+  // Decoded hit: no byte fetch â count here. Otherwise membership + hit/miss
   // come from fetchDemBytesCached (incl. parent overzoom keys).
   if (decodedDemCache.has(key)) {
     noteDemKey(key, true)
@@ -496,6 +496,55 @@ function sampleTerrarium(tile: DemTile, fx: number, fy: number): number {
     elev(x0, y0 + 1) * (1 - tx) * ty +
     elev(x0 + 1, y0 + 1) * tx * ty
   )
+}
+
+/**
+ * Square MSL height grid (m) around (lat0, lon0) in the terrain ENU frame,
+ * pixel-centre convention, rows north → south. Same Mapterhorn tiles and
+ * tile cache as the displayed relief.
+ */
+export async function sampleDemGridMslM(input: {
+  lat0: number
+  lon0: number
+  extentM: number
+  size: number
+  zoom?: number
+}): Promise<Float32Array> {
+  const z = input.zoom ?? PLANET_DEM_MAX_ZOOM
+  const n = input.size
+  const coords = new Float64Array(n * n * 2)
+  const keys = new Set<string>()
+  for (let j = 0; j < n; j++) {
+    const north = -((j + 0.5) / n - 0.5) * input.extentM
+    for (let i = 0; i < n; i++) {
+      const east = ((i + 0.5) / n - 0.5) * input.extentM
+      const { lat, lon } = enuToLatLon(east, north, input.lat0, input.lon0)
+      const t = latLonToTile(lat, lon, z)
+      const k = (j * n + i) * 2
+      coords[k] = t.x
+      coords[k + 1] = t.y
+      keys.add(`${z}/${Math.floor(t.x)}/${Math.floor(t.y)}`)
+    }
+  }
+  const tiles = new Map<string, DemTile | null>()
+  await mapPool([...keys], FETCH_CONCURRENCY, async (key) => {
+    const [tz, tx, ty] = key.split('/').map(Number) as [number, number, number]
+    tiles.set(key, await resolveDemTile(tz, tx, ty))
+  })
+  const out = new Float32Array(n * n)
+  for (let p = 0; p < n * n; p++) {
+    const x = coords[p * 2]!
+    const y = coords[p * 2 + 1]!
+    const tile = tiles.get(`${z}/${Math.floor(x)}/${Math.floor(y)}`)
+    out[p] = tile
+      ? sampleTerrarium(
+          tile,
+          (x - Math.floor(x)) * TILE_SIZE,
+          (y - Math.floor(y)) * TILE_SIZE,
+        )
+      : Number.NaN
+  }
+  return out
 }
 
 /** Distance ? DEM zoom: max near tripod, coarser far away. */
@@ -575,7 +624,7 @@ async function fetchEsriBytes(
   return pending
 }
 
-/** Esri gray "Map data not yet available" plates — same detector as MapLibre. */
+/** Esri gray "Map data not yet available" plates â same detector as MapLibre. */
 async function isEsriStubTile(bytes: ArrayBuffer): Promise<boolean> {
   if (bytes.byteLength === 0) return true
   if (bytes.byteLength >= ESRI_STUB_PROBE) return false
@@ -719,7 +768,7 @@ async function paintImageryLayer(
   return painted
 }
 
-/** Imagery atlases call getImageData (ocean / exposure) — avoid GPU sync stalls. */
+/** Imagery atlases call getImageData (ocean / exposure) â avoid GPU sync stalls. */
 function ortho2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
   return canvas.getContext('2d', { willReadFrequently: true })
 }
@@ -754,7 +803,7 @@ function canvasToTerrainTexture(
   return tex
 }
 
-/** Fast first-paint atlas — coarse Esri only, then upgraded in place. */
+/** Fast first-paint atlas â coarse Esri only, then upgraded in place. */
 async function buildPreviewImageryTexture(
   lat0: number,
   lon0: number,
@@ -787,7 +836,7 @@ async function buildImageryTexture(
   radiusM: number,
 ): Promise<THREE.CanvasTexture | null> {
   try {
-    // Prefer 4096 for =16 km cores (~3–8 m/px). Fall back to 2048 if alloc fails.
+    // Prefer 4096 for =16 km cores (~3â8 m/px). Fall back to 2048 if alloc fails.
     let size = radiusM <= 16_000 ? 4096 : 2048
     const canvas = document.createElement('canvas')
     canvas.width = size
@@ -829,15 +878,15 @@ async function buildImageryTexture(
     )
     enhanceOceanPixels(ctx, size)
     liftImageryExposure(ctx, size, 0.12)
-    // No mips on the core atlas — cliff UVs were picking blurry levels.
-    // (DEM hillshade bake on 4096² killed the WebGL context — do NOT restore.)
+    // No mips on the core atlas â cliff UVs were picking blurry levels.
+    // (DEM hillshade bake on 4096Â² killed the WebGL context â do NOT restore.)
     return canvasToTerrainTexture(canvas, { anisotropy: 16, mipmaps: false })
   } catch {
     return null
   }
 }
 
-/** Mid-ground nested atlas (14 km) — summit second-plan ridges ~7 m/px. */
+/** Mid-ground nested atlas (14 km) â summit second-plan ridges ~7 m/px. */
 async function buildMidDetailImageryTexture(
   lat0: number,
   lon0: number,
@@ -892,7 +941,7 @@ async function buildMidDetailImageryTexture(
   }
 }
 
-/** Wide nested atlas (32 km) — island context at ~16 m/px. */
+/** Wide nested atlas (32 km) â island context at ~16 m/px. */
 async function buildWideDetailImageryTexture(
   lat0: number,
   lon0: number,
@@ -939,7 +988,7 @@ async function buildWideDetailImageryTexture(
 
 /**
  * Foreground atlases mixed onto the near mesh. Must reach the ridges that fill
- * a 16 mm Mirador FOV (~1–3 km), not just the 110–480 m feet discs.
+ * a 16 mm Mirador FOV (~1â3 km), not just the 110â480 m feet discs.
  */
 const NEAR_RADIUS_M = 3_200
 const ULTRA_NEAR_RADIUS_M = 1_100
@@ -976,7 +1025,7 @@ async function buildForegroundImageryTexture(
       IMAGERY_MAX_ZOOM,
       radiusM,
     )
-    // No mipmaps — grazing cliff UVs were sampling blurry mips.
+    // No mipmaps â grazing cliff UVs were sampling blurry mips.
     return canvasToTerrainTexture(canvas, {
       anisotropy: 16,
       mipmaps: false,
@@ -1015,7 +1064,7 @@ async function buildRingImageryTexture(
     for (const z of sorted) {
       await paintImageryLayer(ctx, size, lat0, lon0, radiusM, z, radiusM)
     }
-    // Real Esri pixels — shadow lift so mid/far LOD matches near readability.
+    // Real Esri pixels â shadow lift so mid/far LOD matches near readability.
     enhanceOceanPixels(ctx, size)
     // Keep far rings readable without blowing a white horizon band.
     liftImageryExposure(ctx, size, radiusM > 80_000 ? 0.18 : 0.14)
@@ -1045,7 +1094,7 @@ function edgeCos(
 
 /**
  * Split edges that cover too much angle from the tripod, and steep
- * treads that read as stairs. The new point bisects the angle — a
+ * treads that read as stairs. The new point bisects the angle â a
  * geometric midpoint leaves the near half just as wide.
  */
 function refineTerrainEdges(
@@ -1186,7 +1235,7 @@ function refineTerrainEdges(
 }
 
 const ADAPT_EXTRA_VERTS = 220_000
-// Pitch-down puts mid-cliff cells on-screen — reach past the old 280 m bubble.
+// Pitch-down puts mid-cliff cells on-screen â reach past the old 280 m bubble.
 const ADAPT_REACH_M = 520
 const ADAPT_COS = Math.cos((1.25 * Math.PI) / 180)
 const ADAPT_CELL_M = 64
@@ -1644,7 +1693,7 @@ function createAdaptiveRefine(
   }
 }
 
-/** Mild exposure lift on far ortho (keeps hue — no blue wash). */
+/** Mild exposure lift on far ortho (keeps hue â no blue wash). */
 function liftImageryExposure(
   ctx: CanvasRenderingContext2D,
   size: number,
@@ -1676,7 +1725,7 @@ export function enhanceOceanPixelData(data: Uint8ClampedArray): void {
     const g = data[i + 1]!
     const b = data[i + 2]!
     const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
-    // Strict sea only — loose "cool+dark" painted basalt ridges blue.
+    // Strict sea only â loose "cool+dark" painted basalt ridges blue.
     const seaBlue = b > r + 12 && b > g + 8
     if (lum >= 0.13 || !seaBlue) continue
     const targetR = 58
@@ -1772,7 +1821,7 @@ async function buildTerrainLodRing(input: {
       const dist = Math.hypot(east, north)
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
       const elev = elevationFromCache(lat, lon, dist, cache, input.baseElev)
-      // Curvature: sphere sits below the ENU tangent plane — critical past ~20 km.
+      // Curvature: sphere sits below the ENU tangent plane â critical past ~20 km.
       const h =
         (elev - input.baseElev) * VERTICAL_EXAGGERATION - earthCurvatureDropM(dist)
       const idx = j * (resolution + 1) + i
@@ -1827,7 +1876,7 @@ async function buildTerrainLodRing(input: {
   const material = new THREE.MeshBasicMaterial({
     color: texture ? 0xffffff : 0xc4a574,
     map: texture ?? null,
-    // FrontSide — DoubleSide on overlapping LOD/detail layers = glass shards.
+    // FrontSide â DoubleSide on overlapping LOD/detail layers = glass shards.
     side: THREE.FrontSide,
     polygonOffset: true,
     polygonOffsetFactor: 2,
@@ -1838,7 +1887,7 @@ async function buildTerrainLodRing(input: {
   attachRadiusBandDiscard(material, ring.innerM * 0.88, ring.outerM)
   attachWorldXZOrthoMap(material, radiusM)
   attachOrthoSlopeShade(material)
-  // Match sky stereographic — terrain without stel = yellow disk + sea shards.
+  // Match sky stereographic â terrain without stel = yellow disk + sea shards.
   attachStelProjector(material, { terrainSafe: true })
   const mesh = new THREE.Mesh(geometry, material)
   mesh.frustumCulled = false
@@ -1920,7 +1969,7 @@ async function buildDetailTerrainDisc(input: {
       const dist = Math.hypot(east, north)
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
       const elev = elevationFromCache(lat, lon, dist, cache, input.baseElev)
-      // Same height formula as the near disc — any lift here opened a sky slit
+      // Same height formula as the near disc â any lift here opened a sky slit
       // at the radius-band handoff under log-depth.
       const h =
         (elev - input.baseElev) * VERTICAL_EXAGGERATION -
@@ -1948,7 +1997,7 @@ async function buildDetailTerrainDisc(input: {
       const cz = positions[c * 3 + 2]!
       const dx = positions[d * 3]!
       const dz = positions[d * 3 + 2]!
-      // Keep a quad if ANY corner is outside the hole — seals the seam.
+      // Keep a quad if ANY corner is outside the hole â seals the seam.
       const maxR2 = Math.max(
         ax * ax + az * az,
         bx * bx + bz * bz,
@@ -2009,7 +2058,7 @@ async function buildDetailTerrainDisc(input: {
 }
 
 /**
- * Curved MSL sea disc under DEM. Quads under land (DEM » 0) are omitted so the
+ * Curved MSL sea disc under DEM. Quads under land (DEM Â» 0) are omitted so the
  * blue mesh can't z-fight through ridges (the salt-and-pepper overlay).
  */
 function buildSeaMesh(input: {
@@ -2091,7 +2140,7 @@ function buildSeaMesh(input: {
   const material = new THREE.MeshBasicMaterial({
     color: 0x4a7a96,
     side: THREE.FrontSide,
-    // No depth write — never punch holes / flicker through land depth.
+    // No depth write â never punch holes / flicker through land depth.
     depthWrite: false,
     depthTest: true,
     polygonOffset: true,
@@ -2115,7 +2164,7 @@ function buildSeaMesh(input: {
 }
 
 /**
- * Background LOD rings with Earth curvature — mid ridges → far → horizon
+ * Background LOD rings with Earth curvature â mid ridges â far â horizon
  * silhouettes out to ~300 km, plus a curved MSL sea underlay.
  */
 async function buildFarTerrainMesh(input: {
@@ -2133,7 +2182,7 @@ async function buildFarTerrainMesh(input: {
   group.name = 'far-terrain-lod'
   group.frustumCulled = false
 
-  // Sea underlay — carved under land so blue never z-fights ridges.
+  // Sea underlay â carved under land so blue never z-fights ridges.
   const sea = buildSeaMesh({
     baseElev: input.baseElev,
     radiusM: FAR_TERRAIN_RADIUS_M,
@@ -2189,7 +2238,7 @@ function mixAtlasGlsl(
              vec2 tuv = vTerrainXZ / ${diam} + vec2(0.5);
              // Circular radius fade + UV-edge fade ? without the edge fade the
              // square atlas prints a visible rectangle on hillsides (the
-             // "carr� noir / qualit� diff�rente" artifact).
+             // "carré noir / qualité différente" artifact).
              float tw = 1.0 - smoothstep(${inner}, ${outer}, length(vTerrainXZ));
              float edge = min(min(tuv.x, tuv.y), min(1.0 - tuv.x, 1.0 - tuv.y));
              tw *= smoothstep(0.0, 0.1, edge);
@@ -2202,7 +2251,7 @@ function mixAtlasGlsl(
 }
 
 /**
- * Gentle slope darkening only — never directional (nrm.x / light side).
+ * Gentle slope darkening only â never directional (nrm.x / light side).
  * A +X bias made the same night settings look brighter on one side of the
  * view than the other when panning.
  */
@@ -2223,10 +2272,10 @@ function attachOrthoSlopeShade(material: THREE.Material): void {
     previous?.call(material, shader, renderer)
     if (shader.fragmentShader.includes('ASTRO_ORTHO_SLOPE_SHADE')) return
     if (!shader.fragmentShader.includes('#include <map_fragment>')) return
-    // MeshBasic omits beginnormal_vertex → no objectNormal. Three's program
+    // MeshBasic omits beginnormal_vertex â no objectNormal. Three's program
     // prefix already injects `attribute vec3 normal` when the geometry has
-    // normals — never redeclare it (redefinition kills far LOD shaders →
-    // invisible 30–300 km rings, empty geometric horizon at La Palma etc.).
+    // normals â never redeclare it (redefinition kills far LOD shaders â
+    // invisible 30â300 km rings, empty geometric horizon at La Palma etc.).
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -2313,7 +2362,7 @@ function attachWorldXZOrthoMap(
 }
 
 /**
- * Log-depth kills polygonOffset — layers must discard outside their radius
+ * Log-depth kills polygonOffset â layers must discard outside their radius
  * band or they z-fight into glass/noise.
  * ENU: length(position.xz) == horizontal range (z = -north).
  */
@@ -2377,18 +2426,24 @@ export type TerrainLoadPhase =
 
 export type LocalTerrainHandle = {
   mesh: THREE.Mesh
-  /** LOD background rings (~6–300 km); may be null if build failed. */
+  /** LOD background rings (~6â300 km); may be null if build failed. */
   farMesh: THREE.Group | null
   /** Materials tinted by day/night in ImmersiveView. */
   materials: Array<THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>
   adaptToEye: (ex: number, ey: number, ez: number) => void
   /**
-   * Mesh Y of the DEM surface at local ENU (east, north). Spot center ≈ 0.
+   * Mesh Y of the DEM surface at local ENU (east, north). Spot center â 0.
    * Used to keep the camera a fixed eye-height above the ground while walking.
    */
   groundYAt: (east: number, north: number) => number
   /** True MSL elevation (m) of the DEM surface at local ENU. */
   groundElevationMslAt: (east: number, north: number) => number
+  /**
+   * Mesh Y = (MSL − baseElevationM) · verticalExaggeration − curvature drop.
+   * Lets screen-space effects map scene points back to true MSL.
+   */
+  baseElevationM: number
+  verticalExaggeration: number
   dispose: () => void
   /** False while preview ortho is up; true after nested atlases + far LOD. */
   ready: boolean
@@ -2428,7 +2483,7 @@ export async function createLocalTerrainMesh(input: {
   onProgress?: (info: {
     phase: TerrainLoadPhase
     progress: number
-    /** 0–1 DEM byte/decoded reuse from the previous spot working set. */
+    /** 0â1 DEM byte/decoded reuse from the previous spot working set. */
     cacheHitRatio?: number
   }) => void
 }): Promise<LocalTerrainHandle> {
@@ -2500,7 +2555,7 @@ export async function createLocalTerrainMesh(input: {
       : 0) || 0
   const demHits = tileSession?.gen === sessionGen ? tileSession.demHits : 0
   const cacheHitRatio = demTouch > 0 ? demHits / demTouch : 0
-  // Warm working set: DEM phase is mostly reuse — nudge the loader forward.
+  // Warm working set: DEM phase is mostly reuse â nudge the loader forward.
   notifyProgress('dem', cacheHitRatio >= 0.7 ? 0.28 : 0.22, cacheHitRatio)
 
   const demAtSpot = elevationFromCache(
@@ -2548,8 +2603,8 @@ export async function createLocalTerrainMesh(input: {
       positions[k + 1] = (elev - spotGridElev) * VERTICAL_EXAGGERATION
     }
   }
-  // Same curvature as far LOD — without this, a ~70 m vertical crack opens at
-  // the seam and the sunset sky leaks through as a yellow “hole”.
+  // Same curvature as far LOD â without this, a ~70 m vertical crack opens at
+  // the seam and the sunset sky leaks through as a yellow âholeâ.
   minH = Infinity
   maxH = -Infinity
   for (let k = 0; k < positions.length; k += 3) {
@@ -2584,7 +2639,7 @@ export async function createLocalTerrainMesh(input: {
     )
   }
 
-  // Preview mesh first (no edge refine yet) so the view isn't blocked ~10× longer
+  // Preview mesh first (no edge refine yet) so the view isn't blocked ~10Ã longer
   // than MapLibre's progressive tiles.
   const previewTexture = await buildPreviewImageryTexture(
     input.lat,
@@ -2598,7 +2653,7 @@ export async function createLocalTerrainMesh(input: {
   geometry.setIndex(indices)
   geometry.computeVertexNormals()
 
-  // Nested atlas textures — filled after preview; shader always declares slots.
+  // Nested atlas textures â filled after preview; shader always declares slots.
   const atlasSlots = {
     wide: null as THREE.CanvasTexture | null,
     mid: null as THREE.CanvasTexture | null,
@@ -2668,7 +2723,7 @@ export async function createLocalTerrainMesh(input: {
            if (transformed.y > ceiling) transformed.y = mix(ceiling, transformed.y, rise);`,
         )
     }
-    // Re-inject whenever the program is (re)built — epoch bumps on each atlas.
+    // Re-inject whenever the program is (re)built â epoch bumps on each atlas.
     if (
       shader.fragmentShader.includes('#include <map_fragment>') &&
       !shader.fragmentShader.includes('ASTRO_NESTED_ATLAS')
@@ -2680,9 +2735,9 @@ export async function createLocalTerrainMesh(input: {
       const nearDiam = (radiusM * 2).toFixed(1)
       const feetDetail = `
            {
-             // NEVER dFdx/dFdy hillshade under stereographic warp — screen
+             // NEVER dFdx/dFdy hillshade under stereographic warp â screen
              // derivatives explode into black squares / crushed tiles.
-             // Isotropic slope only (no nrm.x) — directional bias made the
+             // Isotropic slope only (no nrm.x) â directional bias made the
              // same night settings look brighter on one side when panning.
              vec3 nrm = normalize(vAstroNrm);
              float shade = clamp(0.72 + 0.38 * nrm.y, 0.55, 1.08);
@@ -2736,13 +2791,13 @@ export async function createLocalTerrainMesh(input: {
   const previousKey = material.customProgramCacheKey.bind(material)
   material.customProgramCacheKey = () =>
     `eye-clear-v21|isoYShade|atlasEdge|stel|e${atlasEpoch.value}|w${atlasWeights.wide.value}|m${atlasWeights.mid.value}|n${atlasWeights.near.value}|u${atlasWeights.ultra.value}|${previousKey()}`
-  // Exact handoff — overlap z-fights under log-depth (polygonOffset is a no-op).
+  // Exact handoff â overlap z-fights under log-depth (polygonOffset is a no-op).
   attachRadiusBandDiscard(material, 0, MID_DETAIL_INNER_M * 1.08)
   // Stel on terrain (terrainSafe) so stereo matches the sky. Ortho is sampled
-  // from world XZ above — not mesh UVs — so the warp can't smear the satellite.
+  // from world XZ above â not mesh UVs â so the warp can't smear the satellite.
   attachStelProjector(material, { terrainSafe: true })
 
-  // 1×1 placeholders so sampler uniforms are never null before atlases load.
+  // 1Ã1 placeholders so sampler uniforms are never null before atlases load.
   const placeholder = (() => {
     const c = document.createElement('canvas')
     c.width = 1
@@ -2775,6 +2830,8 @@ export async function createLocalTerrainMesh(input: {
     adaptToEye: (ex, ey, ez) => adaptFn(ex, ey, ez),
     groundYAt: sampleTerrainY,
     groundElevationMslAt: sampleTerrainElevMsl,
+    baseElevationM: baseElev,
+    verticalExaggeration: VERTICAL_EXAGGERATION,
     ready: false,
     stats: {
       minH,
@@ -2829,7 +2886,7 @@ export async function createLocalTerrainMesh(input: {
     material.needsUpdate = true
   }
 
-  // Near ortho first (sharp 8 km core) — never block on far LOD tile storms.
+  // Near ortho first (sharp 8 km core) â never block on far LOD tile storms.
   // Sequential (not Promise.all): waiting on full+near+ultra together left the
   // loader frozen at 40% for minutes while ~6k Esri tiles downloaded.
   notifyProgress('ortho', 0.4)
@@ -2995,7 +3052,7 @@ export async function createLocalTerrainMesh(input: {
 }
 
 /**
- * Instant black ground for sky-only testing — no DEM / ortho fetches.
+ * Instant black ground for sky-only testing â no DEM / ortho fetches.
  *
  * A flat disc shreds under stereographic (gray wedges / black holes). Use a
  * dense lower hemisphere (same family as the sky dome) so every projector
@@ -3007,7 +3064,7 @@ export function createFlatLocalTerrainMesh(input: {
   radiusM?: number
 }): LocalTerrainHandle {
   const radiusM = input.radiusM ?? 300_000
-  // Lower hemi: phiStart=π/2 (horizon) → π (nadir). Dense like the sky dome.
+  // Lower hemi: phiStart=Ï/2 (horizon) â Ï (nadir). Dense like the sky dome.
   const geometry = new THREE.SphereGeometry(
     radiusM,
     256,
@@ -3017,7 +3074,7 @@ export function createFlatLocalTerrainMesh(input: {
     Math.PI / 2,
     Math.PI / 2,
   )
-  // Pure black — ImmersiveView must not re-tint this with day albedo.
+  // Pure black â ImmersiveView must not re-tint this with day albedo.
   const material = new THREE.MeshBasicMaterial({
     color: 0x000000,
     side: THREE.BackSide,
@@ -3041,6 +3098,8 @@ export function createFlatLocalTerrainMesh(input: {
     adaptToEye: () => {},
     groundYAt: () => 0,
     groundElevationMslAt: () => input.centerElevationM,
+    baseElevationM: input.centerElevationM,
+    verticalExaggeration: 1,
     ready: true,
     stats: {
       minH: input.centerElevationM,

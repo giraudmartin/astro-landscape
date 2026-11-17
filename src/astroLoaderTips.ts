@@ -29,7 +29,6 @@ export const ASTRO_LOADER_TIPS: readonly string[] = [
   /* 026 */ 'Les taches solaires paraissent sombres parce qu’elles sont moins chaudes que la surface qui les entoure.',
   /* 027 */ 'Les trois étoiles presque alignées de la ceinture d’Orion aident à reconnaître cette constellation.',
   /* 028 */ 'La Grande Casserole est un astérisme de sept étoiles situé dans la constellation de la Grande Ourse.',
-  /* 029 */ 'Les aurores se forment quand des particules chargées excitent les gaz de la haute atmosphère.',
   /* 030 */ 'Un trou noir de quelques masses solaires peut avoir un horizon de seulement quelques dizaines de kilomètres de diamètre.',
   /* 031 */ 'À la surface de Titan, la pression atmosphérique est environ une fois et demie celle mesurée au niveau de la mer sur Terre.',
   /* 032 */ 'Europe, une lune de Jupiter, abrite très probablement un océan sous sa croûte de glace.',

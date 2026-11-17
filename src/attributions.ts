@@ -12,16 +12,16 @@ export type AttributionEntry = {
 export const APP_ATTRIBUTIONS: readonly AttributionEntry[] = [
   {
     id: 'viirs-cog',
-    name: 'Bortle (VIIRS COG)',
+    name: 'Bortle / zenith SQM (VIIRS)',
     credit:
-      'Nighttime radiance COG for Bortle: default bake from NASA GIBS Black Marble (attribute NASA, no endorsement). Preferred upgrade: EOG VIIRS VNL average_masked (Payne Institute / Colorado School of Mines). Bortle is derived from upward radiance, not a ground SQM reading.',
-    url: 'https://eogdata.mines.edu/products/vnl/',
+      'Zenith SQM from EOG VIIRS VNL 2024 (~500 m, CC BY 4.0 via OpenLandMap/Zenodo) using the First Rig / Duriscoe zenith kernel. Cite Elvidge et al. 2021 and Earth Observation Group / Payne Institute. Estimate only — not a ground SQM. Method: docs/LIGHT_POLLUTION.md.',
+    url: 'https://doi.org/10.5281/zenodo.17294744',
   },
   {
     id: 'nasa-black-marble',
     name: 'Pollution lumineuse (Black Marble)',
     credit:
-      'Map/globe night-lights overlay: NASA Black Marble / VIIRS via NASA GIBS. Open NASA Earth science data — attribute NASA; do not imply NASA endorsement of this product. Used for visualization; Bortle prefers the hosted radiance COG when present.',
+      'Map/globe night-lights overlay: NASA Black Marble / VIIRS via NASA GIBS. Open NASA Earth science data — attribute NASA; do not imply NASA endorsement. Overlay only; zenith Bortle uses the VIIRS COG when present.',
     url: 'https://blackmarble.gsfc.nasa.gov/',
   },
   {

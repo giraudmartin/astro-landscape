@@ -1,27 +1,29 @@
 /**
- * Directional light-pollution profile around a spot — approximates an all-sky
- * “PL dome” (bright toward cities on the horizon, darker opposite), similar in
- * spirit to lightpollutionmap.info’s all-sky indicator.
+ * Directional light-pollution profile (horizon / dome lobes).
  *
- * Method (scouting estimate, not Falchi World Atlas — that data is CC BY-NC):
- * 1. Sample satellite glow on rings around the observer (several–hundreds km).
- * 2. Take a small spatial max around each sample (towns are tiny at z8).
- * 3. Weight by a Garstang-like distance falloff.
- * 4. Bin into azimuths (clockwise from north).
- * 5. Feed a 1D texture to the sky-dome shader / all-sky panel.
+ * Preferred path: Duriscoe **all-sky** kernel (α = 2.3·(d/350)^0.28) summed
+ * per azimuth wedge on the VIIRS 500 m COG — same commercial-OK raster as
+ * zenith, but NOT the steeper First Rig zenith kernel (distant cities must
+ * survive for horizon lobes).
  *
- * IMPORTANT: `peak` is the absolute weighted glow (do NOT treat “peak > 0”
- * as full intensity). Spitzkoppe noise (~0.002) must not become a 1-mag dome.
+ * Mag-drop intensity is calibrated on Mer / Paris / Spitz vs LPM+LPMap.app
+ * (see docs/LIGHT_POLLUTION.md). Peak unit = absolute wedge sum S.
  */
 
 import { lightPollutionCogUrl } from './cogConfig'
 import { glowFromBlackMarbleRgb } from './bortleFromRadiance'
 import {
+  ALL_SKY_ALPHA_POWER,
+  ALL_SKY_ALPHA_SCALE,
+  DURISCOE_MAX_KM,
+  horizonDistanceWeight,
+  cellAreaKm2,
+} from './duriscoeZenith'
+import { sampleRadianceFromCog, sumDirectionalFromCog } from './sampleFromCog'
+import {
   maxTerrainElevAngleDeg,
-  ridgeTransmission,
   sampleElevationM,
 } from './sampleElevation'
-import { sampleRadianceFromCog } from './sampleFromCog'
 import {
   LIGHT_POLLUTION_MAX_ZOOM,
   lightPollutionTileUrl,
@@ -31,13 +33,22 @@ import {
 export const LP_AZIMUTH_BINS = 64
 
 /**
- * Sample rings (km). Near towns dominate; far rings catch regional cities
- * (Windhoek / Walvis Bay from Spitzkoppe need ≥250 km).
+ * Soft knee for peak S → 0…1 intensity.
+ * Fitted so Mer (S≈9) → ~0.35 mag drop and Paris (S≈115) → ~1.2 with
+ * {@link HORIZON_MAX_MAG_DROP} = 1.4.
  */
-const RING_KM = [8, 20, 40, 70, 110, 170, 250, 360] as const
+export const HORIZON_PEAK_SOFT = 16
 
-/** Pixel footprint for max-glow around a ring sample (z8 ≈ 0.6 km/px). */
-const SAMPLE_FOOTPRINT_PX = 6
+/** Below this absolute S, treat as noise (Spitzkoppe false lobes). */
+export const HORIZON_PEAK_FLOOR = 0.4
+
+/** Max zenith→horizon mag drop at intensity = 1. */
+export const HORIZON_MAX_MAG_DROP = 1.4
+
+/** BM / sparse fallback rings (km). */
+const RING_KM = [8, 20, 40, 70, 110, 170, 250] as const
+const SAMPLE_FOOTPRINT_PX = 4
+const BM_RADIANCE_SCALE = 22
 
 const tileCache = new Map<string, Promise<ImageData | null>>()
 
@@ -47,7 +58,7 @@ export type HorizonGlowProfile = {
   /** Mean of normalized azimuth (0…1) — soft wash. */
   mean: number
   /**
-   * Absolute peak of the weighted ring sum *before* normalization.
+   * Absolute peak wedge sum S (Duriscoe all-sky) *before* normalization.
    * Drive mag-drop / intensity from this — not from a boolean.
    */
   peak: number
@@ -82,10 +93,9 @@ function offsetLatLon(
   }
 }
 
-/** Garstang-ish: strong near field, long tail for big cities. */
+/** BM fallback / diagnostics — same mid-range lift as COG domes. */
 export function distanceWeight(km: number): number {
-  const d0 = 35
-  return (1 / (1 + (km / d0) * (km / d0))) * Math.exp(-km / 280)
+  return horizonDistanceWeight(km)
 }
 
 async function loadTile(z: number, x: number, y: number): Promise<ImageData | null> {
@@ -151,19 +161,13 @@ function glowFromTileAt(
   return best
 }
 
-async function sampleGlowAt(lat: number, lon: number): Promise<number> {
-  const cogUrl = lightPollutionCogUrl()
-  if (cogUrl) {
-    const rad = await sampleRadianceFromCog(lat, lon, cogUrl)
-    if (rad != null) {
-      // Map radiance to 0…1 glow (cities tens of nW; clip soft).
-      return Math.min(1, Math.pow(Math.max(0, rad) / 25, 0.65))
-    }
-  }
+async function sampleBmRadianceAt(lat: number, lon: number): Promise<number> {
   const { z, x, y } = lonLatToTile(lon, lat, LIGHT_POLLUTION_MAX_ZOOM)
   const image = await loadTile(z, x, y)
   if (!image) return 0
-  return glowFromTileAt(lat, lon, image, z, x, y, SAMPLE_FOOTPRINT_PX)
+  const glow = glowFromTileAt(lat, lon, image, z, x, y, SAMPLE_FOOTPRINT_PX)
+  if (glow < 0.01) return 0
+  return Math.pow(glow, 1.25) * BM_RADIANCE_SCALE
 }
 
 function smoothCircular(bins: Float32Array, radius: number): Float32Array {
@@ -184,26 +188,16 @@ function smoothCircular(bins: Float32Array, radius: number): Float32Array {
 }
 
 /**
- * Absolute ring-sum peak → 0…1 pollution intensity for mag-drop / UI.
- * Noise floor kills pristine-site false domes (Spitzkoppe peakAbs ~0.002 old path).
- * Soft knee: small real town rings (~0.07) still register; cities saturate at 1.
+ * Absolute Duriscoe all-sky wedge peak S → 0…1 intensity for mag-drop.
  */
 export function peakIntensity01(peakAbs: number): number {
-  const floor = 0.025
-  if (!(peakAbs > floor)) return 0
-  // Dense urban ring sums saturate.
-  if (peakAbs >= 1.05) return 1
-  // Mid-curve tuned on LPM sb_2025 world set (Spitzkoppe / Death Valley /
-  // Joshua Tree / Paris). Too steep → fake yellow on dark deserts; too soft
-  // → misses coastal city lobes under Bortle-1 zeniths.
-  const x = (peakAbs - floor) / (peakAbs - floor + 0.19)
-  return Math.min(1, Math.pow(Math.max(0, x), 0.8))
+  if (!(peakAbs > HORIZON_PEAK_FLOOR)) return 0
+  return peakAbs / (peakAbs + HORIZON_PEAK_SOFT)
 }
 
 /**
- * High observatories (La Palma, Mauna Kea): nearby valley towns look bright
- * in Black Marble but contribute less to the visible sky than coastal cities
- * on the true horizon. Attenuate near rings only; leave far lobes intact.
+ * @deprecated Near-ring fade was a BM hack. COG all-sky path does not use it.
+ * Kept for tests / Immersive fallbacks that still call it.
  */
 export function highSiteRingScale(
   observerElevM: number | undefined,
@@ -217,95 +211,15 @@ export function highSiteRingScale(
 }
 
 export type BuildHorizonGlowOptions = {
-  /** Spot MSL elevation (m) — enables high-site + DEM ridge occlusion. */
   observerElevM?: number
-  /** Sample Mapterhorn ridges (default true when elev known / always try). */
   useTerrainOcclusion?: boolean
 }
 
-/**
- * Build an azimuthal PL profile for immersive sky-dome shading + all-sky panel.
- */
-export async function buildHorizonGlowProfile(
-  lat: number,
-  lon: number,
-  options?: BuildHorizonGlowOptions,
-): Promise<HorizonGlowProfile> {
-  const bins = new Float32Array(LP_AZIMUTH_BINS)
-  const horizonAltDeg = new Float32Array(LP_AZIMUTH_BINS)
-  const azStep = 360 / LP_AZIMUTH_BINS
-  const elevOpt = options?.observerElevM
-  const useTerrain = options?.useTerrainOcclusion !== false
-
-  // Prefer map elev; fall back to DEM sample at the spot.
-  let eyeElevM =
-    elevOpt != null && Number.isFinite(elevOpt) ? elevOpt : null
-  if (eyeElevM == null && useTerrain) {
-    eyeElevM = await sampleElevationM(lat, lon)
-  }
-
-  const tasks: Promise<void>[] = []
-
-  for (let i = 0; i < LP_AZIMUTH_BINS; i++) {
-    const azDeg = i * azStep
-    tasks.push(
-      (async () => {
-        let accum = 0
-        if (useTerrain && eyeElevM != null) {
-          // Local horizon for canvas silhouette (dense steps, short range).
-          const hor = await maxTerrainElevAngleDeg(
-            lat,
-            lon,
-            eyeElevM,
-            azDeg,
-            55,
-            6,
-          )
-          horizonAltDeg[i] = Math.max(0, Math.min(40, hor))
-        }
-
-        for (const km of RING_KM) {
-          // Center + ±4° spokes so compact towns (Hilo, Usakos) aren’t
-          // missed between the 5.6° azimuth bins.
-          const center = offsetLatLon(lat, lon, km, azDeg)
-          let glow = await sampleGlowAt(center.lat, center.lon)
-          if (km >= 20) {
-            const left = offsetLatLon(lat, lon, km, azDeg - 4)
-            const right = offsetLatLon(lat, lon, km, azDeg + 4)
-            glow = Math.max(
-              glow,
-              await sampleGlowAt(left.lat, left.lon),
-              await sampleGlowAt(right.lat, right.lon),
-            )
-          }
-
-          let terrainGate = 1
-          if (useTerrain && eyeElevM != null && glow > 0.02 && km >= 40) {
-            const srcElev = (await sampleElevationM(center.lat, center.lon)) ?? eyeElevM
-            const pathRidge = await maxTerrainElevAngleDeg(
-              lat,
-              lon,
-              eyeElevM,
-              azDeg,
-              km,
-            )
-            terrainGate = ridgeTransmission(eyeElevM, srcElev, km, pathRidge)
-          }
-
-          accum +=
-            glow *
-            distanceWeight(km) *
-            highSiteRingScale(eyeElevM ?? undefined, km) *
-            terrainGate
-        }
-        bins[i] = accum
-      })(),
-    )
-  }
-
-  await Promise.all(tasks)
-
-  const smoothed = smoothCircular(bins, 2)
+function finalizeProfile(
+  bins: Float32Array,
+  horizonAltDeg: Float32Array,
+): HorizonGlowProfile {
+  const smoothed = smoothCircular(bins, 1)
   const horizonSmooth = smoothCircular(horizonAltDeg, 1)
   let peak = 0
   let peakIdx = 0
@@ -318,23 +232,20 @@ export async function buildHorizonGlowProfile(
     sum += smoothed[i]!
   }
   const mean = sum / smoothed.length
-  const peakAzDeg = peakIdx * azStep
+  const peakAzDeg = (peakIdx / smoothed.length) * 360
+  const azStep = 360 / smoothed.length
 
-  // Below the intensity noise floor: keep absolute peak for diagnostics but
-  // flatten the shape so immersive / all-sky never invent a fake city lobe.
   if (peakIntensity01(peak) <= 0) {
     smoothed.fill(0)
     return {
       azimuth: smoothed,
       mean: 0,
       peak,
-      peakAzDeg,
+      peakAzDeg: peakIdx * azStep,
       horizonAltDeg: horizonSmooth,
     }
   }
 
-  // Normalize shape for the shader / directional field (peak city → 1).
-  // Absolute `peak` is retained separately for intensity scaling.
   for (let i = 0; i < smoothed.length; i++) {
     smoothed[i] = Math.min(1, smoothed[i]! / peak)
   }
@@ -348,6 +259,120 @@ export async function buildHorizonGlowProfile(
   }
 }
 
+async function buildHorizonFromBmRings(
+  lat: number,
+  lon: number,
+  eyeElevM: number | null,
+  useTerrain: boolean,
+): Promise<HorizonGlowProfile> {
+  const bins = new Float32Array(LP_AZIMUTH_BINS)
+  const horizonAltDeg = new Float32Array(LP_AZIMUTH_BINS)
+  const azStep = 360 / LP_AZIMUTH_BINS
+  // Approximate sample area (km²) for a ring sector.
+  const tasks: Promise<void>[] = []
+
+  for (let i = 0; i < LP_AZIMUTH_BINS; i++) {
+    const azDeg = i * azStep
+    tasks.push(
+      (async () => {
+        let accum = 0
+        if (useTerrain && eyeElevM != null) {
+          const hor = await maxTerrainElevAngleDeg(
+            lat,
+            lon,
+            eyeElevM,
+            azDeg,
+            55,
+            6,
+          )
+          horizonAltDeg[i] = Math.max(0, Math.min(40, hor))
+        }
+
+        for (const km of RING_KM) {
+          if (km > DURISCOE_MAX_KM) continue
+          const center = offsetLatLon(lat, lon, km, azDeg)
+          let rad = await sampleBmRadianceAt(center.lat, center.lon)
+          if (km >= 20) {
+            const left = offsetLatLon(lat, lon, km, azDeg - 4)
+            const right = offsetLatLon(lat, lon, km, azDeg + 4)
+            rad = Math.max(
+              rad,
+              await sampleBmRadianceAt(left.lat, left.lon),
+              await sampleBmRadianceAt(right.lat, right.lon),
+            )
+          }
+          if (rad < 0.5) continue
+          // Annulus sector area ≈ (2π km Δkm) / nAz with Δkm~ring spacing ~30
+          const widthKm = 25
+          const area = ((2 * Math.PI * km * widthKm) / LP_AZIMUTH_BINS) || cellAreaKm2(0.05, lat)
+          accum += rad * area * horizonDistanceWeight(km)
+        }
+        bins[i] = accum
+      })(),
+    )
+  }
+
+  await Promise.all(tasks)
+  return finalizeProfile(bins, horizonAltDeg)
+}
+
+/**
+ * Build an azimuthal PL profile for immersive sky-dome shading + all-sky panel.
+ */
+export async function buildHorizonGlowProfile(
+  lat: number,
+  lon: number,
+  options?: BuildHorizonGlowOptions,
+): Promise<HorizonGlowProfile> {
+  const elevOpt = options?.observerElevM
+  const useTerrain = options?.useTerrainOcclusion !== false
+
+  let eyeElevM =
+    elevOpt != null && Number.isFinite(elevOpt) ? elevOpt : null
+  if (eyeElevM == null && useTerrain) {
+    eyeElevM = await sampleElevationM(lat, lon)
+  }
+
+  const horizonAltDeg = new Float32Array(LP_AZIMUTH_BINS)
+  const azStep = 360 / LP_AZIMUTH_BINS
+
+  if (useTerrain && eyeElevM != null) {
+    const horTasks: Promise<void>[] = []
+    for (let i = 0; i < LP_AZIMUTH_BINS; i++) {
+      const azDeg = i * azStep
+      horTasks.push(
+        (async () => {
+          const hor = await maxTerrainElevAngleDeg(
+            lat,
+            lon,
+            eyeElevM!,
+            azDeg,
+            55,
+            6,
+          )
+          horizonAltDeg[i] = Math.max(0, Math.min(40, hor))
+        })(),
+      )
+    }
+    await Promise.all(horTasks)
+  }
+
+  const cogUrl = lightPollutionCogUrl()
+  if (cogUrl) {
+    const dir = await sumDirectionalFromCog(lat, lon, cogUrl, LP_AZIMUTH_BINS)
+    if (dir && dir.cellsUsed > 0) {
+      return finalizeProfile(dir.bins, horizonAltDeg)
+    }
+    // Try a single radiance probe — if COG exists but empty, still BM-fallback.
+    const probe = await sampleRadianceFromCog(lat, lon, cogUrl)
+    if (probe == null) {
+      return buildHorizonFromBmRings(lat, lon, eyeElevM, useTerrain)
+    }
+  }
+
+  return buildHorizonFromBmRings(lat, lon, eyeElevM, useTerrain)
+}
+
 export function emptyHorizonGlowProfile(): HorizonGlowProfile {
   return {
     azimuth: new Float32Array(LP_AZIMUTH_BINS),
@@ -356,4 +381,9 @@ export function emptyHorizonGlowProfile(): HorizonGlowProfile {
     peakAzDeg: 0,
     horizonAltDeg: new Float32Array(LP_AZIMUTH_BINS),
   }
+}
+
+/** Expose all-sky α for diagnostics / tests. */
+export function allSkyKernelInfo(): { scale: number; power: number } {
+  return { scale: ALL_SKY_ALPHA_SCALE, power: ALL_SKY_ALPHA_POWER }
 }

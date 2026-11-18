@@ -141,14 +141,22 @@ export function bortlePollutionFactor(bortle: number): number {
 }
 
 /**
- * Bortle 1 → green, 9 → red, smooth hue through yellow/orange.
- * Returns CSS `hsl(...)` for badges / mini-cards.
+ * Curated Bortle tones for badges on dark glass (text-friendly, not neon).
+ * 1–3 brand mint, then soft gold → amber → coral → rose → crimson.
  */
+const BORTLE_TONES: ReadonlyArray<string> = [
+  '#7ddea8', // 1
+  '#7ddea8', // 2
+  '#7ddea8', // 3
+  '#e5d06a', // 4 soft gold
+  '#efb85c', // 5 amber
+  '#f0925a', // 6 tangerine
+  '#ee7462', // 7 coral
+  '#e85d6e', // 8 rose
+  '#e04a5a', // 9 crimson
+]
+
+/** CSS color for Bortle badges / chips (1–9). */
 export function bortleColorCss(bortle: number): string {
-  const t = bortlePollutionFactor(bortle)
-  // 125° green → 8° red (skip purple; stay in the “good→bad” traffic arc).
-  const hue = 125 - t * 117
-  const sat = 72 + t * 10
-  const light = 46 - t * 6
-  return `hsl(${hue.toFixed(1)} ${sat.toFixed(0)}% ${light.toFixed(0)}%)`
+  return BORTLE_TONES[clampBortle(bortle) - 1] ?? '#7ddea8'
 }

@@ -27,6 +27,7 @@ import { ensureGlobeMilkyWayLayer } from './globeMilkyWay'
 import { ensureNightShadeProtocol } from './nightShadeProtocol'
 import { ensureLightPollutionProtocol } from './lightPollution/lightPollutionProtocol'
 import { MapControlsStack } from './MapControlsStack'
+import { MapSettingsPanel } from './MapSettingsPanel'
 import {
   filterMapVisiblePersonalSpots,
   fitPersonalSpots,
@@ -1030,6 +1031,7 @@ export function MapCanvas({
         mySpotsOpen={mySpotsOpen}
         onMySpotsOpenChange={onMySpotsOpenChange}
       />
+      <MapSettingsPanel />
       {spot && bortleSample ? (
         <SpotBortleCard
           bortle={bortleSample.bortle}

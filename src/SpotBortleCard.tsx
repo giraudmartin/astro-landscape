@@ -1,5 +1,8 @@
-import { useId } from 'react'
-import { clampBortle } from './lightPollution/bortleFromRadiance'
+import { useId, type CSSProperties } from 'react'
+import {
+  bortleColorCss,
+  clampBortle,
+} from './lightPollution/bortleFromRadiance'
 import { ChevronDownIcon } from './psIcons'
 
 type SpotBortleCardProps = {
@@ -39,6 +42,7 @@ export function SpotBortleCard({
 }: SpotBortleCardProps) {
   const n = clampBortle(bortle)
   const detailsId = useId()
+  const tone = bortleColorCss(n)
   const sqm =
     typeof skyBrightnessMag === 'number' && Number.isFinite(skyBrightnessMag)
       ? skyBrightnessMag.toFixed(2)
@@ -48,6 +52,7 @@ export function SpotBortleCard({
     <div
       className="spot-bortle-card"
       aria-label={`Bortle ${n}, ${label}`}
+      style={{ '--bortle-tone': tone } as CSSProperties}
     >
       <details className="spot-bortle-card__fold">
         <summary

@@ -24,12 +24,12 @@ describe('bortleFromRadiance', () => {
     expect(bortlePollutionFactor(9)).toBe(1)
   })
 
-  it('colors green→red across the scale', () => {
-    const green = bortleColorCss(1)
-    const red = bortleColorCss(9)
-    expect(green).toMatch(/^hsl\(/)
-    expect(red).toMatch(/^hsl\(/)
-    expect(green).not.toBe(red)
+  it('colors 1–3 primary green, then gold→amber→coral→crimson', () => {
+    expect(bortleColorCss(1)).toBe('#7ddea8')
+    expect(bortleColorCss(3)).toBe('#7ddea8')
+    expect(bortleColorCss(4)).toBe('#e5d06a')
+    expect(bortleColorCss(8)).toBe('#e85d6e')
+    expect(bortleColorCss(9)).toBe('#e04a5a')
   })
 })
 

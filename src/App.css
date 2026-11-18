@@ -249,7 +249,8 @@
   position: absolute;
   z-index: 1;
   left: 0.9rem;
-  bottom: calc(16px + 2.1rem);
+  /* Sit above the bottom-left settings FAB (PS layout). */
+  bottom: calc(36px + var(--map-control-size) + 12px);
   margin: 0;
   font-size: 0.7rem;
   line-height: 1.35;
@@ -263,7 +264,8 @@
   position: absolute;
   z-index: 2;
   left: 0.9rem;
-  bottom: calc(16px + 2.1rem);
+  /* Sit above the bottom-left settings FAB (PS layout). */
+  bottom: calc(36px + var(--map-control-size) + 12px);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -279,6 +281,8 @@
   -webkit-backdrop-filter: var(--vf-chrome-blur);
   pointer-events: auto;
   color: var(--ui-text);
+  /* Set inline from bortleColorCss — 1–3 primary green → yellow/orange → red. */
+  --bortle-tone: var(--ui-accent);
 }
 
 .spot-bortle-card__fold {
@@ -320,8 +324,8 @@
   width: 2.85rem;
   height: 2.85rem;
   border-radius: var(--r-md);
-  border: 1px solid var(--ui-primary-border);
-  background: var(--ui-primary-soft);
+  border: 1px solid color-mix(in srgb, var(--bortle-tone) 42%, transparent);
+  background: color-mix(in srgb, var(--bortle-tone) 16%, transparent);
 }
 
 .spot-bortle-card__number {
@@ -330,7 +334,7 @@
   line-height: 1;
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
-  color: var(--ui-primary);
+  color: var(--bortle-tone);
 }
 
 .spot-bortle-card__head-text {
@@ -344,7 +348,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-primary);
+  color: var(--bortle-tone);
 }
 
 .spot-bortle-card__quality {
@@ -544,9 +548,9 @@
   flex: 0 0 auto;
   margin-left: auto;
   padding: 0.45rem 0.7rem;
-  border: 1px solid var(--ui-primary-border);
+  border: 1px solid color-mix(in srgb, var(--bortle-tone, var(--ui-accent)) 42%, transparent);
   border-radius: var(--r-md);
-  background: var(--ui-primary-soft);
+  background: color-mix(in srgb, var(--bortle-tone, var(--ui-accent)) 16%, transparent);
   white-space: nowrap;
 }
 
@@ -560,7 +564,7 @@
   font-size: 1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--ui-primary);
+  color: var(--bortle-tone, var(--ui-accent));
 }
 
 .sky-brightness-panel__workspace {
@@ -739,7 +743,7 @@
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 50%;
-  background: var(--ui-primary);
+  background: var(--bortle-tone, var(--ui-accent));
   flex: 0 0 auto;
 }
 
@@ -5743,9 +5747,9 @@ html[data-qa-hide-chrome='1'] .render-diag {
   border: 1px solid var(--ov-stroke);
   border-radius: var(--r-2xl);
   background: var(--surface-float-glass);
-  box-shadow:
-    0 16px 36px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  /* Keep a light lift only — heavy drop shadows + .map-ui overflow
+     clipped into a fake dark “overlay” slab behind the card stack. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(22px) saturate(1.08);
   -webkit-backdrop-filter: blur(22px) saturate(1.08);
   font-family: var(--font-ui);
@@ -5754,10 +5758,7 @@ html[data-qa-hide-chrome='1'] .render-diag {
 
 .map-card--overview.map-card--glow {
   border-color: rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 0 40px rgba(var(--ui-accent-rgb), 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .map-card--overview.map-card--glow::before {
@@ -5985,7 +5986,8 @@ button.ov-capsule:hover {
     var(--surface-sheen),
     var(--weather-bg);
   color: var(--ui-text);
-  box-shadow: var(--ui-shadow);
+  /* Match overview: no outer drop shadow (avoids clipped haze in .map-ui). */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   font-family: var(--weather-font);
@@ -6715,6 +6717,16 @@ button.ov-capsule:hover {
     gap: 8px;
   }
 
+  .settings-anchor {
+    left: 12px;
+    bottom: 100px;
+  }
+
+  .spot-bortle-card,
+  .spot-readout {
+    bottom: calc(100px + var(--map-control-size) + 12px);
+  }
+
   .map-card {
     padding: 10px 11px 9px;
     border-radius: 14px;
@@ -7085,6 +7097,16 @@ button.ov-capsule:hover {
     bottom: 100px;
     width: min(var(--map-ui-reserve), calc(100% - 78px));
     gap: 8px;
+  }
+
+  .settings-anchor {
+    left: 10px;
+    bottom: 112px;
+  }
+
+  .spot-bortle-card,
+  .spot-readout {
+    bottom: calc(112px + var(--map-control-size) + 12px);
   }
 
   .map-card {
@@ -7535,6 +7557,20 @@ button.ov-capsule:hover {
     height: var(--map-control-size);
   }
 
+  .settings-anchor {
+    left: max(14px, env(safe-area-inset-left, 0px));
+    bottom: max(118px, calc(110px + env(safe-area-inset-bottom, 0px)));
+    z-index: 30;
+  }
+
+  .spot-bortle-card,
+  .spot-readout {
+    bottom: calc(
+      max(118px, calc(110px + env(safe-area-inset-bottom, 0px))) +
+        var(--map-control-size) + 12px
+    );
+  }
+
   /* Full-bleed bottom sheet over the map (PS phone rails). */
   .my-spots-rail {
     position: fixed;
@@ -7574,6 +7610,7 @@ button.ov-capsule:hover {
   html.info-drawer-open .map-compass,
   html.info-drawer-open .map-quick-actions-cluster,
   html.info-drawer-open .map-controls-stack .my-spots-control,
+  html.info-drawer-open .settings-anchor,
   html.info-drawer-open .moon-timeline-dock,
   html.info-drawer-open .moon-timeline-dock__collapsed {
     opacity: 0;
@@ -7588,6 +7625,78 @@ button.ov-capsule:hover {
   .immersive-dock {
     width: min(188px, calc(100vw - 20px));
   }
+}
+
+/* —— Settings FAB (bottom-left, Photo Sightline) —— */
+.settings-anchor {
+  position: absolute;
+  z-index: 4;
+  left: 16px;
+  bottom: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.settings-anchor > * {
+  pointer-events: auto;
+}
+
+.settings-anchor__toggle {
+  display: grid;
+  place-items: center;
+  width: var(--map-control-size);
+  height: var(--map-control-size);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+  background:
+    linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.035) 0%,
+      transparent 42%
+    ),
+    rgba(14, 16, 22, 0.76);
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: blur(14px);
+  color: #d9dde7;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.settings-anchor__toggle svg {
+  width: calc(var(--map-control-size) * 0.36);
+  height: calc(var(--map-control-size) * 0.36);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-anchor__toggle:hover {
+  background: var(--map-control-primary-soft);
+  color: var(--map-control-primary-muted);
+}
+
+.settings-anchor__toggle--active {
+  color: var(--map-control-primary);
+  background: var(--map-control-primary-soft);
+}
+
+.settings-anchor__toggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.78);
+  outline-offset: 2px;
+}
+
+.settings-anchor__toggle:active {
+  transform: scale(0.95);
 }
 
 /* —— Map settings (attributions) —— */

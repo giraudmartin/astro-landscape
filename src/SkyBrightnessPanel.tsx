@@ -1,6 +1,16 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import { createPortal } from 'react-dom'
-import { clampBortle } from './lightPollution/bortleFromRadiance'
+import {
+  bortleColorCss,
+  clampBortle,
+} from './lightPollution/bortleFromRadiance'
 import {
   buildHorizonGlowProfile,
   type HorizonGlowProfile,
@@ -379,6 +389,7 @@ export function SkyBrightnessPanel({
   if (!open || typeof document === 'undefined') return null
 
   const bortle = clampBortle(sample.bortle)
+  const bortleTone = bortleColorCss(bortle)
   const quality = sample.bortleLabel
   const place = formatPlace(lat, lon, elevM)
   const brightest =
@@ -406,6 +417,7 @@ export function SkyBrightnessPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        style={{ '--bortle-tone': bortleTone } as CSSProperties}
       >
         <header className="sky-brightness-panel__header">
           <div className="sky-brightness-panel__titles">

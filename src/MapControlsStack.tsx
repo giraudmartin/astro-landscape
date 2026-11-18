@@ -9,7 +9,6 @@ import {
   nextBasemapMode,
   type BasemapMode,
 } from './basemapMode'
-import { MapSettingsPanel } from './MapSettingsPanel'
 
 type MapControlsStackProps = {
   mapRef: RefObject<MapLibreMap | null>
@@ -154,8 +153,6 @@ export function MapControlsStack({
               <path d="M12 5V3M19 12h2M12 21v-2M3 12h2" />
             </svg>
           </button>
-
-          <MapSettingsPanel />
         </div>
       </div>
       <MySpotsToggle open={mySpotsOpen} onOpenChange={onMySpotsOpenChange} />

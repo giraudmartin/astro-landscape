@@ -4,6 +4,11 @@
  * into pillars / bands. Not a DEM-tile bug — loading just shows a coarser mesh.
  */
 import { describe, expect, it } from 'vitest'
+import {
+  EDGE_PHASES_DEG,
+  terrainEdgeNeedsSplit,
+} from './localTerrainMesh'
+import { TRIPOD_HEIGHT_M } from './presets'
 
 function normalize(x: number, y: number, z: number) {
   const L = Math.hypot(x, y, z)
@@ -99,4 +104,54 @@ describe('stereographic chord vs pitch (artifact source)', () => {
     expect(flat.stLen).toBeGreaterThan(1)
     expect(down.stLen).toBeGreaterThan(1)
   })
+})
+
+describe('terrain densify marks chord-prone edges wide', () => {
+  const finePhase = EDGE_PHASES_DEG[EDGE_PHASES_DEG.length - 1]!
+
+  it('keeps a 0.2° fine phase for static refine', () => {
+    expect(finePhase).toBeLessThanOrEqual(0.2)
+    expect(EDGE_PHASES_DEG).toContain(0.2)
+  })
+
+  it('near ground cell is wide at the fine phase', () => {
+    // Same ~14 m underfoot edge as the chord repro, eye-relative to tripod.
+    const ax = 0
+    const ay = 0 - TRIPOD_HEIGHT_M
+    const az = -5
+    const bx = 14
+    const by = 0 - TRIPOD_HEIGHT_M
+    const bz = -5
+    expect(terrainEdgeNeedsSplit(ax, ay, az, bx, by, bz, finePhase, 0)).toBe(
+      true,
+    )
+  })
+
+  it('short-XZ cliff edge still splits (3D floor, not horiz-only gate)', () => {
+    // Old horiz < 1.4 early-out skipped this silhouette tread.
+    const ax = 8
+    const ay = 18 - TRIPOD_HEIGHT_M
+    const az = -6
+    const bx = 8.4
+    const by = 2 - TRIPOD_HEIGHT_M
+    const bz = -6
+    const horiz = Math.hypot(bx - ax, bz - az)
+    expect(horiz).toBeLessThan(1.4)
+    expect(
+      terrainEdgeNeedsSplit(ax, ay, az, bx, by, bz, finePhase, Math.abs(18 - 2)),
+    ).toBe(true)
+  })
+
+  it('micro-edge stays below the 3D length floor', () => {
+    const ax = 3
+    const ay = 1 - TRIPOD_HEIGHT_M
+    const az = -4
+    const bx = 3.2
+    const by = 1.2 - TRIPOD_HEIGHT_M
+    const bz = -4.1
+    expect(
+      terrainEdgeNeedsSplit(ax, ay, az, bx, by, bz, finePhase, 0.2),
+    ).toBe(false)
+  })
+
 })

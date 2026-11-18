@@ -45,6 +45,11 @@ import {
 } from './renderDiagnostic'
 import { RenderDiagnosticCard } from './RenderDiagnosticCard'
 import { shuffleAstroLoaderTips } from './astroLoaderTips'
+import {
+  formatMegabytes,
+  getNetworkBytesTotal,
+  subscribeNetworkBytes,
+} from './networkBytesMeter'
 
 const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
   dem: 'Relief DEM\u2026',
@@ -352,6 +357,11 @@ export function ImmersiveView({
   const [loaderTipKey, setLoaderTipKey] = useState(0)
   const loaderTipDeckRef = useRef<string[]>([])
   const loaderTipRef = useRef('')
+  const [netBytes, setNetBytes] = useState(0)
+  useEffect(() => {
+    const base = getNetworkBytesTotal()
+    return subscribeNetworkBytes((total) => setNetBytes(total - base))
+  }, [])
   const [projection, setProjection] = useState<StageProjection>(
     savedImmersive.projection,
   )
@@ -2156,6 +2166,7 @@ export function ImmersiveView({
                       : terrainUnlocked
                         ? 'Affinage en arrière-plan'
                         : 'Construction de la scène immersive'}
+                    {` · ${formatMegabytes(netBytes)} reçus`}
                   </p>
                 </div>
                 <p className="immersive__loader-pct">

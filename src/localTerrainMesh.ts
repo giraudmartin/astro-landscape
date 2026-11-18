@@ -1075,8 +1075,12 @@ async function buildRingImageryTexture(
 }
 
 // Fine phases reduce stereographic pan tears without offscreen parking.
-const EDGE_PHASES_DEG = [20, 10, 5, 2.5, 1.25, 0.6, 0.35]
+// Keep index-order refine (no global sort) — worst-first + mid/wide densify
+// OOMed/hung the immersive load on res 1200 / 960 discs.
+export const EDGE_PHASES_DEG = [20, 10, 5, 2.5, 1.25, 0.6, 0.35, 0.2]
 const MAX_TERRAIN_EXTRA_VERTS = 750_000
+/** Skip only micro-edges; short-XZ cliffs must still split under stereo. */
+const MIN_EDGE_LEN_M = 0.7
 
 function edgeCos(
   ax: number,
@@ -1093,39 +1097,88 @@ function edgeCos(
 }
 
 /**
+ * Eye-relative edge needs a split for stereographic densify.
+ * Uses 3D length (not XZ-only) so near-vertical silhouette edges still refine.
+ */
+export function terrainEdgeNeedsSplit(
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+  phaseDeg: number,
+  dyWorld: number,
+): boolean {
+  const len = Math.hypot(bx - ax, by - ay, bz - az)
+  if (len < MIN_EDGE_LEN_M) return false
+  const cosLimit = Math.cos((phaseDeg * Math.PI) / 180)
+  if (edgeCos(ax, ay, az, bx, by, bz) < cosLimit) return true
+  if (phaseDeg > 1.25) return false
+  const horiz = Math.hypot(bx - ax, bz - az)
+  return dyWorld > 4 && horiz > 9
+}
+
+/**
  * Split edges that cover too much angle from the tripod, and steep
- * treads that read as stairs. The new point bisects the angle â a
+ * treads that read as stairs. The new point bisects the angle — a
  * geometric midpoint leaves the near half just as wide.
  */
-function refineTerrainEdges(
+export type RefinedTerrain = {
+  positions: Float32Array
+  uvs: Float32Array
+  indices: number[]
+}
+
+/** Main-thread slice before yielding back to rendering / input. */
+const REFINE_SLICE_MS = 12
+
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    const ch = new MessageChannel()
+    ch.port1.onmessage = () => resolve()
+    ch.port2.postMessage(null)
+  })
+}
+
+/**
+ * Same splits, same vertex order as the original synchronous pass, but
+ * float64 typed buffers + numeric edge keys (no per-edge tuples / strings),
+ * and the work is sliced so the page keeps rendering. Returns null if
+ * `cancelled()` flips while yielding.
+ */
+export async function refineTerrainEdges(
   srcPos: Float32Array,
   srcUv: Float32Array,
   srcIdx: number[],
   sampleY: (east: number, north: number) => number,
-): { positions: Float32Array; uvs: Float32Array; indices: number[] } {
-  const pos = Array.from(srcPos)
-  const uv = Array.from(srcUv)
+  cancelled: () => boolean = () => false,
+): Promise<RefinedTerrain | null> {
+  const srcVerts = srcPos.length / 3
+  const vertCap = srcVerts + MAX_TERRAIN_EXTRA_VERTS
+  // A triangle checks `room` once, then may add up to 3 midpoints.
+  const pos = new Float64Array((vertCap + 3) * 3)
+  const uv = new Float64Array((vertCap + 3) * 2)
+  pos.set(srcPos)
+  uv.set(srcUv)
+  let nVerts = srcVerts
   let indices = srcIdx
-  const vertCap = srcPos.length / 3 + MAX_TERRAIN_EXTRA_VERTS
-  let cosLimit = Math.cos((EDGE_PHASES_DEG[0]! * Math.PI) / 180)
   let phaseDeg = EDGE_PHASES_DEG[0]!
-
-  const rel = (i: number) =>
-    [
-      pos[i * 3]!,
-      pos[i * 3 + 1]! - TRIPOD_HEIGHT_M,
-      pos[i * 3 + 2]!,
-    ] as const
+  let sliceStart = performance.now()
 
   const wide = (i: number, j: number): boolean => {
-    const [ax, ay, az] = rel(i)
-    const [bx, by, bz] = rel(j)
-    const horiz = Math.hypot(bx - ax, bz - az)
-    if (horiz < 1.4) return false
-    if (edgeCos(ax, ay, az, bx, by, bz) < cosLimit) return true
-    if (phaseDeg > 1.25) return false
-    const dy = Math.abs(pos[i * 3 + 1]! - pos[j * 3 + 1]!)
-    return dy > 4 && horiz > 9
+    const ay = pos[i * 3 + 1]!
+    const by = pos[j * 3 + 1]!
+    return terrainEdgeNeedsSplit(
+      pos[i * 3]!,
+      ay - TRIPOD_HEIGHT_M,
+      pos[i * 3 + 2]!,
+      pos[j * 3]!,
+      by - TRIPOD_HEIGHT_M,
+      pos[j * 3 + 2]!,
+      phaseDeg,
+      Math.abs(ay - by),
+    )
   }
 
   const bisectT = (
@@ -1151,19 +1204,24 @@ function refineTerrainEdges(
     return (lo + hi) * 0.5
   }
 
+  const keyStride = vertCap + 3
+
   for (const nextPhase of EDGE_PHASES_DEG) {
-    if (pos.length / 3 >= vertCap) break
+    if (nVerts >= vertCap) break
     phaseDeg = nextPhase
-    cosLimit = Math.cos((phaseDeg * Math.PI) / 180)
     for (let pass = 0; pass < 6; pass += 1) {
-      if (pos.length / 3 >= vertCap) break
-      const mid = new Map<string, number>()
+      if (nVerts >= vertCap) break
+      const mid = new Map<number, number>()
       const midpoint = (i: number, j: number): number => {
-        const key = i < j ? `${i},${j}` : `${j},${i}`
+        const key = i < j ? i * keyStride + j : j * keyStride + i
         const found = mid.get(key)
         if (found != null) return found
-        const [ax, ay, az] = rel(i)
-        const [bx, by, bz] = rel(j)
+        const ax = pos[i * 3]!
+        const ay = pos[i * 3 + 1]! - TRIPOD_HEIGHT_M
+        const az = pos[i * 3 + 2]!
+        const bx = pos[j * 3]!
+        const by = pos[j * 3 + 1]! - TRIPOD_HEIGHT_M
+        const bz = pos[j * 3 + 2]!
         const t = bisectT(ax, ay, az, bx, by, bz)
         const east = ax + (bx - ax) * t
         const z = az + (bz - az) * t
@@ -1189,22 +1247,28 @@ function refineTerrainEdges(
             hi = k
           }
         }
-        const n = pos.length / 3
-        pos.push(east, y, z)
-        uv.push(
-          uv[i * 2]! + (uv[j * 2]! - uv[i * 2]!) * t,
-          uv[i * 2 + 1]! + (uv[j * 2 + 1]! - uv[i * 2 + 1]!) * t,
-        )
+        const n = nVerts
+        pos[n * 3] = east
+        pos[n * 3 + 1] = y
+        pos[n * 3 + 2] = z
+        uv[n * 2] = uv[i * 2]! + (uv[j * 2]! - uv[i * 2]!) * t
+        uv[n * 2 + 1] = uv[i * 2 + 1]! + (uv[j * 2 + 1]! - uv[i * 2 + 1]!) * t
+        nVerts += 1
         mid.set(key, n)
         return n
       }
       const next: number[] = []
       let grew = false
       for (let t = 0; t < indices.length; t += 3) {
+        if ((t & 0xfff) === 0 && performance.now() - sliceStart > REFINE_SLICE_MS) {
+          await yieldToMain()
+          if (cancelled()) return null
+          sliceStart = performance.now()
+        }
         const a = indices[t]!
         const b = indices[t + 1]!
         const c = indices[t + 2]!
-        const room = pos.length / 3 < vertCap
+        const room = nVerts < vertCap
         const ab = room && wide(a, b) ? midpoint(a, b) : -1
         const bc = room && wide(b, c) ? midpoint(b, c) : -1
         const ca = room && wide(c, a) ? midpoint(c, a) : -1
@@ -1228,14 +1292,14 @@ function refineTerrainEdges(
   }
 
   return {
-    positions: Float32Array.from(pos),
-    uvs: Float32Array.from(uv),
+    positions: Float32Array.from(pos.subarray(0, nVerts * 3)),
+    uvs: Float32Array.from(uv.subarray(0, nVerts * 2)),
     indices,
   }
 }
 
 const ADAPT_EXTRA_VERTS = 220_000
-// Pitch-down puts mid-cliff cells on-screen â reach past the old 280 m bubble.
+// Pitch-down puts mid-cliff cells on-screen — reach past the old 280 m bubble.
 const ADAPT_REACH_M = 520
 const ADAPT_COS = Math.cos((1.25 * Math.PI) / 180)
 const ADAPT_CELL_M = 64
@@ -2927,7 +2991,17 @@ export async function createLocalTerrainMesh(input: {
   notifyProgress('ortho', 0.58)
   input.onUpgrade?.(handle)
 
-  const refined = refineTerrainEdges(positions, uvs, indices, sampleTerrainY)
+  const refined = await refineTerrainEdges(
+    positions,
+    uvs,
+    indices,
+    sampleTerrainY,
+    () => disposed,
+  )
+  if (!refined || disposed) {
+    commitTerrainTileSession(sessionGen)
+    return handle
+  }
   geometry.setAttribute(
     'position',
     new THREE.BufferAttribute(refined.positions, 3),

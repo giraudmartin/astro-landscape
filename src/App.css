@@ -4948,10 +4948,6 @@ html[data-qa-hide-chrome='1'] .render-diag {
   opacity: 0;
 }
 
-.immersive__loader--upgrading .immersive__loader-card {
-  background: rgba(8, 12, 20, 0.62);
-}
-
 .immersive__loader-stack {
   display: grid;
   gap: 10px;
@@ -4966,7 +4962,9 @@ html[data-qa-hide-chrome='1'] .render-diag {
   padding: 18px 20px 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--r-2xl);
-  background: rgba(8, 12, 20, 0.8);
+  /* Nearly opaque float — backdrop-filter does not sample the WebGL canvas,
+     so the old 0.52–0.62 glass left constellation labels punching through. */
+  background: var(--surface-sheen), var(--surface-float);
   color: #f5f5f7;
   box-shadow:
     0 22px 48px rgba(0, 0, 0, 0.45),

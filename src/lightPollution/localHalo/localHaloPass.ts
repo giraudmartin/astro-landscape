@@ -13,7 +13,7 @@
  */
 
 /** Bump when the composite shader changes so ImmersiveView remounts the pass. */
-export const LOCAL_HALO_PASS_REV = 43
+export const LOCAL_HALO_PASS_REV = 44
 import * as THREE from 'three'
 import { EARTH_RADIUS_M } from '../../globeConstants'
 import { stelModeUniform } from '../../stelProjector'
@@ -222,6 +222,31 @@ float cloudLayer(vec3 p, int k) {
   if (k == 2) q *= vec3(0.35, 1.7, 3.2);
   vec2 wind = vec2(0.00009, 0.000045) * uCloudTime * (1.0 + float(k) * 0.6);
   q.xz += wind;
+  if (uReference < 0.5 && k > 0) {
+    vec2 xy = p.xz + wind / 0.023;
+    // Broad variations break up the deck into groups with their own orientation.
+    vec2 warp = vec2(texture(uNoise, vec3(xy * 0.0027, 0.27)).r,
+                     texture(uNoise, vec3(xy * 0.0039, 0.71)).r) - 0.5;
+    vec2 local = vec2(dot(vec2(0.95, 0.31), xy), dot(vec2(-0.31, 0.95), xy));
+    float envelope = texture(uNoise, vec3(xy * 0.006 + warp * 0.07, 0.38)).r;
+    float threshold = mix(0.78, 0.18, layer.z);
+    if (k == 1) {
+      // Billows of different sizes within broad altocumulus banks.
+      vec3 cells = vec3((xy + warp * 3.0) * vec2(0.045, 0.056), p.y * 0.085);
+      float billow = noiseField(cells);
+      float mass = 0.65 * billow + 0.35 * envelope;
+      float top = 0.48 + 0.52 * billow;
+      float profile = smoothstep(0.0, 0.18, h) * (1.0 - smoothstep(top - 0.23, top, h));
+      return smoothstep(threshold - 0.035, threshold + 0.23, mass) * profile * layer.w;
+    }
+    // Thin ice trails shear across the layer; a broad envelope tapers each tuft.
+    local.y += warp.x * 5.0 + warp.y * 2.4 + (h - 0.5) * 1.5;
+    vec3 fibres = vec3(local * vec2(0.012, 0.104), p.y * 0.036);
+    float strands = noiseField(fibres);
+    float plume = smoothstep(threshold - 0.14, threshold + 0.23, envelope);
+    float profile = smoothstep(0.0, 0.30, h) * (1.0 - smoothstep(0.51, 1.0, h));
+    return plume * smoothstep(0.26, 0.78, strands) * profile * layer.w * 0.65;
+  }
   float n = noiseField(q);
   float threshold = mix(0.78, 0.18, layer.z);
   float body = smoothstep(threshold, threshold + 0.19, n);
@@ -292,18 +317,33 @@ void main() {
   // underestimates the exact altitude by a positive quadratic remainder.
   float eyeKm = toProtoKm(uEye).y;
   float slope = (rd.y + dot(uEye.xz, rd.xz) / uEarthR) * 0.001 / uExag;
-  float bend = dot(rd.xz, rd.xz) * farM * farM * 0.001 / (2.0 * uEarthR * uExag);
+  float curve = dot(rd.xz, rd.xz) * 0.001 / (2.0 * uEarthR * uExag);
   for (int k = 0; k < 3; k++) {
     vec4 layer = uLayers[k];
     vec2 r = vec2(0.0);
     if (uReference < 0.5 && uCloudOn > 0.5 && layer.z * layer.w > 0.0) {
-      float lo = layer.x - bend - eyeKm;
-      float hi = layer.x + layer.y - eyeKm;
-      if (abs(slope) * farM < 0.00001) {
-        if (lo <= 0.00001 && hi >= -0.00001) r.y = farM;
+      // Intersect the upper surface exactly. Clip to the lower surface on
+      // monotonic segments; a ray crossing the tangent can visit a slab twice.
+      float top = eyeKm - layer.x - layer.y;
+      if (curve * farM * farM < 0.00001) {
+        if (abs(slope) * farM < 0.00001) {
+          if (top <= 0.0 && top + layer.y >= 0.0) r.y = farM;
+        } else {
+          vec2 t = -vec2(top, top + layer.y) / slope;
+          r = vec2(max(0.0, min(t.x,t.y)), min(farM, max(t.x,t.y)));
+        }
       } else {
-        vec2 t = vec2(lo, hi) / slope;
-        r = vec2(max(0.0, min(t.x, t.y)), min(farM, max(t.x, t.y)));
+        float d = slope * slope - 4.0 * curve * top;
+        if (d >= 0.0) {
+          float root = sqrt(d);
+          r = vec2(max(0.0, (-slope-root)/(2.0*curve)), min(farM, (-slope+root)/(2.0*curve)));
+          float lowerD = d - 4.0 * curve * layer.y;
+          if (lowerD > 0.0) {
+            vec2 gap = (-slope + vec2(-1.0,1.0)*sqrt(lowerD))/(2.0*curve);
+            if (r.x >= gap.x) r.x = max(r.x, gap.y);
+            else if (r.y <= gap.y) r.y = min(r.y, gap.x);
+          }
+        }
       }
     }
     ranges[k + 1] = r;
@@ -355,7 +395,9 @@ void main() {
       float air = uHaloAir > 0.0
         ? exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3)) * uHaloAir * uHaze * edge * 0.045
         : 0.0;
-      float cd = cloudDensity(p) * mix(1.0, edge, uReference);
+      float rangeKm = length(pScene.xz - uEye.xz) * 0.001;
+      float distant = exp(-rangeKm / 95.0) * (1.0 - smoothstep(120.0, 390.0, rangeKm));
+      float cd = cloudDensity(p) * mix(distant, edge, uReference);
       float cloudExt = cd * 2.2;
       vec3 cloudColour = vec3(0.0);
       if (cd > 0.001) {
@@ -366,6 +408,11 @@ void main() {
         vec3 skyAmb = mix(nightSky, srgbToLinear(uSkyLight), clamp(uDayFactor, 0.0, 1.0));
         vec3 ambient = (skyAmb * 3.2 + vec3(0.009, 0.012, 0.019))
           * mix(0.16, 1.0, occ.x) * selfShade;
+        if (uReference < 0.5) {
+          float luminance = dot(ambient, vec3(0.2126, 0.7152, 0.0722));
+          vec3 nightGrey = luminance * vec3(0.95, 1.00, 1.04);
+          ambient = mix(nightGrey, ambient, smoothstep(0.0, 0.65, uDayFactor));
+        }
         float under = exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3));
         float cityAmt = ill * uPower * uHaloAir + uSkyLp * 1.25 * under;
         vec3 city = uTint * cityAmt * 0.9 * mix(0.12, 1.0, occ.y);
@@ -536,7 +583,7 @@ export function createLocalHaloPass(): LocalHaloPass {
     },
     uCloudSteps: { value: STEPS_HALO },
     // ~80 km: enough for horizon rays to cross ASL slabs without the ±12 km boule.
-    uCloudFarM: { value: 80_000 },
+    uCloudFarM: { value: 400_000 },
     uSkyLp: { value: 0 },
     uDayFactor: { value: 0 },
     uGroundView: { value: 0 },
@@ -745,7 +792,6 @@ export function createLocalHaloPass(): LocalHaloPass {
         1,
         Math.max(0, clouds.dayFactor ?? 1 - night01),
       )
-      uniforms.uCloudFarM.value = 80_000
       const packed = weatherLayersForShader(clouds.weather)
       const layers = uniforms.uLayers.value as THREE.Vector4[]
       layers[0]!.copy(packed[0])

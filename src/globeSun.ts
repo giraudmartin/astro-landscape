@@ -3,19 +3,8 @@
  * Subsolar math via Astronomy Engine; light → MapLibre spherical frame from
  * makewithmaplibre.com/globe (atmosphere looks opposite the light position).
  */
-import {
-  Body,
-  Equator,
-  Illumination,
-  Observer,
-  SiderealTime,
-} from 'astronomy-engine'
-import type {
-  GeoJSONSource,
-  LightSpecification,
-  Map,
-  RasterTileSource,
-} from 'maplibre-gl'
+import { Body, Equator, Observer, SiderealTime } from 'astronomy-engine'
+import type { LightSpecification, Map, RasterTileSource } from 'maplibre-gl'
 import {
   ensureNightShadeProtocol,
   nightShadeTileUrl,
@@ -37,14 +26,6 @@ export function subsolarPoint(utcMs: number): LngLat {
   const at = new Date(utcMs)
   const eq = Equator(Body.Sun, at, GEOCENTRIC, true, true)
   // SiderealTime → Greenwich apparent sidereal time in hours; RA is hours.
-  const lon = wrapLon(15 * (eq.ra - SiderealTime(at)))
-  return { lon, lat: eq.dec }
-}
-
-/** Geographic point where the Moon is at zenith (UTC instant). */
-export function sublunarPoint(utcMs: number): LngLat {
-  const at = new Date(utcMs)
-  const eq = Equator(Body.Moon, at, GEOCENTRIC, true, true)
   const lon = wrapLon(15 * (eq.ra - SiderealTime(at)))
   return { lon, lat: eq.dec }
 }
@@ -89,17 +70,6 @@ const lastNightShadeByMap = new WeakMap<
   Map,
   { url: string; strength: number }
 >()
-
-export function moonIlluminationAt(utcMs: number): {
-  fraction: number
-  phaseAngleDeg: number
-} {
-  const illum = Illumination(Body.Moon, new Date(utcMs))
-  return {
-    fraction: illum.phase_fraction,
-    phaseAngleDeg: illum.phase_angle,
-  }
-}
 
 /** Drive globe terminator light + hillshade from the playhead sun. */
 export function applyGlobeSunLighting(
@@ -198,11 +168,12 @@ export function applyGlobeSunLighting(
   return subsolar
 }
 
-export const CELESTIAL_SOURCE_ID = 'astro-celestial-bodies'
-export const SUN_LAYER_ID = 'astro-sun-marker'
-export const SUN_GLOW_LAYER_ID = 'astro-sun-marker-glow'
-export const MOON_LAYER_ID = 'astro-moon-marker'
-export const MOON_GLOW_LAYER_ID = 'astro-moon-marker-glow'
+/** Legacy marker ids — removed from the globe; kept for HMR/style cleanup. */
+const CELESTIAL_SOURCE_ID = 'astro-celestial-bodies'
+const SUN_LAYER_ID = 'astro-sun-marker'
+const SUN_GLOW_LAYER_ID = 'astro-sun-marker-glow'
+const MOON_LAYER_ID = 'astro-moon-marker'
+const MOON_GLOW_LAYER_ID = 'astro-moon-marker-glow'
 
 /**
  * Night-shade opacity at a map zoom (linear stops).
@@ -263,14 +234,9 @@ export function ensureNightShadeLayer(map: Map, utcMs: number): void {
   }
 
   if (!map.getLayer(NIGHT_SHADE_LAYER_ID)) {
-    // Above satellite imagery, below hillshade / labels / markers.
+    // Above satellite imagery, below hillshade / labels.
     // Hard maxzoom: never overzoom shade into map/spot framing (tile seams + void).
-    const before =
-      map.getLayer('hillshade') != null
-        ? 'hillshade'
-        : map.getLayer(SUN_GLOW_LAYER_ID) != null
-          ? SUN_GLOW_LAYER_ID
-          : undefined
+    const before = map.getLayer('hillshade') != null ? 'hillshade' : undefined
     map.addLayer(
       {
         id: NIGHT_SHADE_LAYER_ID,
@@ -326,173 +292,34 @@ export function updateNightShadeLayer(
   lastNightShadeByMap.set(map, { url: nextUrl, strength: s })
 }
 
-/** GeoJSON source + circle layers for sun/moon on the globe (low zoom). */
-export function ensureCelestialBodyLayers(map: Map, utcMs: number): void {
+const celestialMarkersCleared = new WeakSet<Map>()
+
+/** Strip leftover subsolar/sublunar circle markers (no longer drawn on the globe). */
+export function removeCelestialBodyMarkers(map: Map): void {
   if (!map.isStyleLoaded()) return
-  ensureNightShadeLayer(map, utcMs)
-
-  if (!map.getSource(CELESTIAL_SOURCE_ID)) {
-    map.addSource(CELESTIAL_SOURCE_ID, {
-      type: 'geojson',
-      data: emptyBodies(),
-    })
+  if (celestialMarkersCleared.has(map) && !map.getSource(CELESTIAL_SOURCE_ID)) {
+    return
   }
-
-  if (!map.getLayer(SUN_GLOW_LAYER_ID)) {
-    map.addLayer({
-      id: SUN_GLOW_LAYER_ID,
-      type: 'circle',
-      source: CELESTIAL_SOURCE_ID,
-      filter: ['==', ['get', 'body'], 'sun'],
-      maxzoom: 6.5,
-      paint: {
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          0,
-          18,
-          4,
-          14,
-          6,
-          8,
-        ],
-        'circle-color': '#ffcc66',
-        'circle-opacity': 0.28,
-        'circle-blur': 0.85,
-      },
-    })
+  for (const id of [
+    MOON_LAYER_ID,
+    MOON_GLOW_LAYER_ID,
+    SUN_LAYER_ID,
+    SUN_GLOW_LAYER_ID,
+  ]) {
+    if (map.getLayer(id)) {
+      try {
+        map.removeLayer(id)
+      } catch {
+        // style churn
+      }
+    }
   }
-
-  if (!map.getLayer(SUN_LAYER_ID)) {
-    map.addLayer({
-      id: SUN_LAYER_ID,
-      type: 'circle',
-      source: CELESTIAL_SOURCE_ID,
-      filter: ['==', ['get', 'body'], 'sun'],
-      maxzoom: 6.5,
-      paint: {
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          0,
-          7,
-          4,
-          5.5,
-          6,
-          3.5,
-        ],
-        'circle-color': '#ffe08a',
-        'circle-stroke-color': '#ffb347',
-        'circle-stroke-width': 1.2,
-        'circle-opacity': 0.95,
-      },
-    })
+  if (map.getSource(CELESTIAL_SOURCE_ID)) {
+    try {
+      map.removeSource(CELESTIAL_SOURCE_ID)
+    } catch {
+      // style churn
+    }
   }
-
-  if (!map.getLayer(MOON_GLOW_LAYER_ID)) {
-    map.addLayer({
-      id: MOON_GLOW_LAYER_ID,
-      type: 'circle',
-      source: CELESTIAL_SOURCE_ID,
-      filter: ['==', ['get', 'body'], 'moon'],
-      maxzoom: 6.5,
-      paint: {
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          0,
-          14,
-          4,
-          11,
-          6,
-          6,
-        ],
-        'circle-color': '#c9d4f5',
-        'circle-opacity': 0.22,
-        'circle-blur': 0.8,
-      },
-    })
-  }
-
-  if (!map.getLayer(MOON_LAYER_ID)) {
-    map.addLayer({
-      id: MOON_LAYER_ID,
-      type: 'circle',
-      source: CELESTIAL_SOURCE_ID,
-      filter: ['==', ['get', 'body'], 'moon'],
-      maxzoom: 6.5,
-      paint: {
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          0,
-          5.5,
-          4,
-          4.5,
-          6,
-          3,
-        ],
-        'circle-color': [
-          'interpolate',
-          ['linear'],
-          ['get', 'illumination'],
-          0,
-          '#2a3140',
-          0.5,
-          '#a8b4c8',
-          1,
-          '#e8eef8',
-        ],
-        'circle-stroke-color': '#dce4f5',
-        'circle-stroke-width': 1,
-        'circle-opacity': 0.92,
-      },
-    })
-  }
-}
-
-type BodyCollection = {
-  type: 'FeatureCollection'
-  features: Array<{
-    type: 'Feature'
-    geometry: { type: 'Point'; coordinates: [number, number] }
-    properties: Record<string, string | number>
-  }>
-}
-
-function emptyBodies(): BodyCollection {
-  return { type: 'FeatureCollection', features: [] }
-}
-
-export function updateCelestialBodyMarkers(map: Map, utcMs: number): void {
-  ensureCelestialBodyLayers(map, utcMs)
-  const source = map.getSource(CELESTIAL_SOURCE_ID) as GeoJSONSource | undefined
-  if (!source || typeof source.setData !== 'function') return
-
-  const sun = subsolarPoint(utcMs)
-  const moon = sublunarPoint(utcMs)
-  const illum = moonIlluminationAt(utcMs)
-
-  source.setData({
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [sun.lon, sun.lat] },
-        properties: { body: 'sun' },
-      },
-      {
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [moon.lon, moon.lat] },
-        properties: {
-          body: 'moon',
-          illumination: Math.round(illum.fraction * 100) / 100,
-        },
-      },
-    ],
-  })
+  celestialMarkersCleared.add(map)
 }

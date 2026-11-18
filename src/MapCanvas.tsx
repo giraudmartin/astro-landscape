@@ -22,7 +22,7 @@ import {
   invalidateMapSkyCache,
 } from './applyMapSky'
 import { sunPositionAt } from './celestial'
-import { ensureCelestialBodyLayers, ensureNightShadeLayer } from './globeSun'
+import { ensureNightShadeLayer, removeCelestialBodyMarkers } from './globeSun'
 import { ensureGlobeMilkyWayLayer } from './globeMilkyWay'
 import { ensureNightShadeProtocol } from './nightShadeProtocol'
 import { ensureLightPollutionProtocol } from './lightPollution/lightPollutionProtocol'
@@ -748,7 +748,7 @@ export function MapCanvas({
       ensureGlobeMilkyWayLayer(map)
       // Playhead UTC — never Date.now(), or first shade tiles disagree with the dock.
       ensureNightShadeLayer(map, skyUtcMsRef.current)
-      ensureCelestialBodyLayers(map, skyUtcMsRef.current)
+      removeCelestialBodyMarkers(map)
       // Terminator + light before first paint settle — don't wait for a user pan.
       applyPlayheadSkyRef.current()
       setBasemapMode(basemapModeRef.current)

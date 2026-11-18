@@ -1,7 +1,7 @@
 import type { Map, RasterTileSource } from 'maplibre-gl'
 import {
   applyGlobeSunLighting,
-  updateCelestialBodyMarkers,
+  removeCelestialBodyMarkers,
 } from './globeSun'
 import {
   LIGHT_POLLUTION_LAYER_ID,
@@ -100,7 +100,7 @@ export function mapImageryNightPaint(
 }
 
 export type ApplyMapSkyOptions = {
-  /** UTC playhead — drives terminator + sun/moon markers. */
+  /** UTC playhead — drives terminator lighting. */
   utcMs: number
   /** Local sun azimuth at map focus (° clockwise from north). */
   sunAzimuthDeg: number
@@ -254,7 +254,8 @@ export function applyMapSky(
       nightAmount: night,
       stableGlobeLight: globe > 0.35,
     })
-    updateCelestialBodyMarkers(map, options.utcMs)
+    // Drop legacy subsolar/sublunar dots if a hot reload left them on the style.
+    removeCelestialBodyMarkers(map)
   } else if (map.getLayer('hillshade')) {
     map.setPaintProperty(
       'hillshade',

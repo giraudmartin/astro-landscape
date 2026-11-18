@@ -27,7 +27,12 @@ export type RenderDiagStats = {
   triangles: number
   points: number
   lines: number
-  path: 'direct' | 'direct-local-halo' | 'cubemap' | 'cubemap-atlas'
+  path:
+    | 'direct'
+    | 'direct-local-halo'
+    | 'direct-weather'
+    | 'cubemap'
+    | 'cubemap-atlas'
 }
 
 export type RenderDiagLive = {

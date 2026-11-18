@@ -90,6 +90,24 @@ import {
   ViewfinderSkyControl,
   type LocalHaloControls,
 } from './ViewfinderSkyControl'
+import {
+  ViewfinderWeatherControl,
+  weatherControlsFromSettings,
+} from './ViewfinderWeatherControl'
+import { fetchWeatherForecast } from './weatherForecast'
+import {
+  DEFAULT_VIEWFINDER_WEATHER,
+  getWeatherDayFactor,
+  getWeatherGroundLightFactor,
+  getWeatherGroundSunWarmth,
+  normalizeWeatherLayer,
+  resolveViewfinderWeatherAt,
+  weatherForecastSnapshot,
+  weatherWantsVolumePass,
+  WEATHER_LAYER_DEFAULTS,
+  type ViewfinderWeather,
+  type ViewfinderWeatherForecast,
+} from './viewfinderWeather'
 import { ViewPitchHud } from './ViewPitchHud'
 import {
   AzimuthGridIcon,
@@ -124,6 +142,7 @@ import {
 import { requestHaloField } from './lightPollution/localHalo/haloFieldClient'
 import {
   createLocalHaloPass,
+  LOCAL_HALO_PASS_REV,
   type LocalHaloField,
   type LocalHaloTuning,
 } from './lightPollution/localHalo/localHaloPass'
@@ -489,6 +508,56 @@ export function ImmersiveView({
   const [showAzimuthGrid, setShowAzimuthGrid] = useState(
     savedImmersive.showAzimuthGrid,
   )
+  const [weatherSettings, setWeatherSettings] = useState<ViewfinderWeather>(
+    () => ({
+      enabled: savedImmersive.weatherEnabled,
+      animateClouds: savedImmersive.weatherAnimateClouds,
+      wind: savedImmersive.weatherWind ?? DEFAULT_VIEWFINDER_WEATHER.wind,
+      followForecast: savedImmersive.weatherFollowForecast,
+      low: normalizeWeatherLayer(savedImmersive.weatherLow, {
+        ...WEATHER_LAYER_DEFAULTS.low,
+        cover: savedImmersive.weatherLowClouds,
+      }),
+      mid: normalizeWeatherLayer(savedImmersive.weatherMid, {
+        ...WEATHER_LAYER_DEFAULTS.mid,
+        cover: savedImmersive.weatherMidClouds,
+      }),
+      high: normalizeWeatherLayer(savedImmersive.weatherHigh, {
+        ...WEATHER_LAYER_DEFAULTS.high,
+        cover: savedImmersive.weatherHighClouds,
+      }),
+      forecast: null,
+    }),
+  )
+  const [weatherForecast, setWeatherForecast] =
+    useState<ViewfinderWeatherForecast | null>(null)
+
+  const weatherSettingsLive = useMemo<ViewfinderWeather>(
+    () => ({ ...weatherSettings, forecast: weatherForecast }),
+    [weatherSettings, weatherForecast],
+  )
+  const weatherSettingsRef = useRef(weatherSettingsLive)
+  weatherSettingsRef.current = weatherSettingsLive
+  const weatherForPlayhead = useMemo(
+    () => resolveViewfinderWeatherAt(weatherSettingsLive, skyUtcMs),
+    [weatherSettingsLive, skyUtcMs],
+  )
+  const weatherControls = useMemo(
+    () => weatherControlsFromSettings(weatherForPlayhead),
+    [weatherForPlayhead],
+  )
+  const setWeather = useCallback((next: ViewfinderWeather) => {
+    setWeatherSettings({
+      enabled: next.enabled,
+      animateClouds: next.animateClouds,
+      wind: next.wind,
+      followForecast: next.followForecast,
+      low: next.low,
+      mid: next.mid,
+      high: next.high,
+      forecast: null,
+    })
+  }, [])
 
   const skyTogglesRef = useRef({
     showMilkyWay: savedImmersive.showMilkyWay,
@@ -567,6 +636,16 @@ export function ImmersiveView({
         showConstellations,
         showCelestialGrid,
         showAzimuthGrid,
+        weatherEnabled: weatherSettings.enabled,
+        weatherAnimateClouds: weatherSettings.animateClouds,
+        weatherWind: weatherSettings.wind,
+        weatherFollowForecast: Boolean(weatherSettings.followForecast),
+        weatherLowClouds: weatherSettings.low.cover,
+        weatherMidClouds: weatherSettings.mid.cover,
+        weatherHighClouds: weatherSettings.high.cover,
+        weatherLow: weatherSettings.low,
+        weatherMid: weatherSettings.mid,
+        weatherHigh: weatherSettings.high,
       },
     })
   }, [
@@ -599,6 +678,40 @@ export function ImmersiveView({
     showConstellations,
     showCelestialGrid,
     showAzimuthGrid,
+    weatherSettings,
+  ])
+
+  useEffect(() => {
+    if (!weatherSettings.enabled || !weatherSettings.followForecast) {
+      setWeatherForecast(null)
+      return
+    }
+    let cancelled = false
+    const end = new Date(`${date}T12:00:00Z`)
+    end.setUTCDate(end.getUTCDate() + 1)
+    const endDate = end.toISOString().slice(0, 10)
+    void fetchWeatherForecast({
+      latitude: lat,
+      longitude: lon,
+      startDate: date,
+      endDate,
+    })
+      .then((data) => {
+        if (cancelled) return
+        setWeatherForecast(weatherForecastSnapshot(data))
+      })
+      .catch(() => {
+        if (!cancelled) setWeatherForecast(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    weatherSettings.enabled,
+    weatherSettings.followForecast,
+    date,
+    lat,
+    lon,
   ])
 
   const nightSkyApiRef = useRef<ReturnType<typeof createNightSky> | null>(null)
@@ -831,6 +944,9 @@ export function ImmersiveView({
     const localHaloPass = createLocalHaloPass()
     let localHaloField: LocalHaloField | null = null
     let localHaloGen = 0
+    let weatherLastFrameAt = performance.now()
+    const latestSunDir = new THREE.Vector3(0, 1, 0)
+    const latestSkyLight = new THREE.Color(0.45, 0.62, 0.82)
     const loadLocalHalo = () => {
       const gen = ++localHaloGen
       localHaloField = null
@@ -931,17 +1047,26 @@ export function ImmersiveView({
         night: localHaloNight(latestSunAltDeg),
       }
     }
-    const localHaloTerrainFrame = () => {
+    const localHaloTerrainFrame = (): {
+      baseElevationM: number
+      verticalExaggeration: number
+    } => {
       const t = activeTerrain
-      if (!t || isFlatTerrainHandle(t)) return null
+      if (t && !isFlatTerrainHandle(t)) {
+        return {
+          baseElevationM: t.baseElevationM,
+          verticalExaggeration: t.verticalExaggeration,
+        }
+      }
       return {
-        baseElevationM: t.baseElevationM,
-        verticalExaggeration: t.verticalExaggeration,
+        baseElevationM: groundElevationRef.current,
+        verticalExaggeration: 1,
       }
     }
     localHaloProbeRef.current = (u, v) => {
       const terrain = localHaloTerrainFrame()
-      if (!localHaloField || !terrain || !groundYAt) return null
+      if (!localHaloField || !groundYAt || !activeTerrain) return null
+      if (isFlatTerrainHandle(activeTerrain)) return null
       const hit = probeLocalHalo({
         u,
         v,
@@ -1016,6 +1141,17 @@ export function ImmersiveView({
       const dir = sunDirectionFromAltAz(alt, sun.azimuthDeg)
       const palette = skyPaletteFromSunAltitude(alt)
       const night = palette.nightAmount
+      {
+        // Daytime cloud ambient from painted sky. Night ambient is forced to
+        // proto #0b1423 inside the shader (uDayFactor) — never the PL wash.
+        const zen = hexToRgb01(palette.zenith)
+        const hor = hexToRgb01(palette.horizon)
+        latestSkyLight.setRGB(
+          zen.r * 0.55 + hor.r * 0.45,
+          zen.g * 0.55 + hor.g * 0.45,
+          zen.b * 0.55 + hor.b * 0.45,
+        )
+      }
       const atmosphereAmountLive = clampAtmosphereAmount(
         skyTogglesRef.current.atmosphereAmount,
       )
@@ -1057,6 +1193,7 @@ export function ImmersiveView({
         eclipticPole: eclipticPoleLocal,
       })
 
+      latestSunDir.copy(dir)
       sunLight.position.copy(dir).multiplyScalar(10_000)
       sunFill.position.copy(dir).multiplyScalar(8_000)
 
@@ -1091,6 +1228,29 @@ export function ImmersiveView({
           (atmosphereOn ? 0.12 : 0.16) * (1 - night) + (atmosphereOn ? 0 : 0.05),
         )
         sunFill.intensity = sunLight.intensity * 0.85
+      }
+
+      const weatherLive = resolveViewfinderWeatherAt(
+        weatherSettingsRef.current,
+        utcMs,
+      )
+      // Dim ground only when volumetric clouds actually cover — not merely when
+      // the Météo master switch is on (that made ON≠OFF with no visible clouds).
+      if (localHaloSourceRef.current !== 'reference' && weatherWantsVolumePass(weatherLive)) {
+        const groundLight = getWeatherGroundLightFactor(weatherLive)
+        const { warmth, overcast } = getWeatherGroundSunWarmth(weatherLive)
+        sunLight.intensity *= groundLight
+        sunFill.intensity *= THREE.MathUtils.lerp(1, 0.9, overcast)
+        hemi.intensity *= THREE.MathUtils.lerp(1, 0.92, overcast)
+        if (warmth > 0.01 && alt > -6) {
+          sunLight.color.offsetHSL(0.02 * warmth, 0.08 * warmth, -0.04 * warmth)
+          sunFill.color.copy(sunLight.color)
+        }
+        if (overcast > 0.2) {
+          const cool = overcast * 0.12
+          sunLight.color.offsetHSL(0, -cool, -cool * 0.5)
+          sunFill.color.copy(sunLight.color)
+        }
       }
 
       const groundTint = groundAlbedoFromSky(palette, alt, {
@@ -1718,6 +1878,14 @@ export function ImmersiveView({
       // Sum whole frame (cubemap = 6 faces + composite).
       renderer.info.autoReset = false
       renderer.info.reset()
+      const weatherLive = resolveViewfinderWeatherAt(
+        weatherSettingsRef.current,
+        latestSkyUtc,
+      )
+      const nowMs = performance.now()
+      const weatherDt = Math.min(0.1, (nowMs - weatherLastFrameAt) / 1000)
+      weatherLastFrameAt = nowMs
+
       if (useCubemap) {
         stereoPass.setAtlasPreview(atlasOn)
         const stage = Number(camera.userData.stageVfovDeg) || stageFov
@@ -1731,16 +1899,39 @@ export function ImmersiveView({
         stereoPass.setAtlasPreview(false)
         const haloTuning = localHaloTuning()
         const haloTerrain = localHaloTerrainFrame()
-        const haloActive =
-          haloTerrain != null && localHaloPass.isActive(haloTuning)
-        localHaloDebugRef.current.active = haloActive
-        if (haloActive) {
+        const cloudsForPass = !useCubemap && weatherLive.enabled
+          ? weatherLive
+          : null
+        const volumeActive = localHaloPass.isActive(haloTuning, cloudsForPass)
+        localHaloDebugRef.current.active = volumeActive
+        if (volumeActive) {
           localHaloPass.begin(renderer)
           renderer.render(scene, camera)
           renderImmersiveLightPollution(sky, renderer, camera)
-          localHaloPass.end(renderer, camera, haloTerrain, haloTuning)
+          localHaloPass.end(
+            renderer,
+            camera,
+            haloTerrain,
+            haloTuning,
+            cloudsForPass && weatherWantsVolumePass(cloudsForPass)
+              ? {
+                  weather: cloudsForPass,
+                  skyLight: latestSkyLight,
+                  deltaSec: cloudsForPass.animateClouds ? weatherDt : 0,
+                  reference: localHaloSourceRef.current === 'reference',
+                  skyLp: clampLightPollutionAmount(
+                    skyTogglesRef.current.lightPollutionAmount,
+                  ) * lightPollutionBortleFactorRef.current,
+                  dayFactor: getWeatherDayFactor(latestSunAltDeg),
+                }
+              : null,
+          )
           renderDiagLiveRef.current.stats.passes = 2
-          renderDiagLiveRef.current.stats.path = 'direct-local-halo'
+          renderDiagLiveRef.current.stats.path = weatherWantsVolumePass(
+            weatherLive,
+          )
+            ? 'direct-weather'
+            : 'direct-local-halo'
         } else {
           renderer.render(scene, camera)
           renderImmersiveLightPollution(sky, renderer, camera)
@@ -1807,12 +1998,14 @@ export function ImmersiveView({
     // must NOT remount (that was reloading the whole terrain on every
     // quit→relaunch). bearingDeg must NOT remount either — that dropped back
     // to muddy preview. flatTerrain toggles a DEM-free sky test stub.
-  }, [lat, lon, flatTerrain])
+  }, [lat, lon, flatTerrain, LOCAL_HALO_PASS_REV])
 
   useEffect(() => {
     apiRef.current?.setSkyUtc(skyUtcMs)
   }, [
     skyUtcMs,
+    weatherSettingsLive,
+    localHaloSource,
     atmosphereAmount,
     airglowAmount,
     airglowHue,
@@ -2674,6 +2867,11 @@ export function ImmersiveView({
           onStarZoomSpanChange={setStarZoomSpan}
           onStarBrightnessChange={setStarBrightness}
           onStarGlowChange={setStarGlow}
+        />
+        <ViewfinderWeatherControl
+          manual={weatherSettings}
+          weather={weatherControls}
+          onWeatherChange={setWeather}
         />
         <ViewfinderProjectionControl
           projection={projection}

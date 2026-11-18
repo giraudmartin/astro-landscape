@@ -1,19 +1,24 @@
 /**
- * Local light-pollution halo — screen pass (port of the Chamonix prototype).
+ * Local light-pollution halo + volumetric clouds — screen pass (Chamonix HTML
+ * prototype port).
  *
  * When active, the frame is drawn into an offscreen target (colour + depth),
  * then one fullscreen shader:
- *   1. rebuilds the view ray of each pixel for the active projection,
+ *   1. rebuilds the view ray for the active projection (recti / stereo / …),
  *   2. stops it at the opaque depth (terrain / LOD rings),
- *   3. integrates the precomputed 3D illumination field over 112 steps,
- *   4. composites halo + scene, then the optional VIIRS ground diagnostic.
+ *   3. integrates PL volume (when loaded) and/or three cloud layers,
+ *   4. composites attenuated scene + glow (stars / MW behind clouds fade).
  *
- * Inactive (halos and diagnostic off, or daylight) → the caller keeps its
- * direct-to-canvas path, so the existing scene is untouched.
+ * Inactive (no clouds, no halo, no diagnostic) → caller keeps a direct path.
  */
+
+/** Bump when the composite shader changes so ImmersiveView remounts the pass. */
+export const LOCAL_HALO_PASS_REV = 43
 import * as THREE from 'three'
 import { EARTH_RADIUS_M } from '../../globeConstants'
 import { stelModeUniform } from '../../stelProjector'
+import type { ViewfinderWeather } from '../../viewfinderWeather'
+import { weatherLayersForShader, weatherWantsVolumePass } from '../../viewfinderWeather'
 import {
   ENU_M_PER_DEG,
   HALO_FIELD_SPEC,
@@ -68,7 +73,22 @@ export type LocalHaloTerrainFrame = {
   verticalExaggeration: number
 }
 
-const STEPS = 112
+export type LocalHaloCloudFrame = {
+  weather: ViewfinderWeather
+  /** Display-referred sky colour driving cloud ambient (daytime). */
+  skyLight: THREE.Color
+  /** Seconds to advance cloud wind (0 when animation frozen). */
+  deltaSec: number
+  /** Integrate inside the prototype box when comparing Chamonix. */
+  reference: boolean
+  /** Regional sky contribution before twilight attenuation. */
+  skyLp: number
+  /** 0 at night → force proto #0b1423 ambient; 1 = use skyLight. */
+  dayFactor: number
+}
+
+const STEPS_HALO = 112
+const STEPS_CLOUDS = 192
 /** Below the screening relief by more than this → the ray is inside rock. */
 const GROUND_STOP_MARGIN_KM = '0.05'
 
@@ -89,9 +109,11 @@ out vec4 fragColor;
 uniform sampler2D uScene;
 uniform sampler2D uDepth;
 uniform sampler3D uVolume;
+uniform sampler3D uNoise;
 uniform sampler2D uRaw;
 uniform sampler2D uGround;
 uniform float uGroundExtentKm;
+uniform float uHasVolume;
 uniform float uStelMode;
 uniform vec2 uNdcScale;
 uniform mat3 uCamRot;
@@ -110,11 +132,26 @@ uniform vec3 uBoxSizeKm;
 uniform float uRefAltKm;
 
 uniform float uPower;
+/** 1 when local-halo toggle is on — gates AIR glow only (not cloud city fill). */
+uniform float uHaloAir;
 uniform float uVertical;
 uniform float uHaze;
 uniform float uBlocking;
 uniform vec3 uTint;
-uniform float uNight;
+uniform float uReference;
+
+uniform float uCloudOn;
+uniform float uCloudTime;
+
+uniform vec3 uSkyLight;
+uniform vec4 uLayers[3];
+uniform float uCloudSteps;
+/** Max ray length for full-sky cloud slabs (scene metres). */
+uniform float uCloudFarM;
+/** Sky-panel PL × night (≈0…2) — under-lights clouds when volume ill is weak. */
+uniform float uSkyLp;
+/** 0 = full night ambient (#0b1423), 1 = daytime skyLight. */
+uniform float uDayFactor;
 
 uniform float uGroundView;
 uniform float uGroundAlpha;
@@ -160,13 +197,6 @@ float srgbToLinear(float c) {
 vec3 srgbToLinear(vec3 c) {
   return vec3(srgbToLinear(c.r), srgbToLinear(c.g), srgbToLinear(c.b));
 }
-float linearToSrgb(float c) {
-  return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1.0 / 2.4) - 0.055;
-}
-vec3 linearToSrgb(vec3 c) {
-  return vec3(linearToSrgb(c.r), linearToSrgb(c.g), linearToSrgb(c.b));
-}
-
 vec2 geoFromProto(vec2 xz) {
   if (uGeoMode == 1) {
     vec2 merc = uGeoOrigin + xz * uGeoScale.x;
@@ -176,8 +206,58 @@ vec2 geoFromProto(vec2 xz) {
   return vec2(uGeoOrigin.x + xz.x * uGeoScale.x, uGeoOrigin.y - xz.y * uGeoScale.y);
 }
 
-// Our terrain has 1–2 px cracks where the sky shows through. A crack pixel
-// has nearer depth on both opposite sides; a ridge silhouette only on one.
+float noiseField(vec3 q) {
+  return texture(uNoise, q).r * 0.62
+    + texture(uNoise, q * 2.07 + vec3(0.17, 0.41, 0.31)).r * 0.26
+    + texture(uNoise, q * 4.13 + vec3(0.53, 0.23, 0.67)).r * 0.12;
+}
+
+// Prototype cloudLayer — p in km, y = MSL km. layers = (alt, thick, cover, density).
+float cloudLayer(vec3 p, int k) {
+  vec4 layer = uLayers[k];
+  float h = (p.y - layer.x) / max(layer.y, 1e-4);
+  if (h <= 0.0 || h >= 1.0 || layer.z <= 0.0 || layer.w <= 0.0) return 0.0;
+  vec3 q = p * vec3(0.023, 0.055, 0.023) + vec3(float(k) * 0.31, float(k) * 0.17, float(k) * 0.43);
+  if (k == 1) q *= vec3(1.5, 0.8, 1.5);
+  if (k == 2) q *= vec3(0.35, 1.7, 3.2);
+  vec2 wind = vec2(0.00009, 0.000045) * uCloudTime * (1.0 + float(k) * 0.6);
+  q.xz += wind;
+  float n = noiseField(q);
+  float threshold = mix(0.78, 0.18, layer.z);
+  float body = smoothstep(threshold, threshold + 0.19, n);
+  float profile = smoothstep(0.0, 0.18, h) * (1.0 - smoothstep(0.65, 1.0, h));
+  return body * profile * layer.w;
+}
+
+float cloudDensity(vec3 p) {
+  if (uCloudOn < 0.5) return 0.0;
+  return cloudLayer(p, 0) + cloudLayer(p, 1) + cloudLayer(p, 2);
+}
+
+// Exact prototype sourceLight (km frame, hard volume bounds).
+float sourceLight(vec3 p) {
+  if (uHasVolume < 0.5) return 0.0;
+  if (abs(p.x) > 12.0 || abs(p.z) > 12.0) return 0.0;
+  vec3 uvw = (p - uBoxMinKm) / uBoxSizeKm;
+  uvw = clamp(uvw, vec3(0.0), vec3(1.0));
+  vec2 light = texture(uVolume, uvw).rg;
+  // Above the precalculated field, decay the top slice (proto).
+  return mix(light.g, light.r, uBlocking) * exp(-max(p.y - 8.3, 0.0) / 2.0);
+}
+
+vec2 columnOcclusion(vec3 p) {
+  float above = 0.0;
+  float below = 0.0;
+  for (int k = 0; k < 3; k++) {
+    vec4 l = uLayers[k];
+    float mid = l.x + l.y * 0.45;
+    float local = cloudLayer(vec3(p.x, mid, p.z), k);
+    above += local * clamp(l.x + l.y - p.y, 0.0, l.y) * 1.4;
+    below += local * clamp(p.y - l.x, 0.0, l.y) * 0.65;
+  }
+  return exp(-vec2(above, below));
+}
+
 float depthAt(ivec2 px, ivec2 hi) {
   return texelFetch(uDepth, clamp(px, ivec2(0), hi), 0).r;
 }
@@ -203,45 +283,112 @@ void main() {
 
   vec3 glow = vec3(0.0);
   float trans = 1.0;
-  vec2 range = boxRange(uEye, rd);
-  float start = max(0.0, range.x);
-  float end = min(range.y, dist);
-  if (end > start && uPower > 0.0) {
-    float stride = (end - start) / ${STEPS}.0;
+  vec2 box = boxRange(uEye, rd);
+  vec2 ranges[4];
+  ranges[0] = vec2(max(0.0, box.x), min(dist, box.y));
+  if (uHaloAir <= 0.0 && uReference < 0.5) ranges[0] = vec2(0.0);
+  float farM = min(dist, uCloudFarM);
+  // Enclose each curved MSL slab with a ray interval. The tangent altitude
+  // underestimates the exact altitude by a positive quadratic remainder.
+  float eyeKm = toProtoKm(uEye).y;
+  float slope = (rd.y + dot(uEye.xz, rd.xz) / uEarthR) * 0.001 / uExag;
+  float bend = dot(rd.xz, rd.xz) * farM * farM * 0.001 / (2.0 * uEarthR * uExag);
+  for (int k = 0; k < 3; k++) {
+    vec4 layer = uLayers[k];
+    vec2 r = vec2(0.0);
+    if (uReference < 0.5 && uCloudOn > 0.5 && layer.z * layer.w > 0.0) {
+      float lo = layer.x - bend - eyeKm;
+      float hi = layer.x + layer.y - eyeKm;
+      if (abs(slope) * farM < 0.00001) {
+        if (lo <= 0.00001 && hi >= -0.00001) r.y = farM;
+      } else {
+        vec2 t = vec2(lo, hi) / slope;
+        r = vec2(max(0.0, min(t.x, t.y)), min(farM, max(t.x, t.y)));
+      }
+    }
+    ranges[k + 1] = r;
+  }
+  // Sort and remove overlap before distributing samples over occupied space.
+  for (int i = 1; i < 4; i++) {
+    for (int j = i; j > 0; j--) {
+      if (ranges[j].x >= ranges[j-1].x) break;
+      vec2 tmp = ranges[j]; ranges[j] = ranges[j-1]; ranges[j-1] = tmp;
+    }
+  }
+  float last = 0.0;
+  float total = 0.0;
+  for (int i = 0; i < 4; i++) {
+    ranges[i].x = max(last, ranges[i].x);
+    total += max(0.0, ranges[i].y - ranges[i].x);
+    last = max(last, ranges[i].y);
+  }
+  if (total > 0.0 && (uHaloAir > 0.0 || uCloudOn > 0.5)) {
+    int steps = int(uCloudSteps + 0.5);
+    float stride = total / float(steps);
     float strideKm = stride * 0.001 * length(vec3(rd.x, rd.y / uExag, rd.z));
     float jitter = hash(gl_FragCoord.xy);
-    for (int i = 0; i < ${STEPS}; i++) {
-      vec3 p = toProtoKm(uEye + rd * (start + (float(i) + jitter) * stride));
-      // Wider cracks: the screening relief still stops the ray inside rock.
-      float groundKm = texture(uGround, p.xz / uGroundExtentKm + 0.5).r;
-      if (p.y < groundKm - ${GROUND_STOP_MARGIN_KM}) break;
-      vec3 uvw = (p - uBoxMinKm) / uBoxSizeKm;
-      float inside = step(0.0, uvw.y) * step(uvw.y, 1.0);
-      vec2 light = texture(uVolume, uvw).rg;
-      float illumination = mix(light.g, light.r, uBlocking);
+    int band = 0;
+    float offset = 0.0;
+    for (int i = 0; i < ${STEPS_CLOUDS}; i++) {
+      if (i >= steps || trans < 0.002) break;
+      float t = (float(i) + jitter) * stride;
+      while (band < 3) {
+        float span = max(0.0, ranges[band].y - ranges[band].x);
+        if (t < offset + span) break;
+        offset += span;
+        band++;
+      }
+      vec3 pScene = uEye + rd * (ranges[band].x + t - offset);
+      vec3 p = toProtoKm(pScene);
+      // Skip underground samples but KEEP marching. A ridge false-positive used
+      // to break the whole sky ray before it reached the cloud slab (Meteo ON
+      // showed no clouds, yet path/lighting differed from Meteo OFF).
+      if (uHasVolume > 0.5 && abs(p.x) < uGroundExtentKm * 0.5
+          && abs(p.z) < uGroundExtentKm * 0.5) {
+        float groundKm = texture(uGround, p.xz / uGroundExtentKm + 0.5).r;
+        if (p.y < groundKm - ${GROUND_STOP_MARGIN_KM}) continue;
+      }
+      // Prototype edge / lighting coefficients — verbatim from chamonix-threejs.html.
       float edge = 1.0 - smoothstep(11.0, 12.0, max(abs(p.x), abs(p.z)));
-      float density = exp(-max(p.y - uRefAltKm, 0.0) / uVertical) * uHaze * edge * inside;
-      float opacity = 1.0 - exp(-density * 0.045 * strideKm);
-      glow += trans * uTint * illumination * uPower * opacity * 3.5;
+      float ill = sourceLight(p);
+      // Air glow ONLY when local halo is enabled — not when clouds alone boost power.
+      float air = uHaloAir > 0.0
+        ? exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3)) * uHaloAir * uHaze * edge * 0.045
+        : 0.0;
+      float cd = cloudDensity(p) * mix(1.0, edge, uReference);
+      float cloudExt = cd * 2.2;
+      vec3 cloudColour = vec3(0.0);
+      if (cd > 0.001) {
+        vec2 occ = columnOcclusion(p);
+        float selfShade = exp(-cloudDensity(p + vec3(0.12, 0.18, 0.08)) * 0.8);
+        // Proto night sky #0b1423 — never the washed PL horizon (that → chalk white).
+        vec3 nightSky = srgbToLinear(vec3(11., 20., 35.) / 255.);
+        vec3 skyAmb = mix(nightSky, srgbToLinear(uSkyLight), clamp(uDayFactor, 0.0, 1.0));
+        vec3 ambient = (skyAmb * 3.2 + vec3(0.009, 0.012, 0.019))
+          * mix(0.16, 1.0, occ.x) * selfShade;
+        float under = exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3));
+        float cityAmt = ill * uPower * uHaloAir + uSkyLp * 1.25 * under;
+        vec3 city = uTint * cityAmt * 0.9 * mix(0.12, 1.0, occ.y);
+        cloudColour = ambient + city;
+      }
+      float extinction = air + cloudExt;
+      float opacity = 1.0 - exp(-extinction * strideKm);
+      vec3 incident = (air * uTint * ill * uPower * 3.5 + cloudExt * cloudColour)
+        / max(extinction, 1e-6);
+      glow += trans * incident * opacity;
       trans *= 1.0 - opacity;
     }
   }
 
   vec3 sceneDisplay = texture(uScene, vUv).rgb;
   vec3 col = sceneDisplay;
-  if (uPower > 0.0) {
-    // Prototype output = (1 − exp(−1.5·c))^(1/2.2). The halo keeps exactly
-    // that curve; the scene keeps our sRGB output. Both meet through the
-    // screen operator the prototype curve applies to any sum of light.
-    vec3 sceneLin = srgbToLinear(sceneDisplay) * trans;
-    vec3 haloDisplay = pow(vec3(1.0) - exp(-glow * 1.5), vec3(1.0 / 2.2));
-    vec3 haloLin = srgbToLinear(haloDisplay);
-    vec3 outLin = sceneLin + haloLin * (vec3(1.0) - sceneLin);
-    col = mix(sceneDisplay, linearToSrgb(clamp(outLin, 0.0, 1.0)), uNight);
+  if (trans < 1.0 || any(greaterThan(glow, vec3(0.0)))) {
+    // The backdrop already has its display look. Recover the equivalent input
+    // of the reference curve so an empty volume round-trips unchanged.
+    vec3 background = -log(max(vec3(1e-5), 1.0 - pow(sceneDisplay, vec3(2.2)))) / 1.5;
+    col = pow(1.0 - exp(-1.5 * (background * trans + glow)), vec3(1.0 / 2.2));
   }
 
-  // Diagnostic colours go on after the halo and the output curve, so they
-  // stay readable (prototype order).
   vec3 pk = toProtoKm(endPoint);
   if (uGroundView > 0.5 && depth < 0.99999 && abs(pk.x) < 12.0 && abs(pk.z) < 12.0) {
     vec2 geo = geoFromProto(pk.xz);
@@ -262,7 +409,10 @@ void main() {
 
 export type LocalHaloPass = {
   /** True when the frame must go through {@link LocalHaloPass.begin}. */
-  isActive: (tuning: LocalHaloTuning) => boolean
+  isActive: (
+    tuning: LocalHaloTuning,
+    clouds?: ViewfinderWeather | null,
+  ) => boolean
   setField: (field: LocalHaloField | null) => void
   hasField: () => boolean
   /** Bind the offscreen target; draw the scene (and its overlays) after. */
@@ -273,8 +423,30 @@ export type LocalHaloPass = {
     camera: THREE.PerspectiveCamera,
     terrain: LocalHaloTerrainFrame,
     tuning: LocalHaloTuning,
+    clouds?: LocalHaloCloudFrame | null,
   ) => void
   dispose: () => void
+}
+
+function makeNoise3D(): THREE.Data3DTexture {
+  const size = 32
+  const bytes = new Uint8Array(size ** 3)
+  let seed = 7823
+  for (let i = 0; i < bytes.length; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    bytes[i] = seed >>> 24
+  }
+  const tex = new THREE.Data3DTexture(bytes, size, size, size)
+  tex.format = THREE.RedFormat
+  tex.type = THREE.UnsignedByteType
+  tex.minFilter = THREE.LinearFilter
+  tex.magFilter = THREE.LinearFilter
+  tex.wrapS = THREE.RepeatWrapping
+  tex.wrapT = THREE.RepeatWrapping
+  tex.wrapR = THREE.RepeatWrapping
+  tex.unpackAlignment = 1
+  tex.needsUpdate = true
+  return tex
 }
 
 export function createLocalHaloPass(): LocalHaloPass {
@@ -314,19 +486,23 @@ export function createLocalHaloPass(): LocalHaloPass {
     THREE.HalfFloatType,
   )
   emptyGround.needsUpdate = true
+  const noiseTex = makeNoise3D()
 
   let volumeTex: THREE.Data3DTexture | null = null
   let rawTex: THREE.DataTexture | null = null
   let groundTex: THREE.DataTexture | null = null
   let current: LocalHaloField | null = null
+  let cloudTimeSec = 0
 
   const uniforms = {
     uScene: { value: target.texture as THREE.Texture },
     uDepth: { value: depthTexture as THREE.Texture },
     uVolume: { value: emptyVolume as THREE.Texture },
+    uNoise: { value: noiseTex as THREE.Texture },
     uRaw: { value: emptyRaw as THREE.Texture },
     uGround: { value: emptyGround as THREE.Texture },
     uGroundExtentKm: { value: 1 },
+    uHasVolume: { value: 0 },
     uStelMode: stelModeUniform,
     uNdcScale: { value: new THREE.Vector2(1, 1) },
     uCamRot: { value: new THREE.Matrix3() },
@@ -342,11 +518,27 @@ export function createLocalHaloPass(): LocalHaloPass {
     uBoxSizeKm: { value: new THREE.Vector3(1, 1, 1) },
     uRefAltKm: { value: 1.03 },
     uPower: { value: 0 },
+    uHaloAir: { value: 0 },
     uVertical: { value: 1.4 },
     uHaze: { value: 0.45 },
     uBlocking: { value: 1 },
     uTint: { value: new THREE.Vector3(1, 0.48, 0.19) },
-    uNight: { value: 1 },
+    uReference: { value: 0 },
+    uCloudOn: { value: 0 },
+    uCloudTime: { value: 0 },
+    uSkyLight: { value: new THREE.Color(0.4, 0.55, 0.75) },
+    uLayers: {
+      value: [
+        new THREE.Vector4(2.2, 1.1, 0, 1.1),
+        new THREE.Vector4(4.6, 1.4, 0, 0.7),
+        new THREE.Vector4(7.4, 0.7, 0, 0.35),
+      ],
+    },
+    uCloudSteps: { value: STEPS_HALO },
+    // ~80 km: enough for horizon rays to cross ASL slabs without the ±12 km boule.
+    uCloudFarM: { value: 80_000 },
+    uSkyLp: { value: 0 },
+    uDayFactor: { value: 0 },
     uGroundView: { value: 0 },
     uGroundAlpha: { value: 0.85 },
     uGeoMode: { value: 0 },
@@ -385,8 +577,10 @@ export function createLocalHaloPass(): LocalHaloPass {
       uniforms.uVolume.value = emptyVolume
       uniforms.uRaw.value = emptyRaw
       uniforms.uGround.value = emptyGround
+      uniforms.uHasVolume.value = 0
       return
     }
+    uniforms.uHasVolume.value = 1
     const g = field.ground
     const groundTexture = new THREE.DataTexture(
       Uint16Array.from(g.heightsKm, toHalfBits),
@@ -457,7 +651,11 @@ export function createLocalHaloPass(): LocalHaloPass {
     )
   }
 
-  const isActive = (t: LocalHaloTuning) => {
+  const isActive = (
+    t: LocalHaloTuning,
+    clouds?: ViewfinderWeather | null,
+  ) => {
+    if (clouds && weatherWantsVolumePass(clouds)) return true
     if (!current) return false
     const halo = t.enabled && t.intensity > 0 && t.night > 0.001
     return halo || t.groundView
@@ -476,9 +674,12 @@ export function createLocalHaloPass(): LocalHaloPass {
     camera: THREE.PerspectiveCamera,
     terrain: LocalHaloTerrainFrame,
     t: LocalHaloTuning,
+    clouds: LocalHaloCloudFrame | null = null,
   ) => {
     renderer.setRenderTarget(null)
-    if (!current) return
+    const cloudsOn = clouds != null && weatherWantsVolumePass(clouds.weather)
+    if (!current && !cloudsOn && !t.groundView) return
+
     const spec = HALO_FIELD_SPEC
     camera.updateMatrixWorld(true)
     const pe = camera.projectionMatrix.elements
@@ -491,32 +692,74 @@ export function createLocalHaloPass(): LocalHaloPass {
     const base = terrain.baseElevationM
     uniforms.uExag.value = exag
     uniforms.uBaseElevM.value = base
-    const half = spec.halfExtentKm * 1000
-    const cx = current.centerScene.x
-    const cz = current.centerScene.z
+
+    const halfKm = current ? spec.halfExtentKm : 48
+    const half = halfKm * 1000
+    const cx = current?.centerScene.x ?? uniforms.uEye.value.x
+    const cz = current?.centerScene.z ?? uniforms.uEye.value.z
+    uniforms.uCenter.value.set(cx, cz)
+    const yMinKm = current?.yMinKm ?? 0.2
+    const yMaxKm = Math.max(current?.yMaxKm ?? 9.5, cloudsOn ? (clouds?.reference ? 11.5 : 9.5) : yMinKm + 1)
     const far = Math.hypot(Math.abs(cx) + half, Math.abs(cz) + half)
     const maxDrop = (far * far) / (2 * EARTH_RADIUS_M)
     uniforms.uBoxMinScene.value.set(
       cx - half,
-      (current.yMinKm * 1000 - base) * exag - maxDrop,
+      (yMinKm * 1000 - base) * exag - maxDrop,
       cz - half,
     )
     uniforms.uBoxMaxScene.value.set(
       cx + half,
-      (current.yMaxKm * 1000 - base) * exag,
+      (yMaxKm * 1000 - base) * exag,
       cz + half,
     )
+    if (!current) {
+      uniforms.uBoxMinKm.value.set(-halfKm, yMinKm, -halfKm)
+      uniforms.uBoxSizeKm.value.set(halfKm * 2, yMaxKm - yMinKm, halfKm * 2)
+      uniforms.uRefAltKm.value = base * 0.001
+      uniforms.uHasVolume.value = 0
+    }
 
-    const haloOn = t.enabled && t.night > 0.001
+    const night01 = Math.min(1, Math.max(0, t.night))
+    const haloOn = Boolean(current) && t.enabled && night01 > 0.001
     uniforms.uPower.value = haloOn ? t.intensity : 0
+    uniforms.uHaloAir.value = haloOn && t.intensity > 0 ? night01 : 0
     uniforms.uVertical.value = t.heightKm
     uniforms.uHaze.value = t.haze
     uniforms.uBlocking.value = t.blocking ? 1 : 0
     const tint = localHaloTint(t.tempK)
     uniforms.uTint.value.set(tint[0], tint[1], tint[2])
-    uniforms.uNight.value = Math.min(1, Math.max(0, t.night))
-    uniforms.uGroundView.value = t.groundView ? 1 : 0
+    uniforms.uReference.value = clouds?.reference ? 1 : 0
+    uniforms.uGroundView.value = t.groundView && current ? 1 : 0
     uniforms.uGroundAlpha.value = t.groundAlpha
+
+    uniforms.uCloudOn.value = cloudsOn ? 1 : 0
+    uniforms.uCloudSteps.value = cloudsOn ? STEPS_CLOUDS : STEPS_HALO
+    if (clouds) {
+      cloudTimeSec += Math.max(0, Math.min(0.1, clouds.deltaSec)) * clouds.weather.wind
+      uniforms.uCloudTime.value = cloudTimeSec
+      uniforms.uSkyLight.value.copy(clouds.skyLight)
+      const skyLp = clouds.reference ? 0 : Math.max(0, clouds.skyLp) * night01
+      uniforms.uSkyLp.value = skyLp
+      // Day factor from skyLight vs proto night — ImmersiveView also sets this.
+      uniforms.uDayFactor.value = Math.min(
+        1,
+        Math.max(0, clouds.dayFactor ?? 1 - night01),
+      )
+      uniforms.uCloudFarM.value = 80_000
+      const packed = weatherLayersForShader(clouds.weather)
+      const layers = uniforms.uLayers.value as THREE.Vector4[]
+      layers[0]!.copy(packed[0])
+      layers[1]!.copy(packed[1])
+      layers[2]!.copy(packed[2])
+    } else {
+      uniforms.uSkyLp.value = 0
+      uniforms.uDayFactor.value = 0
+      const layers = uniforms.uLayers.value as THREE.Vector4[]
+      layers[0]!.z = 0
+      layers[1]!.z = 0
+      layers[2]!.z = 0
+    }
+
     renderer.render(postScene, postCamera)
   }
 
@@ -531,6 +774,7 @@ export function createLocalHaloPass(): LocalHaloPass {
       emptyVolume.dispose()
       emptyRaw.dispose()
       emptyGround.dispose()
+      noiseTex.dispose()
       target.dispose()
       depthTexture.dispose()
       material.dispose()

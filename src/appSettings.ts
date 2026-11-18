@@ -78,6 +78,14 @@ import {
   LOCAL_HALO_VIIRS_GROUND_DEFAULT,
   LOCAL_HALO_VIIRS_OPACITY_DEFAULT,
 } from './lightPollution/localHalo/localHaloSettings'
+import {
+  clampCloudCoverPct,
+  clampCloudWind,
+  DEFAULT_VIEWFINDER_WEATHER,
+  normalizeWeatherLayer,
+  WEATHER_LAYER_DEFAULTS,
+  type WeatherCloudLayer,
+} from './viewfinderWeather'
 
 export const APP_SETTINGS_STORAGE_KEY = 'astro-landscape.settings.v1'
 
@@ -153,6 +161,17 @@ export type ImmersiveSettings = {
   showConstellations: boolean
   showCelestialGrid: boolean
   showAzimuthGrid: boolean
+  /** Volumetric clouds (Chamonix prototype model) in the Three.js immersif. */
+  weatherEnabled: boolean
+  weatherAnimateClouds: boolean
+  weatherWind: number
+  weatherFollowForecast: boolean
+  weatherLowClouds: number
+  weatherMidClouds: number
+  weatherHighClouds: number
+  weatherLow: WeatherCloudLayer
+  weatherMid: WeatherCloudLayer
+  weatherHigh: WeatherCloudLayer
 }
 
 export type MapSettings = {
@@ -218,6 +237,16 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   showConstellations: true,
   showCelestialGrid: false,
   showAzimuthGrid: false,
+  weatherEnabled: DEFAULT_VIEWFINDER_WEATHER.enabled,
+  weatherAnimateClouds: DEFAULT_VIEWFINDER_WEATHER.animateClouds,
+  weatherWind: DEFAULT_VIEWFINDER_WEATHER.wind,
+  weatherFollowForecast: DEFAULT_VIEWFINDER_WEATHER.followForecast === true,
+  weatherLowClouds: DEFAULT_VIEWFINDER_WEATHER.low.cover,
+  weatherMidClouds: DEFAULT_VIEWFINDER_WEATHER.mid.cover,
+  weatherHighClouds: DEFAULT_VIEWFINDER_WEATHER.high.cover,
+  weatherLow: { ...WEATHER_LAYER_DEFAULTS.low },
+  weatherMid: { ...WEATHER_LAYER_DEFAULTS.mid },
+  weatherHigh: { ...WEATHER_LAYER_DEFAULTS.high },
 }
 
 export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = {
@@ -461,6 +490,60 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
       row.showAzimuthGrid,
       DEFAULT_IMMERSIVE_SETTINGS.showAzimuthGrid,
     ),
+    weatherEnabled: readBoolean(
+      row.weatherEnabled,
+      DEFAULT_IMMERSIVE_SETTINGS.weatherEnabled,
+    ),
+    weatherAnimateClouds: readBoolean(
+      row.weatherAnimateClouds,
+      DEFAULT_IMMERSIVE_SETTINGS.weatherAnimateClouds,
+    ),
+    weatherWind: clampCloudWind(
+      Number(row.weatherWind ?? DEFAULT_IMMERSIVE_SETTINGS.weatherWind),
+    ),
+    weatherFollowForecast: readBoolean(
+      row.weatherFollowForecast,
+      DEFAULT_IMMERSIVE_SETTINGS.weatherFollowForecast,
+    ),
+    weatherLowClouds: clampCloudCoverPct(
+      Number(
+        row.weatherLowClouds ?? DEFAULT_IMMERSIVE_SETTINGS.weatherLowClouds,
+      ),
+    ),
+    weatherMidClouds: clampCloudCoverPct(
+      Number(
+        row.weatherMidClouds ?? DEFAULT_IMMERSIVE_SETTINGS.weatherMidClouds,
+      ),
+    ),
+    weatherHighClouds: clampCloudCoverPct(
+      Number(
+        row.weatherHighClouds ?? DEFAULT_IMMERSIVE_SETTINGS.weatherHighClouds,
+      ),
+    ),
+    weatherLow: normalizeWeatherLayer(row.weatherLow, {
+      ...WEATHER_LAYER_DEFAULTS.low,
+      cover: clampCloudCoverPct(
+        Number(
+          row.weatherLowClouds ?? DEFAULT_IMMERSIVE_SETTINGS.weatherLowClouds,
+        ),
+      ),
+    }),
+    weatherMid: normalizeWeatherLayer(row.weatherMid, {
+      ...WEATHER_LAYER_DEFAULTS.mid,
+      cover: clampCloudCoverPct(
+        Number(
+          row.weatherMidClouds ?? DEFAULT_IMMERSIVE_SETTINGS.weatherMidClouds,
+        ),
+      ),
+    }),
+    weatherHigh: normalizeWeatherLayer(row.weatherHigh, {
+      ...WEATHER_LAYER_DEFAULTS.high,
+      cover: clampCloudCoverPct(
+        Number(
+          row.weatherHighClouds ?? DEFAULT_IMMERSIVE_SETTINGS.weatherHighClouds,
+        ),
+      ),
+    }),
   }
 }
 

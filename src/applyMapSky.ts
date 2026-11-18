@@ -9,6 +9,8 @@ import {
   lightPollutionOpacityExpression,
   lightPollutionProtocolTileUrl,
 } from './lightPollution/tiles'
+import { getPlHeatmapEnabledForMap } from './lightPollution/plMapOverlay'
+import { getBasemapModeForMap } from './satelliteHybrid'
 import { hexToRgb, type SkyPalette } from './skyLighting'
 
 const lastLightPollutionUrlByMap = new WeakMap<Map, string>()
@@ -194,11 +196,14 @@ export function applyMapSky(
     map.setPaintProperty('imagery', 'raster-opacity', paint.opacity)
   }
 
-  // City lights: globe-only. Hard layout visibility + zoom expression + maxzoom.
-  // Never leave Black Marble painted in map framing (flyTo / time scrub).
+  // Coloured heatmap toggle replaces Black Marble sparks when on.
+  // Satellite/hybrid (heatmap off): BM on globe only.
+  const heatmapOn = getPlHeatmapEnabledForMap(map) === true
+  const planBasemap = getBasemapModeForMap(map) === 'plan'
   if (map.getLayer(LIGHT_POLLUTION_LAYER_ID)) {
     const zoom = options?.zoom ?? map.getZoom()
-    const onGlobe = groundViewAmount(zoom) < 0.35
+    const onGlobe =
+      !heatmapOn && !planBasemap && groundViewAmount(zoom) < 0.35
     try {
       map.setLayoutProperty(
         LIGHT_POLLUTION_LAYER_ID,
@@ -218,6 +223,8 @@ export function applyMapSky(
   // spot must not reload Black Marble (looked like a PL map flash).
   if (
     options &&
+    !heatmapOn &&
+    !planBasemap &&
     groundViewAmount(options.zoom) < 0.35 &&
     map.getSource(LIGHT_POLLUTION_SOURCE_ID)
   ) {

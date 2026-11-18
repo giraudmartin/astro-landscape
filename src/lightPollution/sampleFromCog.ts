@@ -278,6 +278,7 @@ export type NativeRasterWindow = {
 export async function readNativeRasterWindowFromCog(
   bbox: { west: number; south: number; east: number; north: number },
   url: string,
+  options?: { maxDim?: number },
 ): Promise<NativeRasterWindow | null> {
   const cog = await getCog(url)
   if (!cog) return null
@@ -287,15 +288,21 @@ export async function readNativeRasterWindowFromCog(
   const x1 = Math.min(cog.width, Math.ceil((bbox.east - cog.west) / dx))
   const y0 = Math.max(0, Math.floor((cog.north - bbox.north) / dy))
   const y1 = Math.min(cog.height, Math.ceil((cog.north - bbox.south) / dy))
-  const w = x1 - x0
-  const h = y1 - y0
-  if (w < 1 || h < 1) return null
+  const nativeW = x1 - x0
+  const nativeH = y1 - y0
+  if (nativeW < 1 || nativeH < 1) return null
+  // Cap decode size so overview tiles don't OOM / fail → empty map.
+  const maxDim = Math.max(64, options?.maxDim ?? 768)
+  const scale = Math.min(1, maxDim / Math.max(nativeW, nativeH))
+  const w = Math.max(1, Math.round(nativeW * scale))
+  const h = Math.max(1, Math.round(nativeH * scale))
   let band: ArrayLike<number>
   try {
     const rasters = await cog.image.readRasters({
       window: [x0, y0, x1, y1],
       width: w,
       height: h,
+      resampleMethod: 'bilinear',
     })
     band = (rasters as ArrayLike<ArrayLike<number>>)[0]!
   } catch {
@@ -303,13 +310,28 @@ export async function readNativeRasterWindowFromCog(
   }
   if (!band || band.length < w * h) return null
   const gdalNoData = cog.image.getGDALNoData()
-  const nodata = gdalNoData != null && Number.isFinite(gdalNoData) ? gdalNoData : -32768
+  const nodata =
+    gdalNoData != null && Number.isFinite(gdalNoData) ? gdalNoData : -32768
+  const outWest = cog.west + x0 * dx
+  const outNorth = cog.north - y0 * dy
+  const outDx = (nativeW * dx) / w
+  const outDy = (nativeH * dy) / h
   return {
     values: Float32Array.from(band as ArrayLike<number>),
     width: w,
     height: h,
-    geotransform: [cog.west + x0 * dx, dx, 0, cog.north - y0 * dy, 0, -dy],
+    geotransform: [outWest, outDx, 0, outNorth, 0, -outDy],
     nodata,
+  }
+}
+
+/** Absolute URL for browser COG fetches (geotiff + Range). */
+export function resolveLightPollutionCogUrl(url: string): string {
+  if (/^https?:\/\//i.test(url) || typeof window === 'undefined') return url
+  try {
+    return new URL(url, window.location.origin).href
+  } catch {
+    return url
   }
 }
 

@@ -260,6 +260,34 @@
   font-variant-numeric: tabular-nums;
 }
 
+.pl-map-legend {
+  position: absolute;
+  z-index: 2;
+  left: 0.9rem;
+  bottom: calc(36px + var(--map-control-size) + 12px);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-sheen), var(--surface-float-glass);
+  box-shadow: var(--ui-shadow);
+  pointer-events: none;
+}
+
+.pl-map-legend__bar {
+  width: 7.5rem;
+  height: 0.55rem;
+  border-radius: 999px;
+}
+
+.pl-map-legend__edge {
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(244, 246, 251, 0.75);
+}
+
 .spot-bortle-card {
   position: absolute;
   z-index: 2;
@@ -1042,6 +1070,134 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+}
+
+/* Standalone PL heatmap control — below the map button group. */
+.pl-heatmap-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: var(--map-control-size);
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: calc(var(--map-control-size) / 2);
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.035) 0%, transparent 42%),
+    rgba(14, 16, 22, 0.76);
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: blur(14px);
+  color: #d9dde7;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.pl-heatmap-control--on {
+  color: var(--map-control-primary);
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, transparent 42%),
+    var(--map-control-primary-soft),
+    rgba(14, 16, 22, 0.76);
+}
+
+.pl-heatmap-control__toggle {
+  display: grid;
+  place-items: center;
+  width: calc(var(--map-control-size) - 2px);
+  height: calc(var(--map-control-size) - 2px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pl-heatmap-control__toggle svg {
+  width: var(--map-control-icon);
+  height: var(--map-control-icon);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pl-heatmap-control__toggle:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: -3px;
+  border-radius: 50%;
+}
+
+.pl-heatmap-control__slider {
+  --pl-thumb: 14px;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  padding: 8px 0 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pl-heatmap-control__track {
+  position: relative;
+  width: 100%;
+  height: 88px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: ns-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.pl-heatmap-control__track:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ui-focus-ring);
+  border-radius: 8px;
+}
+
+.pl-heatmap-control__groove {
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.pl-heatmap-control__fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--pl-t, 0.5) * 100%);
+  border-radius: inherit;
+  background: var(--map-control-primary);
+  opacity: 0.9;
+}
+
+.pl-heatmap-control__thumb {
+  position: absolute;
+  left: 50%;
+  top: calc(7px + (1 - var(--pl-t, 0.5)) * (100% - 14px));
+  width: var(--pl-thumb);
+  height: var(--pl-thumb);
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(14, 16, 22, 0.92);
+  border-radius: 50%;
+  background: var(--map-control-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.pl-heatmap-control__track:hover .pl-heatmap-control__thumb,
+.pl-heatmap-control__track:active .pl-heatmap-control__thumb {
+  box-shadow:
+    0 0 0 2px rgba(136, 248, 226, 0.35),
+    0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
 .map-address-search {
@@ -7609,6 +7765,7 @@ button.ov-capsule:hover {
 
   html.info-drawer-open .map-compass,
   html.info-drawer-open .map-quick-actions-cluster,
+  html.info-drawer-open .map-controls-stack .pl-heatmap-control,
   html.info-drawer-open .map-controls-stack .my-spots-control,
   html.info-drawer-open .settings-anchor,
   html.info-drawer-open .moon-timeline-dock,

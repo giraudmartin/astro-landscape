@@ -26,6 +26,19 @@ import { ensureCelestialBodyLayers, ensureNightShadeLayer } from './globeSun'
 import { ensureGlobeMilkyWayLayer } from './globeMilkyWay'
 import { ensureNightShadeProtocol } from './nightShadeProtocol'
 import { ensureLightPollutionProtocol } from './lightPollution/lightPollutionProtocol'
+import { ensurePlMapOverlayProtocol } from './lightPollution/plMapOverlayProtocol'
+import {
+  applyPlMapOverlay,
+  PL_MAP_OVERLAY_ATTRIBUTION,
+  PL_MAP_OVERLAY_LAYER_ID,
+  PL_MAP_OVERLAY_LAYER_MAX_ZOOM,
+  PL_MAP_OVERLAY_MAX_ZOOM,
+  PL_MAP_OVERLAY_MIN_ZOOM,
+  PL_MAP_OVERLAY_OPACITY_DEFAULT,
+  PL_MAP_OVERLAY_SOURCE_ID,
+  PL_MAP_OVERLAY_TILE_URL,
+} from './lightPollution/plMapOverlay'
+import { PlMapOverlayLegend } from './PlMapOverlayLegend'
 import { MapControlsStack } from './MapControlsStack'
 import { MapSettingsPanel } from './MapSettingsPanel'
 import {
@@ -108,6 +121,8 @@ type MapCanvasProps = {
   mode: CameraMode
   threeDimensional: boolean
   basemapMode: BasemapMode
+  plHeatmapEnabled: boolean
+  plHeatmapOpacity: number
   addressSearchOpen: boolean
   spot: SpotState | null
   onModeChange: (
@@ -117,6 +132,8 @@ type MapCanvasProps = {
   onSpotChange: (spot: SpotState) => void
   onThreeDimensionalChange: (next: boolean) => void
   onBasemapModeChange: (next: BasemapMode) => void
+  onPlHeatmapEnabledChange: (next: boolean) => void
+  onPlHeatmapOpacityChange: (next: number) => void
   onAddressSearchOpenChange: (open: boolean) => void
   /** UTC ms driving sky / lighting (timeline playhead). */
   skyUtcMs: number
@@ -187,6 +204,14 @@ function buildStyle(): StyleSpecification {
         maxzoom: LIGHT_POLLUTION_MAX_ZOOM,
         attribution: LIGHT_POLLUTION_ATTRIBUTION,
       },
+      [PL_MAP_OVERLAY_SOURCE_ID]: {
+        type: 'raster',
+        tiles: [PL_MAP_OVERLAY_TILE_URL],
+        tileSize: 256,
+        minzoom: PL_MAP_OVERLAY_MIN_ZOOM,
+        maxzoom: PL_MAP_OVERLAY_MAX_ZOOM,
+        attribution: PL_MAP_OVERLAY_ATTRIBUTION,
+      },
       terrain: demSource(),
       hillshadeDem: demSource(),
     },
@@ -230,6 +255,21 @@ function buildStyle(): StyleSpecification {
           'raster-opacity': lightPollutionOpacityExpression(),
           'raster-fade-duration': 0,
           'raster-resampling': 'linear',
+        },
+      },
+      {
+        // Coloured PL heatmap — plan basemap + zoomed map only (not globe).
+        id: PL_MAP_OVERLAY_LAYER_ID,
+        type: 'raster',
+        source: PL_MAP_OVERLAY_SOURCE_ID,
+        minzoom: PL_MAP_OVERLAY_MIN_ZOOM,
+        maxzoom: PL_MAP_OVERLAY_LAYER_MAX_ZOOM,
+        layout: { visibility: 'none' },
+        paint: {
+          'raster-opacity': PL_MAP_OVERLAY_OPACITY_DEFAULT,
+          'raster-fade-duration': 0,
+          // Nearest avoids hairline seams from linear filter across tile edges.
+          'raster-resampling': 'nearest',
         },
       },
     ],
@@ -276,12 +316,16 @@ export function MapCanvas({
   mode,
   threeDimensional,
   basemapMode,
+  plHeatmapEnabled,
+  plHeatmapOpacity,
   addressSearchOpen,
   spot,
   onModeChange,
   onSpotChange,
   onThreeDimensionalChange,
   onBasemapModeChange,
+  onPlHeatmapEnabledChange,
+  onPlHeatmapOpacityChange,
   onAddressSearchOpenChange,
   skyUtcMs,
   mySpotsOpen,
@@ -309,6 +353,8 @@ export function MapCanvas({
   const spotRef = useRef(spot)
   const threeDimensionalRef = useRef(threeDimensional)
   const basemapModeRef = useRef(basemapMode)
+  const plHeatmapEnabledRef = useRef(plHeatmapEnabled)
+  const plHeatmapOpacityRef = useRef(plHeatmapOpacity)
   const personalSpotPickingRef = useRef(personalSpotPicking)
   const personalSpotsRef = useRef(personalSpots)
   const personalSpotFoldersRef = useRef(personalSpotFolders)
@@ -329,6 +375,8 @@ export function MapCanvas({
   spotRef.current = spot
   threeDimensionalRef.current = threeDimensional
   basemapModeRef.current = basemapMode
+  plHeatmapEnabledRef.current = plHeatmapEnabled
+  plHeatmapOpacityRef.current = plHeatmapOpacity
   personalSpotPickingRef.current = personalSpotPicking
   personalSpotsRef.current = personalSpots
   personalSpotFoldersRef.current = personalSpotFolders
@@ -346,6 +394,7 @@ export function MapCanvas({
     setMode: (next: CameraMode) => void
     setThreeDimensional: (next: boolean) => void
     setBasemapMode: (next: BasemapMode) => void
+    setPlHeatmap: (enabled: boolean, opacity: number) => void
     flyToAddress: (result: AddressSearchResult) => void
     flyToMyLocation: () => void
     flyToPersonalSpot: (spot: PersonalSpot) => void
@@ -391,6 +440,7 @@ export function MapCanvas({
     ensureMapterhornSafeDemProtocol()
     ensureNightShadeProtocol()
     ensureLightPollutionProtocol()
+    ensurePlMapOverlayProtocol()
 
     const map = new maplibregl.Map({
       container,
@@ -547,8 +597,21 @@ export function MapCanvas({
           })
           .finally(() => {
             // Hillshade paint is reset by basemap — restore playhead night/day.
+            applyPlMapOverlay(map, {
+              enabled: plHeatmapEnabledRef.current,
+              opacity: plHeatmapOpacityRef.current,
+            })
             applyPlayheadSkyRef.current()
           })
+      }
+      if (map.isStyleLoaded()) apply()
+      else map.once('load', apply)
+    }
+
+    const setPlHeatmap = (enabled: boolean, opacity: number) => {
+      const apply = () => {
+        applyPlMapOverlay(map, { enabled, opacity })
+        applyPlayheadSkyRef.current()
       }
       if (map.isStyleLoaded()) apply()
       else map.once('load', apply)
@@ -671,13 +734,17 @@ export function MapCanvas({
       setMode,
       setThreeDimensional,
       setBasemapMode,
+      setPlHeatmap,
       flyToAddress,
       flyToMyLocation,
       flyToPersonalSpot,
       showAllPersonalSpots,
     }
 
-    map.on('load', () => {
+    let mapReadyDone = false
+    const onMapReady = () => {
+      if (mapReadyDone) return
+      mapReadyDone = true
       map.setTerrain({
         source: 'terrain',
         exaggeration: TERRAIN_EXAGGERATION,
@@ -689,6 +756,7 @@ export function MapCanvas({
       // Terminator + light before first paint settle — don't wait for a user pan.
       applyPlayheadSkyRef.current()
       setBasemapMode(basemapModeRef.current)
+      setPlHeatmap(plHeatmapEnabledRef.current, plHeatmapOpacityRef.current)
       // One re-apply after first tiles are in; never on every moveend (that
       // rewrote light/veil and looked like time jumping on drag-release).
       map.once('idle', () => applyPlayheadSkyRef.current())
@@ -697,7 +765,10 @@ export function MapCanvas({
       map.on('zoomend', () => {
         applyPlayheadSkyRef.current()
       })
-    })
+    }
+    map.on('load', onMapReady)
+    // Inline style can finish before 'load' is attached — don't skip basemap/PL.
+    if (map.isStyleLoaded()) onMapReady()
 
     /** Place / move the working pin — no camera jump (PS: right-click pins in place). */
     const placeWorkingPin = (lat: number, lng: number) => {
@@ -870,6 +941,10 @@ export function MapCanvas({
   }, [basemapMode])
 
   useEffect(() => {
+    apiRef.current?.setPlHeatmap(plHeatmapEnabled, plHeatmapOpacity)
+  }, [plHeatmapEnabled, plHeatmapOpacity])
+
+  useEffect(() => {
     const map = mapRef.current
     if (!map) return
     map.getCanvas().style.cursor = personalSpotPicking ? 'crosshair' : ''
@@ -1024,6 +1099,10 @@ export function MapCanvas({
         onThreeDimensionalChange={onThreeDimensionalChange}
         basemapMode={basemapMode}
         onBasemapModeChange={onBasemapModeChange}
+        plHeatmapEnabled={plHeatmapEnabled}
+        plHeatmapOpacity={plHeatmapOpacity}
+        onPlHeatmapEnabledChange={onPlHeatmapEnabledChange}
+        onPlHeatmapOpacityChange={onPlHeatmapOpacityChange}
         addressSearchOpen={addressSearchOpen}
         onAddressSearchOpenChange={onAddressSearchOpenChange}
         onAddressSelect={(result) => apiRef.current?.flyToAddress(result)}
@@ -1032,6 +1111,7 @@ export function MapCanvas({
         onMySpotsOpenChange={onMySpotsOpenChange}
       />
       <MapSettingsPanel />
+      {plHeatmapEnabled ? <PlMapOverlayLegend /> : null}
       {spot && bortleSample ? (
         <SpotBortleCard
           bortle={bortleSample.bortle}

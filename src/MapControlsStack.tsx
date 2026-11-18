@@ -3,6 +3,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl'
 import { MapAddressSearch } from './MapAddressSearch'
 import { MapCompass } from './MapCompass'
 import { MySpotsToggle } from './MySpotsCard'
+import { PlHeatmapControl } from './PlHeatmapControl'
 import type { AddressSearchResult } from './addressSearch'
 import {
   basemapModeLabel,
@@ -16,6 +17,10 @@ type MapControlsStackProps = {
   onThreeDimensionalChange: (next: boolean) => void
   basemapMode: BasemapMode
   onBasemapModeChange: (next: BasemapMode) => void
+  plHeatmapEnabled: boolean
+  plHeatmapOpacity: number
+  onPlHeatmapEnabledChange: (next: boolean) => void
+  onPlHeatmapOpacityChange: (next: number) => void
   addressSearchOpen: boolean
   onAddressSearchOpenChange: (open: boolean) => void
   onAddressSelect: (result: AddressSearchResult) => void
@@ -30,6 +35,10 @@ export function MapControlsStack({
   onThreeDimensionalChange,
   basemapMode,
   onBasemapModeChange,
+  plHeatmapEnabled,
+  plHeatmapOpacity,
+  onPlHeatmapEnabledChange,
+  onPlHeatmapOpacityChange,
   addressSearchOpen,
   onAddressSearchOpenChange,
   onAddressSelect,
@@ -155,6 +164,14 @@ export function MapControlsStack({
           </button>
         </div>
       </div>
+
+      <PlHeatmapControl
+        enabled={plHeatmapEnabled}
+        opacity={plHeatmapOpacity}
+        onEnabledChange={onPlHeatmapEnabledChange}
+        onOpacityChange={onPlHeatmapOpacityChange}
+      />
+
       <MySpotsToggle open={mySpotsOpen} onOpenChange={onMySpotsOpenChange} />
     </div>
   )

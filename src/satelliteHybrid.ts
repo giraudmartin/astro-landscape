@@ -6,6 +6,14 @@ import type {
   StyleSpecification,
 } from 'maplibre-gl'
 import type { BasemapMode } from './basemapMode'
+import { getPlHeatmapEnabledForMap } from './lightPollution/plMapOverlay'
+import { LIGHT_POLLUTION_LAYER_ID } from './lightPollution/tiles'
+
+const basemapModeByMap = new WeakMap<MapLibreMap, BasemapMode>()
+
+export function getBasemapModeForMap(map: MapLibreMap): BasemapMode | undefined {
+  return basemapModeByMap.get(map)
+}
 
 const HYBRID_SOURCE_ID = 'astro-versatiles-osm'
 const HYBRID_PREFIX = 'astro-versatiles-hybrid-'
@@ -195,7 +203,14 @@ export async function ensurePlanBasemap(
   map: MapLibreMap,
 ): Promise<string | undefined> {
   const style = await loadPlanStyle()
-  if (!map.isStyleLoaded()) return style.glyphs
+  // Wait for style after the network fetch — an early return here left plan
+  // mode with no OpenFreeMap layers (empty / wrong background).
+  if (!map.isStyleLoaded()) {
+    await new Promise<void>((resolve) => {
+      map.once('load', () => resolve())
+      if (map.isStyleLoaded()) resolve()
+    })
+  }
 
   for (const [sourceId, source] of Object.entries(style.sources ?? {})) {
     const id = `${PLAN_SOURCE_PREFIX}${sourceId}`
@@ -256,6 +271,7 @@ export async function applyBasemapMode(
   mode: BasemapMode,
 ): Promise<void> {
   if (!map.isStyleLoaded()) return
+  basemapModeByMap.set(map, mode)
 
   let glyphs: string | undefined
   if (mode === 'hybrid') {
@@ -287,4 +303,16 @@ export async function applyBasemapMode(
 
   setPrefixedVisibility(map, HYBRID_PREFIX, mode === 'hybrid')
   setPrefixedVisibility(map, PLAN_PREFIX, mode === 'plan')
+
+  // Heatmap toggle owns BM suppression; plan alone no longer implies heatmap.
+  if (
+    getPlHeatmapEnabledForMap(map) &&
+    map.getLayer(LIGHT_POLLUTION_LAYER_ID)
+  ) {
+    try {
+      map.setLayoutProperty(LIGHT_POLLUTION_LAYER_ID, 'visibility', 'none')
+    } catch {
+      // style not ready
+    }
+  }
 }

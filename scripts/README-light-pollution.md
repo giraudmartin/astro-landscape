@@ -4,8 +4,10 @@ Full method, licences, and resolution audit: **`docs/LIGHT_POLLUTION.md`**.
 
 ## Map / globe overlay
 
-NASA GIBS `VIIRS_Black_Marble` (commercial-OK, zero self-hosting).  
-Terminator-masked via `astro-lightpollution` protocol.
+NASA GIBS `VIIRS_Black_Marble` (commercial-OK, zero self-hosting).
+
+- **Night lights (always):** terminator-masked via `astro-lightpollution` — city glow on the dark globe (GIBS Black Marble).
+- **Coloured PL overlay:** `astro-pl-map-v17`, dedicated map-control toggle (any basemap) + opacity. Overview z&lt;7 = 1:1 colourised GIBS; z≥7 = VIIRS COG + geographic halo, full-res spread, nearest upscale. When on, replaces Black Marble sparks.
 
 ## Bortle / zenith SQM at selected spot
 

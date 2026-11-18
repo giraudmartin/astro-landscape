@@ -63,6 +63,12 @@ export default function App() {
   const [basemapMode, setBasemapMode] = useState<BasemapMode>(
     savedMap.basemapMode,
   )
+  const [plHeatmapEnabled, setPlHeatmapEnabled] = useState(
+    savedMap.plHeatmapEnabled,
+  )
+  const [plHeatmapOpacity, setPlHeatmapOpacity] = useState(
+    savedMap.plHeatmapOpacity,
+  )
   const [addressSearchOpen, setAddressSearchOpen] = useState(false)
   const [spot, setSpot] = useState<SpotState | null>(null)
   const [infoDrawerOpen, setInfoDrawerOpen] = useState(false)
@@ -187,9 +193,14 @@ export default function App() {
 
   useEffect(() => {
     patchAppSettings({
-      map: { threeDimensional, basemapMode },
+      map: {
+        threeDimensional,
+        basemapMode,
+        plHeatmapEnabled,
+        plHeatmapOpacity,
+      },
     })
-  }, [threeDimensional, basemapMode])
+  }, [threeDimensional, basemapMode, plHeatmapEnabled, plHeatmapOpacity])
 
   useEffect(() => {
     const root = document.documentElement
@@ -515,6 +526,8 @@ export default function App() {
           mode={mode}
           threeDimensional={threeDimensional}
           basemapMode={basemapMode}
+          plHeatmapEnabled={plHeatmapEnabled}
+          plHeatmapOpacity={plHeatmapOpacity}
           addressSearchOpen={addressSearchOpen}
           spot={spot}
           onModeChange={(next, opts) => {
@@ -544,6 +557,8 @@ export default function App() {
           }}
           onThreeDimensionalChange={setThreeDimensional}
           onBasemapModeChange={setBasemapMode}
+          onPlHeatmapEnabledChange={setPlHeatmapEnabled}
+          onPlHeatmapOpacityChange={setPlHeatmapOpacity}
           onAddressSearchOpenChange={setAddressSearchOpen}
           skyUtcMs={playheadUtcMs}
           mySpotsOpen={mySpotsOpen}

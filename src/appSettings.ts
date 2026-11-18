@@ -158,6 +158,9 @@ export type ImmersiveSettings = {
 export type MapSettings = {
   threeDimensional: boolean
   basemapMode: BasemapMode
+  /** Coloured Bortle heatmap overlay (independent of basemap). */
+  plHeatmapEnabled: boolean
+  plHeatmapOpacity: number
 }
 
 export type TimelineSettings = {
@@ -174,6 +177,8 @@ export type AppSettings = {
 export const DEFAULT_MAP_SETTINGS: MapSettings = {
   threeDimensional: true,
   basemapMode: 'satellite',
+  plHeatmapEnabled: false,
+  plHeatmapOpacity: 0.82,
 }
 
 export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
@@ -289,15 +294,29 @@ function normalizeZoomIndex(value: unknown): number {
   )
 }
 
+function normalizePlHeatmapOpacity(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return DEFAULT_MAP_SETTINGS.plHeatmapOpacity
+  return Math.min(1, Math.max(0.15, n))
+}
+
 function normalizeMap(value: unknown): MapSettings {
   const row = asRecord(value)
   if (!row) return { ...DEFAULT_MAP_SETTINGS }
+  const basemapMode = normalizeBasemapMode(row.basemapMode)
+  // Migrate: older builds implied heatmap whenever basemap was "plan".
+  const plHeatmapEnabled =
+    typeof row.plHeatmapEnabled === 'boolean'
+      ? row.plHeatmapEnabled
+      : basemapMode === 'plan'
   return {
     threeDimensional: readBoolean(
       row.threeDimensional,
       DEFAULT_MAP_SETTINGS.threeDimensional,
     ),
-    basemapMode: normalizeBasemapMode(row.basemapMode),
+    basemapMode,
+    plHeatmapEnabled,
+    plHeatmapOpacity: normalizePlHeatmapOpacity(row.plHeatmapOpacity),
   }
 }
 

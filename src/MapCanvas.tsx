@@ -51,7 +51,7 @@ import {
 import { DEFAULT_MAP_VIEW } from './presets'
 import { skyPaletteFromSunAltitude } from './skyLighting'
 import type { BasemapMode } from './basemapMode'
-import { applyBasemapMode } from './satelliteHybrid'
+import { applyBasemapMode, waitForStyleLoaded } from './satelliteHybrid'
 import {
   LIGHT_POLLUTION_ATTRIBUTION,
   LIGHT_POLLUTION_LAYER_ID,
@@ -393,7 +393,7 @@ export function MapCanvas({
   const apiRef = useRef<{
     setMode: (next: CameraMode) => void
     setThreeDimensional: (next: boolean) => void
-    setBasemapMode: (next: BasemapMode) => void
+    setBasemapMode: (next: BasemapMode) => Promise<void>
     setPlHeatmap: (enabled: boolean, opacity: number) => void
     flyToAddress: (result: AddressSearchResult) => void
     flyToMyLocation: () => void
@@ -590,31 +590,27 @@ export function MapCanvas({
     }
 
     const setBasemapMode = (next: BasemapMode) => {
-      const apply = () => {
-        void applyBasemapMode(map, next)
-          .catch((error) => {
-            console.error('[basemap]', error)
+      // applyBasemapMode waits for style.load after glyphs — never once('load'),
+      // which misses clicks while isStyleLoaded is briefly false.
+      return applyBasemapMode(map, next)
+        .catch((error) => {
+          console.error('[basemap]', error)
+        })
+        .finally(() => {
+          // Hillshade paint is reset by basemap — restore playhead night/day.
+          applyPlMapOverlay(map, {
+            enabled: plHeatmapEnabledRef.current,
+            opacity: plHeatmapOpacityRef.current,
           })
-          .finally(() => {
-            // Hillshade paint is reset by basemap — restore playhead night/day.
-            applyPlMapOverlay(map, {
-              enabled: plHeatmapEnabledRef.current,
-              opacity: plHeatmapOpacityRef.current,
-            })
-            applyPlayheadSkyRef.current()
-          })
-      }
-      if (map.isStyleLoaded()) apply()
-      else map.once('load', apply)
+          applyPlayheadSkyRef.current()
+        })
     }
 
     const setPlHeatmap = (enabled: boolean, opacity: number) => {
-      const apply = () => {
+      void waitForStyleLoaded(map).then(() => {
         applyPlMapOverlay(map, { enabled, opacity })
         applyPlayheadSkyRef.current()
-      }
-      if (map.isStyleLoaded()) apply()
-      else map.once('load', apply)
+      })
     }
 
     /** Mid-fly Black Marble overzoom looked like a PL map — hide before zooming in. */
@@ -936,8 +932,17 @@ export function MapCanvas({
     apiRef.current?.setThreeDimensional(threeDimensional)
   }, [threeDimensional])
 
+  const [basemapApplying, setBasemapApplying] = useState(false)
+  const basemapApplySeqRef = useRef(0)
+
   useEffect(() => {
-    apiRef.current?.setBasemapMode(basemapMode)
+    const api = apiRef.current
+    if (!api) return
+    const seq = ++basemapApplySeqRef.current
+    setBasemapApplying(true)
+    void api.setBasemapMode(basemapMode).finally(() => {
+      if (basemapApplySeqRef.current === seq) setBasemapApplying(false)
+    })
   }, [basemapMode])
 
   useEffect(() => {
@@ -1056,8 +1061,7 @@ export function MapCanvas({
       if (Math.abs(z - lastAppliedZoom) < 0.15) return
       apply()
     }
-    if (map.isStyleLoaded()) apply()
-    else map.once('load', apply)
+    void waitForStyleLoaded(map).then(apply)
     map.on('zoomend', apply)
     map.on('moveend', onMoveEnd)
     return () => {
@@ -1098,6 +1102,7 @@ export function MapCanvas({
         threeDimensional={threeDimensional}
         onThreeDimensionalChange={onThreeDimensionalChange}
         basemapMode={basemapMode}
+        basemapApplying={basemapApplying}
         onBasemapModeChange={onBasemapModeChange}
         plHeatmapEnabled={plHeatmapEnabled}
         plHeatmapOpacity={plHeatmapOpacity}

@@ -10,9 +10,72 @@ import { getPlHeatmapEnabledForMap } from './lightPollution/plMapOverlay'
 import { LIGHT_POLLUTION_LAYER_ID } from './lightPollution/tiles'
 
 const basemapModeByMap = new WeakMap<MapLibreMap, BasemapMode>()
+/** Bumps on every apply so a stale async switch (glyphs reload) cannot win. */
+const basemapApplyGenByMap = new WeakMap<MapLibreMap, number>()
 
 export function getBasemapModeForMap(map: MapLibreMap): BasemapMode | undefined {
   return basemapModeByMap.get(map)
+}
+
+/**
+ * `map.once('load')` is wrong after setGlyphs/setSprite: the initial `load` already
+ * fired, `isStyleLoaded()` goes false, and the queued apply never runs — first
+ * basemap click looks like a no-op.
+ *
+ * Also: after `style.load`, `isStyleLoaded()` can still be false for a tick. If we
+ * only listened for the event we already missed, the wait hung forever and the
+ * next mode click never reached visibility updates.
+ */
+export function waitForStyleLoaded(map: MapLibreMap): Promise<void> {
+  if (map.isStyleLoaded()) return Promise.resolve()
+  return new Promise((resolve) => {
+    let settled = false
+    const done = () => {
+      if (settled) return
+      settled = true
+      map.off('style.load', done)
+      map.off('load', done)
+      window.clearInterval(poll)
+      window.clearTimeout(fallback)
+      resolve()
+    }
+    map.on('style.load', done)
+    map.on('load', done)
+    const poll = window.setInterval(() => {
+      if (map.isStyleLoaded()) done()
+    }, 32)
+    const fallback = window.setTimeout(done, 2000)
+    if (map.isStyleLoaded()) done()
+  })
+}
+
+/**
+ * Listen for style.load *before* mutating. Do not resolve on a microtask
+ * isStyleLoaded check — setGlyphs often leaves it true until a later task,
+ * and resolving early meant visibility was set then wiped by the reload.
+ */
+function afterStyleMutation(
+  map: MapLibreMap,
+  mutate: () => void,
+): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false
+    const done = () => {
+      if (settled) return
+      settled = true
+      map.off('style.load', done)
+      window.clearTimeout(fallback)
+      resolve()
+    }
+    map.once('style.load', done)
+    // Same-URL no-op may never emit style.load; don't hang the basemap switch.
+    const fallback = window.setTimeout(done, 1500)
+    try {
+      mutate()
+    } catch {
+      done()
+    }
+  })
 }
 
 const HYBRID_SOURCE_ID = 'astro-versatiles-osm'
@@ -163,7 +226,9 @@ export async function ensureSatelliteHybridOverlay(
   map: MapLibreMap,
 ): Promise<string | undefined> {
   const style = await loadHybridStyle()
-  if (!map.isStyleLoaded()) return style.glyphs
+  // Same wait as plan — an early return left hybrid with no overlay layers
+  // (button said hybrid, map stayed pure satellite).
+  await waitForStyleLoaded(map)
 
   if (!map.getSource(HYBRID_SOURCE_ID)) {
     const source = style.sources[VERSATILES_VECTOR_SOURCE_ID]
@@ -198,34 +263,19 @@ export async function ensureSatelliteHybridOverlay(
 /**
  * OpenFreeMap dark plan (Photo Sightline basemap), inserted so hillshade can
  * sit above land fills and shade the relief.
+ * Sprite/glyphs are applied by `applyBasemapMode` *before* this runs so a
+ * style reload cannot wipe visibility set afterward.
  */
 export async function ensurePlanBasemap(
   map: MapLibreMap,
 ): Promise<string | undefined> {
   const style = await loadPlanStyle()
-  // Wait for style after the network fetch — an early return here left plan
-  // mode with no OpenFreeMap layers (empty / wrong background).
-  if (!map.isStyleLoaded()) {
-    await new Promise<void>((resolve) => {
-      map.once('load', () => resolve())
-      if (map.isStyleLoaded()) resolve()
-    })
-  }
+  await waitForStyleLoaded(map)
 
   for (const [sourceId, source] of Object.entries(style.sources ?? {})) {
     const id = `${PLAN_SOURCE_PREFIX}${sourceId}`
     if (!map.getSource(id)) {
       map.addSource(id, source)
-    }
-  }
-
-  if (style.sprite) {
-    try {
-      map.setSprite(
-        typeof style.sprite === 'string' ? style.sprite : String(style.sprite),
-      )
-    } catch {
-      // optional icons
     }
   }
 
@@ -270,23 +320,48 @@ export async function applyBasemapMode(
   map: MapLibreMap,
   mode: BasemapMode,
 ): Promise<void> {
-  if (!map.isStyleLoaded()) return
+  const gen = (basemapApplyGenByMap.get(map) ?? 0) + 1
+  basemapApplyGenByMap.set(map, gen)
+  const alive = () => basemapApplyGenByMap.get(map) === gen
+
+  await waitForStyleLoaded(map)
+  if (!alive()) return
+
   basemapModeByMap.set(map, mode)
 
+  // 1) Resolve style assets and apply glyphs/sprite *before* ensuring layers.
+  //    setGlyphs/setSprite reload the style; visibility must be set only after.
   let glyphs: string | undefined
   if (mode === 'hybrid') {
-    glyphs = await ensureSatelliteHybridOverlay(map)
+    glyphs = (await loadHybridStyle()).glyphs
   } else if (mode === 'plan') {
-    glyphs = await ensurePlanBasemap(map)
+    glyphs = (await loadPlanStyle()).glyphs
   }
-  if (glyphs) {
-    try {
-      map.setGlyphs(glyphs)
-    } catch {
-      // keep existing glyphs
-    }
+  if (!alive()) return
+
+  // Skip OpenFreeMap sprite here: setSprite reloads the style and was wiping
+  // plan layers / visibility when fired without a settled wait (icons optional).
+
+  if (glyphs && map.getStyle()?.glyphs !== glyphs) {
+    const glyphsUrl = glyphs
+    await afterStyleMutation(map, () => {
+      map.setGlyphs(glyphsUrl)
+    })
+    if (!alive()) return
   }
 
+  await waitForStyleLoaded(map)
+  if (!alive()) return
+
+  // 2) Add overlay layers (idempotent) now that style mutations have settled.
+  if (mode === 'hybrid') {
+    await ensureSatelliteHybridOverlay(map)
+  } else if (mode === 'plan') {
+    await ensurePlanBasemap(map)
+  }
+  if (!alive()) return
+
+  // 3) Visibility last — never before a pending style.reload.
   const satOn = mode === 'satellite' || mode === 'hybrid'
   if (map.getLayer('imagery')) {
     map.setLayoutProperty('imagery', 'visibility', satOn ? 'visible' : 'none')

@@ -16,6 +16,8 @@ type MapControlsStackProps = {
   threeDimensional: boolean
   onThreeDimensionalChange: (next: boolean) => void
   basemapMode: BasemapMode
+  /** True while MapLibre is still applying the last basemap switch. */
+  basemapApplying: boolean
   onBasemapModeChange: (next: BasemapMode) => void
   plHeatmapEnabled: boolean
   plHeatmapOpacity: number
@@ -34,6 +36,7 @@ export function MapControlsStack({
   threeDimensional,
   onThreeDimensionalChange,
   basemapMode,
+  basemapApplying,
   onBasemapModeChange,
   plHeatmapEnabled,
   plHeatmapOpacity,
@@ -135,9 +138,20 @@ export function MapControlsStack({
                 : 'map-quick-actions__button'
             }
             data-basemap-mode={basemapMode}
+            data-applying={basemapApplying ? 'true' : undefined}
             aria-pressed={planActive}
-            aria-label={`${label} — cliquer pour changer`}
-            title={`${label} (satellite → sat+plan → plan)`}
+            aria-busy={basemapApplying}
+            disabled={basemapApplying}
+            aria-label={
+              basemapApplying
+                ? `Passage en ${label}…`
+                : `${label} — cliquer pour changer`
+            }
+            title={
+              basemapApplying
+                ? `Chargement — ${label}`
+                : `${label} (satellite → sat+plan → plan)`
+            }
             onClick={() => onBasemapModeChange(nextBasemapMode(basemapMode))}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">

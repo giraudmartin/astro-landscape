@@ -1415,6 +1415,11 @@
   animation: ui-mint-confirm 480ms var(--motion-ease-out) both;
 }
 
+/* Stacked pill clips the mint ring → two green bands. Pulse covers feedback. */
+.map-quick-actions__button--active[data-basemap-mode] {
+  animation: none;
+}
+
 .map-quick-actions__button--active:hover {
   background: transparent;
 }
@@ -1432,6 +1437,30 @@
 
 .map-quick-actions__button[data-clicked='true'] svg {
   animation: map-location-pulse 480ms ease-out both;
+}
+
+/* Basemap switch in flight — click registered, map still catching up. */
+.map-quick-actions__button[data-applying='true'],
+.map-quick-actions__button[data-applying='true']:hover,
+.map-quick-actions__button[data-applying='true']:disabled {
+  color: var(--map-control-primary);
+  background: var(--map-control-primary-soft);
+  cursor: wait;
+  opacity: 1;
+}
+
+.map-quick-actions__button[data-applying='true'] svg {
+  animation: map-basemap-applying 900ms ease-in-out infinite;
+}
+
+@keyframes map-basemap-applying {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
 }
 
 @keyframes map-location-pulse {

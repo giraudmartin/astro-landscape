@@ -13,7 +13,7 @@
  */
 
 /** Bump when the composite shader changes so ImmersiveView remounts the pass. */
-export const LOCAL_HALO_PASS_REV = 44
+export const LOCAL_HALO_PASS_REV = 46
 import * as THREE from 'three'
 import { EARTH_RADIUS_M } from '../../globeConstants'
 import { stelModeUniform } from '../../stelProjector'
@@ -259,15 +259,28 @@ float cloudDensity(vec3 p) {
   return cloudLayer(p, 0) + cloudLayer(p, 1) + cloudLayer(p, 2);
 }
 
-// Exact prototype sourceLight (km frame, hard volume bounds).
-float sourceLight(vec3 p) {
-  if (uHasVolume < 0.5) return 0.0;
-  if (abs(p.x) > 12.0 || abs(p.z) > 12.0) return 0.0;
-  vec3 uvw = (p - uBoxMinKm) / uBoxSizeKm;
-  uvw = clamp(uvw, vec3(0.0), vec3(1.0));
+// The air is sampled inside the VIIRS box. For cloud lighting only, extend
+// its boundary values with a smooth falloff and filter over a wider footprint.
+float fieldLight(vec3 p) {
+  vec3 uvw = clamp((p - uBoxMinKm) / uBoxSizeKm, vec3(0.0), vec3(1.0));
   vec2 light = texture(uVolume, uvw).rg;
-  // Above the precalculated field, decay the top slice (proto).
   return mix(light.g, light.r, uBlocking) * exp(-max(p.y - 8.3, 0.0) / 2.0);
+}
+
+float cloudLightTap(vec3 p, float reach) {
+  vec2 outside = max(abs(p.xz) - vec2(12.0), vec2(0.0));
+  return fieldLight(p) * exp(-dot(outside, outside) / (reach * reach));
+}
+
+float diffuseCloudLight(vec3 p) {
+  float height = max(p.y - uRefAltKm, 0.0);
+  float radius = clamp(0.45 * height, 0.6, 3.6);
+  float reach = 2.0 + radius;
+  vec3 dx = vec3(radius, 0.0, 0.0);
+  vec3 dz = dx.yyx;
+  return 0.36 * cloudLightTap(p, reach) + 0.16 * (
+    cloudLightTap(p + dx, reach) + cloudLightTap(p - dx, reach) +
+    cloudLightTap(p + dz, reach) + cloudLightTap(p - dz, reach));
 }
 
 vec2 columnOcclusion(vec3 p) {
@@ -390,14 +403,17 @@ void main() {
       }
       // Prototype edge / lighting coefficients — verbatim from chamonix-threejs.html.
       float edge = 1.0 - smoothstep(11.0, 12.0, max(abs(p.x), abs(p.z)));
-      float ill = sourceLight(p);
+      float ill = uHasVolume > 0.5 && max(abs(p.x), abs(p.z)) <= 12.0 ? fieldLight(p) : 0.0;
       // Air glow ONLY when local halo is enabled — not when clouds alone boost power.
       float air = uHaloAir > 0.0
         ? exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3)) * uHaloAir * uHaze * edge * 0.045
         : 0.0;
       float rangeKm = length(pScene.xz - uEye.xz) * 0.001;
       float distant = exp(-rangeKm / 95.0) * (1.0 - smoothstep(120.0, 390.0, rangeKm));
-      float cd = cloudDensity(p) * mix(distant, edge, uReference);
+      float midDensity = cloudLayer(p, 1) * uCloudOn;
+      float lowDensity = cloudLayer(p, 0) * uCloudOn;
+      float density = midDensity + lowDensity + uCloudOn * cloudLayer(p, 2);
+      float cd = density * mix(distant, edge, uReference);
       float cloudExt = cd * 2.2;
       vec3 cloudColour = vec3(0.0);
       if (cd > 0.001) {
@@ -408,14 +424,27 @@ void main() {
         vec3 skyAmb = mix(nightSky, srgbToLinear(uSkyLight), clamp(uDayFactor, 0.0, 1.0));
         vec3 ambient = (skyAmb * 3.2 + vec3(0.009, 0.012, 0.019))
           * mix(0.16, 1.0, occ.x) * selfShade;
+        vec3 cityTint = uTint;
         if (uReference < 0.5) {
           float luminance = dot(ambient, vec3(0.2126, 0.7152, 0.0722));
+          // Diffuse skylight reaches the underside of a thick mid-level bank
+          // even where the direct sky path is strongly self-shadowed.
+          float midFraction = midDensity / max(density, 1e-6);
+          float lowFraction = lowDensity / max(density, 1e-6);
+          luminance += midFraction * mix(0.016, 0.025, occ.x);
+          luminance += lowFraction * mix(0.016, 0.025, occ.x);
+          // Keep the intensity of city light, with a softer amber on low banks.
+          float tintLuma = dot(uTint, vec3(0.2126, 0.7152, 0.0722));
+          cityTint = mix(uTint, vec3(tintLuma), 0.85 * lowFraction * (1.0 - uDayFactor));
           vec3 nightGrey = luminance * vec3(0.95, 1.00, 1.04);
           ambient = mix(nightGrey, ambient, smoothstep(0.0, 0.65, uDayFactor));
         }
         float under = exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3));
-        float cityAmt = ill * uPower * uHaloAir + uSkyLp * 1.25 * under;
-        vec3 city = uTint * cityAmt * 0.9 * mix(0.12, 1.0, occ.y);
+        float cloudIll = ill;
+        if (uReference < 0.5 && uHasVolume > 0.5 && uPower * uHaloAir > 0.0)
+          cloudIll = diffuseCloudLight(p);
+        float cityAmt = cloudIll * uPower * uHaloAir + uSkyLp * 1.25 * under;
+        vec3 city = cityTint * cityAmt * 0.9 * mix(0.12, 1.0, occ.y);
         cloudColour = ambient + city;
       }
       float extinction = air + cloudExt;

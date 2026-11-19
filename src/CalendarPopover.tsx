@@ -32,6 +32,8 @@ type CalendarPopoverProps = {
 type PopoverPos = {
   top?: number
   bottom?: number
+  width?: number
+  maxHeight?: number
   left: number
 }
 
@@ -46,17 +48,29 @@ function placeAboveAnchor(anchor: DOMRect, panelTop: number): PopoverPos {
   return { bottom, left }
 }
 
-function placeBelowAnchor(anchor: DOMRect): PopoverPos {
-  const width = Math.min(340, window.innerWidth - 24)
+function placeByMapDate(anchor: DOMRect, panel: DOMRect): PopoverPos {
+  const margin = 12
   const gap = 10
-  const left = Math.min(
-    window.innerWidth - width - 12,
-    Math.max(12, anchor.left),
-  )
-  const top = Math.min(window.innerHeight - 24, anchor.bottom + gap)
-  return { top, left }
-}
+  const width = Math.min(340, window.innerWidth - margin * 2)
+  const height = Math.min(465, window.innerHeight - margin * 2)
+  const top = Math.max(0, panel.top)
+  const maxHeight = Math.max(0, window.innerHeight - top - margin)
+  if (panel.right + gap + width <= window.innerWidth - margin) {
+    return { left: panel.right + gap, top, maxHeight }
+  }
+  if (panel.left - gap - width >= margin) {
+    return { left: panel.left - gap - width, top, maxHeight }
+  }
 
+  const fittedWidth = Math.min(anchor.width, width)
+  const left = Math.max(margin, Math.min(anchor.left, window.innerWidth - margin - fittedWidth))
+  const below = window.innerHeight - anchor.bottom - gap - margin
+  const above = anchor.top - gap - margin
+  if (below < height && above > below) {
+    return { left, width: fittedWidth, bottom: window.innerHeight - anchor.top + gap }
+  }
+  return { left, width: fittedWidth, top: anchor.bottom + gap, maxHeight: Math.max(0, below) }
+}
 function nightDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60)
   const remainder = Math.round(minutes % 60)
@@ -106,13 +120,14 @@ export function CalendarPopover({
       const rect = el.getBoundingClientRect()
       setPos(
         placement === 'below'
-          ? placeBelowAnchor(rect)
+          ? placeByMapDate(rect, el.closest('.map-card')?.getBoundingClientRect() ?? rect)
           : placeAboveAnchor(rect, dock?.getBoundingClientRect().top ?? rect.top),
       )
     }
     update()
     const observer = new ResizeObserver(update)
     if (dock) observer.observe(dock)
+    if (anchorRef.current) observer.observe(anchorRef.current)
     window.addEventListener('resize', update)
     window.addEventListener('scroll', update, true)
     return () => {
@@ -147,6 +162,8 @@ export function CalendarPopover({
 
   const style: CSSProperties = {
     left: pos.left,
+    width: pos.width,
+    maxHeight: pos.maxHeight,
     ...(pos.bottom != null
       ? { bottom: pos.bottom, top: 'auto', maxHeight: Math.max(0, window.innerHeight - pos.bottom - 12) }
       : { top: pos.top }),

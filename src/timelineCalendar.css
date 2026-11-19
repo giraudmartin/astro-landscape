@@ -1,7 +1,7 @@
 /* Ported from Photo Sightline — timeline + calendar */
 .moon-cal {
   margin-top: 4px;
-  flex: 1 1 auto;
+  flex: none;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -327,8 +327,6 @@
   position: fixed;
   z-index: 90;
   width: min(340px, calc(100% - 24px));
-  /* Fixed footprint: 6-week grid + chrome, no month-to-month jump. */
-  height: 465px;
   max-height: calc(100vh - 24px);
   overflow-y: auto;
   padding: 14px 14px 12px;
@@ -464,7 +462,8 @@
 }
 
 .moon-calendar-popover .moon-cal__readout {
-  margin-top: auto;
+  margin-top: 10px;
+  flex: none;
 }
 
 .moon-calendar-popover .moon-help {

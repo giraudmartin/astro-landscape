@@ -784,7 +784,7 @@ export function MapCanvas({
         : FLAT_PITCH
       const heightM = readElevation(lng, lat) ?? 0
 
-      // "Mes spots" picking still uses left-click (same as Photo Sightline).
+      // "Mes spots" picking / edit-relocate still uses left-click.
       if (personalSpotPickingRef.current) {
         publishSpot(lat, lng, bearing, pitch)
         onPlacePersonalSpotRef.current({
@@ -794,7 +794,8 @@ export function MapCanvas({
           bearingDeg: bearing,
           pitchDeg: pitch,
         })
-        map.getCanvas().style.cursor = ''
+        // Keep crosshair while picking stays on (edit relocate is multi-click).
+        map.getCanvas().style.cursor = 'crosshair'
         return
       }
 

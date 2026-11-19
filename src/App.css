@@ -2674,6 +2674,11 @@
   line-height: 1.35;
 }
 
+.spot-save-card__coordinates-hint {
+  color: rgba(255, 255, 255, 0.32);
+  font-variant-numeric: normal;
+}
+
 .spot-save-card__actions {
   display: grid;
   grid-template-columns: 1fr;

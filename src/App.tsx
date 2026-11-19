@@ -95,6 +95,8 @@ export default function App() {
   const [pendingSaveName, setPendingSaveName] = useState('')
   const [editingSpot, setEditingSpot] = useState<PersonalSpot | null>(null)
   const [editingName, setEditingName] = useState('')
+  /** Snapshot used to restore the pin / list if the edit dialog is cancelled. */
+  const editingOriginRef = useRef<PersonalSpot | null>(null)
   const [folderDialog, setFolderDialog] = useState<{
     mode: 'create' | 'edit'
     folder: PersonalSpotFolder | null
@@ -257,6 +259,15 @@ export default function App() {
     [personalSpots],
   )
 
+  /** Draft edit location overlays the saved list for map markers only. */
+  const personalSpotsForMap = useMemo(() => {
+    if (!editingSpot) return personalSpots
+    return upsertPersonalSpot(personalSpots, {
+      ...editingSpot,
+      name: editingName.trim() || editingSpot.name,
+    })
+  }, [personalSpots, editingSpot, editingName])
+
   const selectPersonalSpot = useCallback((saved: PersonalSpot) => {
     setSelectedPersonalSpotId(saved.id)
     setSpot({
@@ -270,8 +281,26 @@ export default function App() {
     setFlyToPersonalSpotId(saved.id)
   }, [])
 
+  const closeEditDialog = useCallback(() => {
+    const origin = editingOriginRef.current
+    editingOriginRef.current = null
+    setEditingSpot(null)
+    setEditingName('')
+    setPersonalSpotPicking(false)
+    if (!origin) return
+    setSpot({
+      lat: origin.lat,
+      lon: origin.lon,
+      heightM: origin.heightM ?? 0,
+      bearingDeg: origin.bearingDeg,
+      pitchDeg: origin.pitchDeg,
+    })
+    setSelectedPersonalSpotId(origin.id)
+  }, [])
+
   const openSaveDialog = useCallback(
     (input: PendingSave) => {
+      editingOriginRef.current = null
       setEditingSpot(null)
       setPendingSave(input)
       setPendingSaveName(`Spot ${personalSpots.length + 1}`)
@@ -283,10 +312,51 @@ export default function App() {
 
   const openEditDialog = useCallback((saved: PersonalSpot) => {
     setPendingSave(null)
+    editingOriginRef.current = saved
     setEditingSpot(saved)
     setEditingName(saved.name)
+    setSelectedPersonalSpotId(saved.id)
+    setSpot({
+      lat: saved.lat,
+      lon: saved.lon,
+      heightM: saved.heightM ?? 0,
+      bearingDeg: saved.bearingDeg,
+      pitchDeg: saved.pitchDeg,
+    })
+    setPersonalSpotPicking(true)
     setMarkerMenuOpen(false)
   }, [])
+
+  const applyEditingSpotLocation = useCallback(
+    (input: {
+      lat: number
+      lon: number
+      heightM: number
+      bearingDeg: number
+      pitchDeg: number
+    }) => {
+      setEditingSpot((prev) =>
+        prev
+          ? {
+              ...prev,
+              lat: input.lat,
+              lon: input.lon,
+              heightM: input.heightM,
+              bearingDeg: input.bearingDeg,
+              pitchDeg: input.pitchDeg,
+            }
+          : null,
+      )
+      setSpot({
+        lat: input.lat,
+        lon: input.lon,
+        heightM: input.heightM,
+        bearingDeg: input.bearingDeg,
+        pitchDeg: input.pitchDeg,
+      })
+    },
+    [],
+  )
 
   const onPlacePersonalSpot = useCallback(
     (input: {
@@ -296,6 +366,10 @@ export default function App() {
       bearingDeg: number
       pitchDeg: number
     }) => {
+      if (editingSpot) {
+        applyEditingSpotLocation(input)
+        return
+      }
       setSpot({
         lat: input.lat,
         lon: input.lon,
@@ -306,7 +380,7 @@ export default function App() {
       setSelectedPersonalSpotId(null)
       openSaveDialog(input)
     },
-    [openSaveDialog],
+    [editingSpot, applyEditingSpotLocation, openSaveDialog],
   )
 
   const onRequestSaveSpot = useCallback(() => {
@@ -361,8 +435,18 @@ export default function App() {
       name: editingName.trim() || editingSpot.name,
     }
     setPersonalSpots((prev) => upsertPersonalSpot(prev, next))
+    editingOriginRef.current = null
     setEditingSpot(null)
     setEditingName('')
+    setPersonalSpotPicking(false)
+    setSelectedPersonalSpotId(next.id)
+    setSpot({
+      lat: next.lat,
+      lon: next.lon,
+      heightM: next.heightM ?? 0,
+      bearingDeg: next.bearingDeg,
+      pitchDeg: next.pitchDeg,
+    })
   }, [editingSpot, editingName])
 
   const requestDeleteEditingSpot = useCallback(() => {
@@ -430,8 +514,10 @@ export default function App() {
       setPersonalSpots((prev) => removePersonalSpot(prev, id))
       if (selectedPersonalSpotId === id) setSelectedPersonalSpotId(null)
       if (editingSpot?.id === id) {
+        editingOriginRef.current = null
         setEditingSpot(null)
         setEditingName('')
+        setPersonalSpotPicking(false)
       }
     } else {
       const next = removePersonalSpotFolder(
@@ -546,6 +632,22 @@ export default function App() {
             setSpot(next)
             // Height-only DEM updates must not clear a saved selection.
             if (!moved) return
+            if (editingSpot) {
+              setEditingSpot((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      lat: next.lat,
+                      lon: next.lon,
+                      heightM: next.heightM,
+                      bearingDeg: next.bearingDeg,
+                      pitchDeg: next.pitchDeg,
+                    }
+                  : null,
+              )
+              setSelectedPersonalSpotId(editingSpot.id)
+              return
+            }
             const saved = selectedPersonalSpotId
               ? personalSpots.find((row) => row.id === selectedPersonalSpotId)
               : null
@@ -564,16 +666,16 @@ export default function App() {
           mySpotsOpen={mySpotsOpen}
           onMySpotsOpenChange={(open) => {
             setMySpotsOpen(open)
-            if (!open) setPersonalSpotPicking(false)
+            if (!open && !editingSpot) setPersonalSpotPicking(false)
             if (open) {
               setAddressSearchOpen(false)
               setInfoDrawerOpen(false)
             }
           }}
-          personalSpots={personalSpots}
+          personalSpots={personalSpotsForMap}
           personalSpotFolders={personalSpotFolders}
           selectedPersonalSpotId={selectedPersonalSpotId}
-          personalSpotPicking={personalSpotPicking}
+          personalSpotPicking={personalSpotPicking || editingSpot != null}
           onPlacePersonalSpot={onPlacePersonalSpot}
           onSelectPersonalSpot={selectPersonalSpot}
           flyToPersonalSpotId={flyToPersonalSpotId}
@@ -634,7 +736,7 @@ export default function App() {
             setInfoDrawerOpen(open)
             if (open) {
               setMySpotsOpen(false)
-              setPersonalSpotPicking(false)
+              if (!editingSpot) setPersonalSpotPicking(false)
               setAddressSearchOpen(false)
             }
           }}
@@ -692,7 +794,7 @@ export default function App() {
           open={mySpotsOpen}
           onClose={() => {
             setMySpotsOpen(false)
-            setPersonalSpotPicking(false)
+            if (!editingSpot) setPersonalSpotPicking(false)
           }}
           spots={personalSpots}
           folders={personalSpotFolders}
@@ -731,11 +833,9 @@ export default function App() {
           name={editingName}
           lat={editingSpot.lat}
           lon={editingSpot.lon}
+          mapPass
           onNameChange={setEditingName}
-          onClose={() => {
-            setEditingSpot(null)
-            setEditingName('')
-          }}
+          onClose={closeEditDialog}
           onSubmit={commitEditingSpot}
           onDelete={requestDeleteEditingSpot}
         />

@@ -3,6 +3,8 @@ type SpotSaveCardProps = {
   name: string
   lat: number
   lon: number
+  /** Let map clicks through so the pin can be relocated under the card. */
+  mapPass?: boolean
   onNameChange: (name: string) => void
   onClose: () => void
   onSubmit: () => void
@@ -14,6 +16,7 @@ export function SpotSaveCard({
   name,
   lat,
   lon,
+  mapPass = false,
   onNameChange,
   onClose,
   onSubmit,
@@ -23,20 +26,27 @@ export function SpotSaveCard({
   const intro =
     mode === 'save'
       ? 'Donne un nom à ce marker pour le retrouver dans Mes spots.'
-      : 'Renomme ce spot ou supprime-le.'
+      : mapPass
+        ? 'Renomme ce spot, clique sur la carte pour le déplacer, ou supprime-le.'
+        : 'Renomme ce spot ou supprime-le.'
 
   return (
     <div
-      className="spot-save-card-backdrop"
+      className={
+        mapPass
+          ? 'spot-save-card-backdrop spot-save-card-backdrop--map-pass'
+          : 'spot-save-card-backdrop'
+      }
       role="presentation"
       onMouseDown={(event) => {
+        if (mapPass) return
         if (event.target === event.currentTarget) onClose()
       }}
     >
       <form
         className="spot-save-card"
         role="dialog"
-        aria-modal="true"
+        aria-modal={!mapPass}
         aria-labelledby="spot-save-card-title"
         onSubmit={(event) => {
           event.preventDefault()
@@ -89,6 +99,12 @@ export function SpotSaveCard({
             <p className="spot-save-card__coordinates">
               {Math.abs(lat).toFixed(5)}°{lat >= 0 ? 'N' : 'S'} ·{' '}
               {Math.abs(lon).toFixed(5)}°{lon >= 0 ? 'E' : 'W'}
+              {mapPass ? (
+                <span className="spot-save-card__coordinates-hint">
+                  {' '}
+                  · clic carte pour déplacer
+                </span>
+              ) : null}
             </p>
             <div
               className={

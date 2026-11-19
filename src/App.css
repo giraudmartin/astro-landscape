@@ -133,6 +133,10 @@
   --event-moonset: #64748b;
   --event-moonset-bright: #94a3b8;
   --event-useful: #4ade80;
+  /* Timeline altitude curves (aligned with sky trajectory accents). */
+  --curve-sun: #ffc65a;
+  --curve-moon: #9dc5ff;
+  --curve-milkyway: var(--ui-accent);
 
   --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-fast: 140ms;

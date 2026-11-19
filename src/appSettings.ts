@@ -186,6 +186,8 @@ export type MapSettings = {
 export type TimelineSettings = {
   zoomIndex: number
   collapsed: boolean
+  /** Expanded altitude curves (sun / moon / galactic center). */
+  advanced: boolean
 }
 
 export type AppSettings = {
@@ -254,6 +256,7 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
 export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = {
   zoomIndex: 2,
   collapsed: false,
+  advanced: false,
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -556,6 +559,7 @@ function normalizeTimeline(value: unknown): TimelineSettings {
   return {
     zoomIndex: normalizeZoomIndex(row.zoomIndex),
     collapsed: readBoolean(row.collapsed, DEFAULT_TIMELINE_SETTINGS.collapsed),
+    advanced: readBoolean(row.advanced, DEFAULT_TIMELINE_SETTINGS.advanced),
   }
 }
 

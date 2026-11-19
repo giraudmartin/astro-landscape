@@ -7,6 +7,8 @@ import {
   civilDayStartUtcMs,
   isMorningAt,
   shiftIsoDate,
+  galacticCenterAltitudeDegAt,
+  moonAltitudeDegAt,
   sunAltitudeDegAt,
   toCalendarDay,
   type DayInfo,
@@ -21,6 +23,7 @@ import {
   ClockIcon,
   CalendarIcon,
   ChevronDownIcon,
+  AltitudeCurvesIcon,
 } from './psIcons'
 import { skyEventFromSunAltitude } from './skyLighting'
 import { EXPAND_TIMELINE_EVENT } from './ViewfinderCaptureCapsule'
@@ -59,6 +62,9 @@ export function TimelineDock({
   const [collapsed, setCollapsed] = useState(
     () => loadAppSettings().timeline.collapsed,
   )
+  const [advanced, setAdvanced] = useState(
+    () => loadAppSettings().timeline.advanced,
+  )
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [jumpRequest, setJumpRequest] = useState(0)
   const [editingClock, setEditingClock] = useState(false)
@@ -80,8 +86,8 @@ export function TimelineDock({
   }, [calKey])
 
   useEffect(() => {
-    patchAppSettings({ timeline: { zoomIndex, collapsed } })
-  }, [zoomIndex, collapsed])
+    patchAppSettings({ timeline: { zoomIndex, collapsed, advanced } })
+  }, [zoomIndex, collapsed, advanced])
 
   useEffect(() => {
     const onExpand = () => {
@@ -112,6 +118,12 @@ export function TimelineDock({
 
   const playheadClock = civilClockFromUtc(playheadUtcMs, lon)
   const sunAlt = sunAltitudeDegAt(lat, lon, elevationM, playheadUtcMs)
+  const moonAlt = advanced
+    ? moonAltitudeDegAt(lat, lon, elevationM, playheadUtcMs)
+    : null
+  const milkyAlt = advanced
+    ? galacticCenterAltitudeDegAt(lat, lon, elevationM, playheadUtcMs)
+    : null
   const phase = skyEventFromSunAltitude(sunAlt, {
     morning: isMorningAt(playheadUtcMs, lon),
   })
@@ -174,7 +186,15 @@ export function TimelineDock({
 
   return (
     <>
-      <div className="moon-timeline-dock" role="region" aria-label="Timeline">
+      <div
+        className={
+          advanced
+            ? 'moon-timeline-dock moon-timeline-dock--advanced'
+            : 'moon-timeline-dock'
+        }
+        role="region"
+        aria-label="Timeline"
+      >
         <div className="moon-timeline-dock__controls">
           <div className="moon-timeline-dock__controls-left">
             <button
@@ -286,6 +306,28 @@ export function TimelineDock({
               ››
             </button>
             <button
+              type="button"
+              className={
+                advanced
+                  ? 'moon-timeline-dock__icon-btn is-active'
+                  : 'moon-timeline-dock__icon-btn'
+              }
+              aria-label={
+                advanced
+                  ? 'Masquer les courbes d’altitude'
+                  : 'Afficher les courbes d’altitude'
+              }
+              aria-pressed={advanced}
+              title={
+                advanced
+                  ? 'Mode simple'
+                  : 'Mode avancé — altitudes Soleil, Lune, Voie lactée'
+              }
+              onClick={() => setAdvanced((v) => !v)}
+            >
+              <AltitudeCurvesIcon />
+            </button>
+            <button
               ref={calendarBtnRef}
               type="button"
               className={
@@ -315,33 +357,25 @@ export function TimelineDock({
         <div className="moon-timeline-dock__timeline">
           <DayTimeline
             dayInfo={dayInfo}
+            elevationM={elevationM}
             playheadUtcMs={playheadUtcMs}
             onPlayheadChange={onPlayheadChange}
             zoomIndex={zoomIndex}
             jumpRequest={jumpRequest}
             onHorizonEventClick={onHorizon}
+            advanced={advanced}
           />
         </div>
 
         <div className="moon-timeline-dock__ephemeris">
           <span>
             {phase.label} · Soleil {sunAlt.toFixed(1)}°
+            {moonAlt != null ? ` · Lune ${moonAlt.toFixed(1)}°` : ''}
+            {milkyAlt != null ? ` · VL ${milkyAlt.toFixed(1)}°` : ''}
           </span>
           <span>
             Lune {dayInfo.illuminationPercent}% · {dayInfo.phaseLabel}
           </span>
-          {dayInfo.sunrise ? (
-            <span title="Lever du soleil">↑⊙ {dayInfo.sunrise.datetimeLocal}</span>
-          ) : null}
-          {dayInfo.sunset ? (
-            <span title="Coucher du soleil">↓⊙ {dayInfo.sunset.datetimeLocal}</span>
-          ) : null}
-          {dayInfo.moonrise ? (
-            <span title="Lever de Lune">↑☾ {dayInfo.moonrise.datetimeLocal}</span>
-          ) : null}
-          {dayInfo.moonset ? (
-            <span title="Coucher de Lune">↓☾ {dayInfo.moonset.datetimeLocal}</span>
-          ) : null}
         </div>
       </div>
 

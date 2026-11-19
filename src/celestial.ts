@@ -321,7 +321,7 @@ export function nearestScheduleKind(
   return best.kind
 }
 
-function moonAltitudeDegAt(
+export function moonAltitudeDegAt(
   lat: number,
   lon: number,
   elevationM: number,
@@ -330,6 +330,21 @@ function moonAltitudeDegAt(
   const observer = new Observer(lat, lon, elevationM / 1000)
   const at = new Date(utcMs)
   const eq = Equator(Body.Moon, at, observer, true, true)
+  const horiz = Horizon(at, observer, eq.ra, eq.dec)
+  return horiz.altitude
+}
+
+/** Galactic center (Sgr A*) altitude — proxy for the Milky Way core. */
+export function galacticCenterAltitudeDegAt(
+  lat: number,
+  lon: number,
+  elevationM: number,
+  utcMs: number,
+): number {
+  ensureGalacticCenterStar()
+  const observer = new Observer(lat, lon, elevationM / 1000)
+  const at = new Date(utcMs)
+  const eq = Equator(Body.Star1, at, observer, true, true)
   const horiz = Horizon(at, observer, eq.ra, eq.dec)
   return horiz.altitude
 }

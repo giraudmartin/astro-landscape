@@ -488,6 +488,147 @@
   height: 48px;
 }
 
+.moon-preview-timeline--advanced .moon-preview-timeline__viewport {
+  /* hours 16 + band 128 + bottom 4 */
+  height: 148px;
+  overflow: hidden;
+}
+
+.moon-preview-timeline--advanced .moon-preview-timeline__gradient {
+  top: 16px;
+  bottom: 4px;
+  height: auto;
+  border-radius: 12px;
+  opacity: 1;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 0 28px rgba(0, 0, 0, 0.28);
+}
+
+/* Soft scrim so curves stay readable on bright day bands. */
+.moon-preview-timeline--advanced .moon-preview-timeline__gradient::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(6, 8, 12, 0.22) 0%,
+    rgba(6, 8, 12, 0.08) 42%,
+    rgba(6, 8, 12, 0.28) 100%
+  );
+}
+
+.moon-preview-timeline--advanced .moon-preview-timeline__mark {
+  top: 16px;
+  height: calc(100% - 20px);
+  opacity: 0.4;
+}
+
+.moon-preview-timeline--advanced .moon-preview-timeline__mark-label {
+  display: none;
+}
+
+.moon-preview-timeline--advanced .moon-preview-timeline__mark-dot {
+  top: 0;
+}
+
+/* Same inset as the day-light band (top 16 / bottom 4 → 128px). */
+.moon-preview-timeline__chart {
+  position: absolute;
+  left: 0;
+  top: 16px;
+  width: 100%;
+  height: 128px;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.moon-preview-timeline__chart-horizon {
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 1.35;
+}
+
+.moon-preview-timeline__chart-grid {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
+}
+
+.moon-preview-timeline__chart-playhead {
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 1.6;
+}
+
+.moon-preview-timeline__curve {
+  fill: none;
+  stroke-width: 2.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.moon-preview-timeline__curve--under {
+  stroke: rgba(0, 0, 0, 0.22);
+  stroke-width: 3.4;
+}
+
+.moon-preview-timeline__curve--sun {
+  stroke: var(--curve-sun);
+}
+
+.moon-preview-timeline__curve--moon {
+  stroke: var(--curve-moon);
+}
+
+.moon-preview-timeline__curve--milkyway {
+  stroke: var(--curve-milkyway);
+  stroke-width: 2.15;
+}
+
+.moon-preview-timeline__curve-dot {
+  stroke: rgba(8, 10, 14, 0.28);
+  stroke-width: 1;
+}
+
+.moon-preview-timeline__curve-dot--sun {
+  fill: var(--curve-sun);
+}
+
+.moon-preview-timeline__curve-dot--moon {
+  fill: var(--curve-moon);
+}
+
+.moon-preview-timeline__curve-dot--milkyway {
+  fill: var(--curve-milkyway);
+}
+
+.moon-preview-timeline--advanced .moon-preview-timeline__legend {
+  justify-content: center;
+  margin-bottom: 2px;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.moon-preview-timeline__legend-mark--sun {
+  background: var(--curve-sun);
+}
+
+.moon-preview-timeline__legend-mark--moon {
+  background: var(--curve-moon);
+}
+
+.moon-preview-timeline__legend-mark--milkyway {
+  background: var(--curve-milkyway);
+}
+
+.moon-timeline-dock--advanced {
+  max-width: min(
+    calc(var(--timeline-dock-max, 720px) + 40px),
+    calc(100vw - var(--map-rail-width, 0px) - 24px)
+  );
+}
+
 .moon-preview-timeline--compact .moon-preview-timeline__mark-label {
   top: 20px;
 }
@@ -1109,6 +1250,12 @@ button.moon-preview-timeline__mark--button:hover .moon-preview-timeline__mark-do
 
   .moon-preview-timeline__legend {
     display: none;
+  }
+
+  .moon-preview-timeline--advanced .moon-preview-timeline__legend {
+    display: flex;
+    font-size: 0.6rem;
+    gap: 6px 10px;
   }
 
   .moon-timeline-dock__collapsed {

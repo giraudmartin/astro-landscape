@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   civilDayStartUtcMs,
   civilFractionFromUtc,
+  galacticCenterAltitudeDegAt,
+  moonAltitudeDegAt,
+  sunAltitudeDegAt,
   type DayInfo,
   type HorizonKind,
 } from './celestial'
@@ -33,6 +36,16 @@ const TIMELINE_TICK_STEPS_MS = [
 
 const TIMELINE_MIN_TICK_PX = 36
 
+/**
+ * Symmetric altitude frame so the horizon (0°) sits in the vertical middle.
+ * Values outside the frame are not clamped — paths exit and clip cleanly
+ * (no flat “ceiling / floor” segments).
+ */
+const CHART_ALT_MIN_DEG = -50
+const CHART_ALT_MAX_DEG = 50
+const CHART_BAND_HEIGHT_PX = 128
+const CHART_INNER_PAD_PX = 10
+
 function pickTickStepMs(pxPerMs: number): number {
   for (const step of TIMELINE_TICK_STEPS_MS) {
     if (step * pxPerMs >= TIMELINE_MIN_TICK_PX) return step
@@ -52,19 +65,41 @@ function formatTick(utcMs: number, lon: number, stepMs: number): string {
   return `${hour}:${minute}`
 }
 
+function polylinePath(
+  xs: number[],
+  alts: number[],
+  yFor: (alt: number) => number,
+): string {
+  if (xs.length === 0) return ''
+  let d = `M ${xs[0]!.toFixed(2)} ${yFor(alts[0]!).toFixed(2)}`
+  for (let i = 1; i < xs.length; i += 1) {
+    d += ` L ${xs[i]!.toFixed(2)} ${yFor(alts[i]!).toFixed(2)}`
+  }
+  return d
+}
+
+const MARK_LABELS: Record<HorizonKind, string> = {
+  sunrise: 'Lever du soleil',
+  sunset: 'Coucher du soleil',
+  moonrise: 'Lever de Lune',
+  moonset: 'Coucher de Lune',
+}
+
 type Mark = {
   kind: HorizonKind
   utcMs: number
-  label: string
 }
 
 type DayTimelineProps = {
   dayInfo: DayInfo
+  elevationM: number
   playheadUtcMs: number
   onPlayheadChange: (utcMs: number) => void
   zoomIndex: number
   jumpRequest?: number
   onHorizonEventClick?: (kind: HorizonKind) => void
+  /** Expand the day-light band into an altitude chart. */
+  advanced?: boolean
 }
 
 /**
@@ -74,13 +109,18 @@ type DayTimelineProps = {
  */
 export function DayTimeline({
   dayInfo,
+  elevationM,
   playheadUtcMs,
   onPlayheadChange,
   zoomIndex,
   jumpRequest = 0,
   onHorizonEventClick,
+  advanced = false,
 }: DayTimelineProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const chartDomId = useId().replace(/:/g, '')
+  const clipId = `tl-curve-clip-${chartDomId}`
+  const glowId = `tl-curve-glow-${chartDomId}`
   const [width, setWidth] = useState(320)
   const [scrubbing, setScrubbing] = useState(false)
   const dragRef = useRef<{
@@ -113,20 +153,21 @@ export function DayTimeline({
   const dayStart = civilDayStartUtcMs(dayInfo.date, dayInfo.lon)
   const dayEnd = dayStart + 24 * 60 * 60_000
   const lon = dayInfo.lon
+  const lat = dayInfo.lat
 
   const marks = useMemo(() => {
     const list: Mark[] = []
-    const push = (kind: HorizonKind, utc: string | undefined, label: string) => {
+    const push = (kind: HorizonKind, utc: string | undefined) => {
       if (!utc) return
       const ms = Date.parse(utc)
       if (!Number.isFinite(ms)) return
       if (ms < dayStart - 60_000 || ms > dayEnd + 60_000) return
-      list.push({ kind, utcMs: ms, label })
+      list.push({ kind, utcMs: ms })
     }
-    push('sunrise', dayInfo.sunrise?.datetimeUtc, '↑⊙')
-    push('sunset', dayInfo.sunset?.datetimeUtc, '↓⊙')
-    push('moonrise', dayInfo.moonrise?.datetimeUtc, '↑☾')
-    push('moonset', dayInfo.moonset?.datetimeUtc, '↓☾')
+    push('sunrise', dayInfo.sunrise?.datetimeUtc)
+    push('sunset', dayInfo.sunset?.datetimeUtc)
+    push('moonrise', dayInfo.moonrise?.datetimeUtc)
+    push('moonset', dayInfo.moonset?.datetimeUtc)
     return list
   }, [dayInfo, dayStart, dayEnd])
 
@@ -169,6 +210,62 @@ export function DayTimeline({
 
   const xFor = (utcMs: number) => ((utcMs - windowStart) / span) * width
 
+  // Quantize the sample window so fine scrub does not recompute every frame.
+  const sampleBucketMs = 2 * 60_000
+  const sampleStart = Math.floor(windowStart / sampleBucketMs) * sampleBucketMs
+  const sampleEnd = Math.ceil(windowEnd / sampleBucketMs) * sampleBucketMs
+  const sampleCount = Math.min(
+    96,
+    Math.max(advanced ? 48 : 24, Math.round(width / (advanced ? 7 : 12))),
+  )
+
+  const altitudeSamples = useMemo(() => {
+    if (!advanced) return null
+    const times: number[] = []
+    const sun: number[] = []
+    const moon: number[] = []
+    const milky: number[] = []
+    const denom = Math.max(1, sampleCount - 1)
+    for (let i = 0; i < sampleCount; i += 1) {
+      const t = sampleStart + ((sampleEnd - sampleStart) * i) / denom
+      times.push(t)
+      sun.push(sunAltitudeDegAt(lat, lon, elevationM, t))
+      moon.push(moonAltitudeDegAt(lat, lon, elevationM, t))
+      milky.push(galacticCenterAltitudeDegAt(lat, lon, elevationM, t))
+    }
+    return { times, sun, moon, milky }
+  }, [
+    advanced,
+    sampleStart,
+    sampleEnd,
+    sampleCount,
+    lat,
+    lon,
+    elevationM,
+  ])
+
+  const altitudeCurves = useMemo(() => {
+    if (!altitudeSamples || !(width > 0)) return null
+    const xs = altitudeSamples.times.map(
+      (t) => ((t - windowStart) / span) * width,
+    )
+    return {
+      xs,
+      sun: altitudeSamples.sun,
+      moon: altitudeSamples.moon,
+      milky: altitudeSamples.milky,
+    }
+  }, [altitudeSamples, windowStart, span, width])
+
+  const playheadAlts = useMemo(() => {
+    if (!advanced) return null
+    return {
+      sun: sunAltitudeDegAt(lat, lon, elevationM, playheadUtcMs),
+      moon: moonAltitudeDegAt(lat, lon, elevationM, playheadUtcMs),
+      milky: galacticCenterAltitudeDegAt(lat, lon, elevationM, playheadUtcMs),
+    }
+  }, [advanced, lat, lon, elevationM, playheadUtcMs])
+
   useEffect(() => {
     if (!jumpRequest) return
   }, [jumpRequest])
@@ -206,14 +303,48 @@ export function DayTimeline({
     }
   }, [])
 
+  const chartHeight = advanced ? CHART_BAND_HEIGHT_PX : 0
+  const plotHeight = Math.max(
+    1,
+    chartHeight - CHART_INNER_PAD_PX * 2,
+  )
+  const yForAlt = (alt: number) => {
+    const t =
+      (CHART_ALT_MAX_DEG - alt) / (CHART_ALT_MAX_DEG - CHART_ALT_MIN_DEG)
+    return CHART_INNER_PAD_PX + t * plotHeight
+  }
+  const horizonY = yForAlt(0)
+  const playheadX = width * 0.5
+  const altInFrame = (alt: number) =>
+    alt >= CHART_ALT_MIN_DEG && alt <= CHART_ALT_MAX_DEG
+
   return (
     <div
-      className={
-        scrubbing
-          ? 'moon-preview-timeline moon-preview-timeline--compact is-scrubbing'
-          : 'moon-preview-timeline moon-preview-timeline--compact'
-      }
+      className={[
+        'moon-preview-timeline',
+        'moon-preview-timeline--compact',
+        advanced ? 'moon-preview-timeline--advanced' : '',
+        scrubbing ? 'is-scrubbing' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
+      {advanced ? (
+        <ul className="moon-preview-timeline__legend" aria-label="Courbes">
+          <li>
+            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--sun" />
+            Soleil
+          </li>
+          <li>
+            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--moon" />
+            Lune
+          </li>
+          <li>
+            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--milkyway" />
+            Voie lactée
+          </li>
+        </ul>
+      ) : null}
       <div
         ref={viewportRef}
         className="moon-preview-timeline__viewport"
@@ -266,17 +397,161 @@ export function DayTimeline({
             className="moon-preview-timeline__gradient"
             style={{ background: gradient }}
           />
+          {advanced && altitudeCurves ? (
+            <svg
+              className="moon-preview-timeline__chart"
+              width={width}
+              height={chartHeight}
+              viewBox={`0 0 ${width} ${chartHeight}`}
+              aria-hidden="true"
+            >
+              <defs>
+                <clipPath id={clipId}>
+                  <rect
+                    x={0}
+                    y={0}
+                    width={width}
+                    height={chartHeight}
+                    rx={12}
+                    ry={12}
+                  />
+                </clipPath>
+                <filter
+                  id={glowId}
+                  x="-20%"
+                  y="-40%"
+                  width="140%"
+                  height="180%"
+                >
+                  <feDropShadow
+                    dx="0"
+                    dy="0"
+                    stdDeviation="0.8"
+                    floodColor="rgba(0,0,0,0.45)"
+                    floodOpacity="0.55"
+                  />
+                </filter>
+              </defs>
+              <g clipPath={`url(#${clipId})`}>
+                <line
+                  className="moon-preview-timeline__chart-grid"
+                  x1={0}
+                  x2={width}
+                  y1={yForAlt(30)}
+                  y2={yForAlt(30)}
+                />
+                <line
+                  className="moon-preview-timeline__chart-grid"
+                  x1={0}
+                  x2={width}
+                  y1={yForAlt(-30)}
+                  y2={yForAlt(-30)}
+                />
+                <line
+                  className="moon-preview-timeline__chart-horizon"
+                  x1={0}
+                  x2={width}
+                  y1={horizonY}
+                  y2={horizonY}
+                />
+                {/* Dark understroke for contrast on bright day bands */}
+                <path
+                  className="moon-preview-timeline__curve moon-preview-timeline__curve--under"
+                  d={polylinePath(
+                    altitudeCurves.xs,
+                    altitudeCurves.milky,
+                    yForAlt,
+                  )}
+                />
+                <path
+                  className="moon-preview-timeline__curve moon-preview-timeline__curve--under"
+                  d={polylinePath(
+                    altitudeCurves.xs,
+                    altitudeCurves.moon,
+                    yForAlt,
+                  )}
+                />
+                <path
+                  className="moon-preview-timeline__curve moon-preview-timeline__curve--under"
+                  d={polylinePath(
+                    altitudeCurves.xs,
+                    altitudeCurves.sun,
+                    yForAlt,
+                  )}
+                />
+                <path
+                  className="moon-preview-timeline__curve moon-preview-timeline__curve--milkyway"
+                  d={polylinePath(
+                    altitudeCurves.xs,
+                    altitudeCurves.milky,
+                    yForAlt,
+                  )}
+                  filter={`url(#${glowId})`}
+                />
+                <path
+                  className="moon-preview-timeline__curve moon-preview-timeline__curve--moon"
+                  d={polylinePath(
+                    altitudeCurves.xs,
+                    altitudeCurves.moon,
+                    yForAlt,
+                  )}
+                  filter={`url(#${glowId})`}
+                />
+                <path
+                  className="moon-preview-timeline__curve moon-preview-timeline__curve--sun"
+                  d={polylinePath(
+                    altitudeCurves.xs,
+                    altitudeCurves.sun,
+                    yForAlt,
+                  )}
+                  filter={`url(#${glowId})`}
+                />
+                <line
+                  className="moon-preview-timeline__chart-playhead"
+                  x1={playheadX}
+                  x2={playheadX}
+                  y1={0}
+                  y2={chartHeight}
+                />
+                {playheadAlts && altInFrame(playheadAlts.milky) ? (
+                  <circle
+                    className="moon-preview-timeline__curve-dot moon-preview-timeline__curve-dot--milkyway"
+                    cx={playheadX}
+                    cy={yForAlt(playheadAlts.milky)}
+                    r={4}
+                  />
+                ) : null}
+                {playheadAlts && altInFrame(playheadAlts.moon) ? (
+                  <circle
+                    className="moon-preview-timeline__curve-dot moon-preview-timeline__curve-dot--moon"
+                    cx={playheadX}
+                    cy={yForAlt(playheadAlts.moon)}
+                    r={4}
+                  />
+                ) : null}
+                {playheadAlts && altInFrame(playheadAlts.sun) ? (
+                  <circle
+                    className="moon-preview-timeline__curve-dot moon-preview-timeline__curve-dot--sun"
+                    cx={playheadX}
+                    cy={yForAlt(playheadAlts.sun)}
+                    r={4}
+                  />
+                ) : null}
+              </g>
+            </svg>
+          ) : null}
           {marks.map((mark) => {
             const left = xFor(mark.utcMs)
             if (left < -20 || left > width + 20) return null
+            const label = MARK_LABELS[mark.kind]
             return (
               <button
                 key={`${mark.kind}-${mark.utcMs}`}
                 type="button"
                 className={`moon-preview-timeline__mark moon-preview-timeline__mark--button moon-preview-timeline__mark--${mark.kind}`}
                 style={{ left }}
-                title={mark.kind}
-                aria-label={mark.kind}
+                title={label}
+                aria-label={label}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation()
@@ -285,15 +560,16 @@ export function DayTimeline({
                 }}
               >
                 <span className="moon-preview-timeline__mark-dot" />
-                <span className="moon-preview-timeline__mark-label">
-                  {mark.label}
-                </span>
               </button>
             )
           })}
         </div>
-        <span className="moon-preview-timeline__caret moon-preview-timeline__caret--top" />
-        <span className="moon-preview-timeline__caret moon-preview-timeline__caret--bottom" />
+        {!advanced ? (
+          <>
+            <span className="moon-preview-timeline__caret moon-preview-timeline__caret--top" />
+            <span className="moon-preview-timeline__caret moon-preview-timeline__caret--bottom" />
+          </>
+        ) : null}
       </div>
     </div>
   )

@@ -34,8 +34,8 @@ export function CalendarIcon({ size = 16, className }: IconProps) {
   )
 }
 
-/** Lucide calendar-clock — collapsed timeline restore control. */
-export function CalendarClockIcon({ size, className }: IconProps) {
+/** Clock — collapsed timeline restore (inset to match map-quick-actions optical size). */
+export function ClockIcon({ size = 16, className }: IconProps) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -45,12 +45,8 @@ export function CalendarClockIcon({ size, className }: IconProps) {
       aria-hidden="true"
       className={className}
     >
-      <path d="M16 14v2.2l1.6 1" />
-      <path d="M16 2v3" />
-      <path d="M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338" />
-      <path d="M3 9h5.859" />
-      <path d="M8 2v3" />
-      <circle cx="16" cy="16" r="6" />
+      <circle cx="12" cy="12" r="7" />
+      <path d="M12 8.5v3.5l2.5 1.5" />
     </svg>
   )
 }

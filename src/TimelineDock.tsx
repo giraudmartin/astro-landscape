@@ -17,7 +17,7 @@ import {
 } from './DayTimeline'
 import { CalendarPopover } from './CalendarPopover'
 import {
-  CalendarClockIcon,
+  ClockIcon,
   CalendarIcon,
   ChevronDownIcon,
 } from './psIcons'
@@ -165,7 +165,7 @@ export function TimelineDock({
           title="Afficher la timeline"
           onClick={() => setCollapsed(false)}
         >
-          <CalendarClockIcon />
+          <ClockIcon />
         </button>
       </div>
     )

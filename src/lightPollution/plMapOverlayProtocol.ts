@@ -1,9 +1,3 @@
-/**
- * Plan-basemap coloured PL overlay from the VIIRS VNL COG.
- * v17: zero visible seams + faster overview.
- * - Overview: 1:1 GIBS colourize (no per-tile expand)
- * - COG: geographic halo ≥ dilate+blur, full-res spread only, nearest upscale
- */
 import * as maplibregl from 'maplibre-gl'
 import { glowFromBlackMarbleRgb } from './bortleFromRadiance'
 import {
@@ -22,7 +16,7 @@ import {
   viirsDnToRadianceNw,
 } from './sampleFromCog'
 
-export const PL_MAP_OVERLAY_PROTOCOL = 'astro-pl-map-v17'
+export const PL_MAP_OVERLAY_PROTOCOL = 'astro-pl-map-v18'
 export const PL_MAP_OVERLAY_PROTOCOL_URL = `${PL_MAP_OVERLAY_PROTOCOL}://{z}/{x}/{y}`
 
 const TILE = 256
@@ -68,7 +62,7 @@ async function withTileSlot<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function parseTileUrl(url: string): { z: number; x: number; y: number } | null {
-  const match = /^astro-pl-map-v17:\/\/(\d+)\/(\d+)\/(\d+)/.exec(url)
+  const match = /^astro-pl-map-v18:\/\/(\d+)\/(\d+)\/(\d+)/.exec(url)
   if (!match) return null
   return {
     z: Number(match[1]),
@@ -176,22 +170,6 @@ function paintRgba(
   }
 }
 
-function cropCenter(
-  src: Float32Array,
-  srcW: number,
-  margin: number,
-  outSize: number,
-): Float32Array {
-  const out = new Float32Array(outSize * outSize)
-  for (let py = 0; py < outSize; py += 1) {
-    const sy = py + margin
-    for (let px = 0; px < outSize; px += 1) {
-      out[py * outSize + px] = src[sy * srcW + (px + margin)]!
-    }
-  }
-  return out
-}
-
 async function probeCog(cogUrl: string): Promise<boolean> {
   if (cogLive === true) return true
   try {
@@ -212,7 +190,7 @@ async function probeCog(cogUrl: string): Promise<boolean> {
 function workSizeForZoom(z: number): number {
   if (z <= 8) return 96
   if (z <= 10) return 128
-  return 192
+  return 160
 }
 
 async function renderFromCog(
@@ -227,7 +205,8 @@ async function renderFromCog(
   // +1 so neighbour tiles share identical edge samples after spread.
   const padded = padBbox(bbox, (margin + 1) / work)
   const win = await readNativeRasterWindowFromCog(padded, cogUrl, {
-    maxDim: z <= 8 ? 160 : z <= 10 ? 192 : 256,
+    // Preserve the native VIIRS grid across overlapping reads.
+    maxDim: Infinity,
   })
   if (!win || win.width < 2 || win.height < 2) return null
 
@@ -246,13 +225,18 @@ async function renderFromCog(
   const [west0, dx, , north0, , dy] = win.geotransform
   const absDy = Math.abs(dy)
 
+  const sourceColumns = new Float64Array(big)
+  for (let px = 0; px < big; px++) {
+    const tilePx = ((px - margin + 0.5) / work) * TILE - 0.5
+    const { lon } = mercatorTilePixelToLonLat(z, x, y, tilePx, 0)
+    sourceColumns[px] = (lon - west0) / dx - 0.5
+  }
   for (let py = 0; py < big; py += 1) {
-    const tilePy = ((py - margin) / work) * TILE - 0.5
+    const tilePy = ((py - margin + 0.5) / work) * TILE - 0.5
+    const { lat } = mercatorTilePixelToLonLat(z, x, y, 0, tilePy)
+    const fy = (north0 - lat) / absDy - 0.5
     for (let px = 0; px < big; px += 1) {
-      const tilePx = ((px - margin) / work) * TILE - 0.5
-      const { lon, lat } = mercatorTilePixelToLonLat(z, x, y, tilePx, tilePy)
-      const fx = (lon - west0) / dx - 0.5
-      const fy = (north0 - lat) / absDy - 0.5
+      const fx = sourceColumns[px]!
       bigRad[py * big + px] = sampleBilinear(
         radianceNative,
         win.width,
@@ -264,27 +248,24 @@ async function renderFromCog(
   }
 
   const spread = spreadRadianceForMapOverlay(bigRad, big, big, z)
-  const tileRad = cropCenter(spread, big, margin, work)
-
-  const small = document.createElement('canvas')
-  small.width = work
-  small.height = work
-  const sctx = small.getContext('2d', { willReadFrequently: true })
-  if (!sctx) throw new Error('pl map overlay: no 2d context')
-  const img = sctx.createImageData(work, work)
-  paintRgba(img.data, tileRad, work * work)
-  sctx.putImageData(img, 0, 0)
-
-  if (work === TILE) return canvasToPng(small)
-
+  // Interpolate radiance through the neighbouring halo before applying the palette.
+  const tileRad = new Float32Array(TILE * TILE)
+  const step = work / TILE
+  for (let py = 0; py < TILE; py++) {
+    const fy = margin + (py + 0.5) * step - 0.5
+    for (let px = 0; px < TILE; px++) {
+      const fx = margin + (px + 0.5) * step - 0.5
+      tileRad[py * TILE + px] = sampleBilinear(spread, big, big, fx, fy)
+    }
+  }
   const canvas = document.createElement('canvas')
   canvas.width = TILE
   canvas.height = TILE
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('pl map overlay: no 2d context')
-  // Nearest: linear upscale blends only within-tile and invents edge mismatches.
-  ctx.imageSmoothingEnabled = false
-  ctx.drawImage(small, 0, 0, TILE, TILE)
+  const img = ctx.createImageData(TILE, TILE)
+  paintRgba(img.data, tileRad, tileRad.length)
+  ctx.putImageData(img, 0, 0)
   return canvasToPng(canvas)
 }
 

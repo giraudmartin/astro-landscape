@@ -129,33 +129,26 @@ function spreadRadianceCore(
   height: number,
   zoom: number,
 ): Float32Array {
-  const rural = new Float32Array(radianceNw.length)
-  const city = new Float32Array(radianceNw.length)
-  for (let i = 0; i < radianceNw.length; i += 1) {
-    const v = radianceNw[i]!
-    if (!(v > 0)) continue
-    rural[i] = Math.min(8, v)
-    if (v >= 8) city[i] = Math.min(48, v)
-  }
-
-  const { rural: ruralDilate, city: cityDilate } = ruralCityDilate(zoom)
-
-  const ruralSoft = blurGlowField(
-    dilateGlowField(rural, width, height, ruralDilate),
-    width,
-    height,
-    ruralDilate + 1,
-  )
-  const citySoft = blurGlowField(
-    dilateGlowField(city, width, height, cityDilate),
-    width,
-    height,
-    cityDilate + 1,
-  )
-
-  const out = new Float32Array(radianceNw.length)
-  for (let i = 0; i < radianceNw.length; i += 1) {
-    out[i] = Math.max(radianceNw[i]!, ruralSoft[i]!, citySoft[i]!)
+  const { rural, city } = ruralCityDilate(zoom)
+  const out = radianceNw.slice()
+  // A radial falloff avoids square contours around isolated sources.
+  for (const radius of new Set([rural, city])) {
+    const reach = 2 * radius + 1
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        const falloff = 1 - Math.hypot(dx, dy) / reach
+        if (falloff <= 0) continue
+        const offset = dy * width + dx
+        for (let y = Math.max(0, -dy); y < Math.min(height, height - dy); y++) {
+          const end = y * width + Math.min(width, width - dx)
+          for (let i = y * width + Math.max(0, -dx); i < end; i++) {
+            const v = radianceNw[i]!
+            if (v <= 0 || (v >= 8 ? city : rural) !== radius) continue
+            out[i + offset] = Math.max(out[i + offset]!, Math.min(v, 48) * falloff * falloff)
+          }
+        }
+      }
+    }
   }
   return out
 }

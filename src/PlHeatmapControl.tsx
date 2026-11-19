@@ -41,6 +41,7 @@ export function PlHeatmapControl({
   )
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!enabled) return
     event.preventDefault()
     draggingRef.current = true
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -60,6 +61,7 @@ export function PlHeatmapControl({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!enabled) return
     const step = event.shiftKey ? 0.1 : 0.05
     if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
       event.preventDefault()
@@ -111,19 +113,23 @@ export function PlHeatmapControl({
         </svg>
       </button>
 
-      {enabled ? (
-        <div className="pl-heatmap-control__slider">
+      <div
+        className="pl-heatmap-control__slider"
+        aria-hidden={!enabled}
+      >
+        <div className="pl-heatmap-control__slider-inner">
           <div
             ref={trackRef}
             className="pl-heatmap-control__track"
             role="slider"
-            tabIndex={0}
+            tabIndex={enabled ? 0 : -1}
             aria-orientation="vertical"
             aria-valuemin={Math.round(OP_MIN * 100)}
             aria-valuemax={Math.round(OP_MAX * 100)}
             aria-valuenow={pct}
             aria-valuetext={`${pct} pour cent`}
             aria-label="Opacité de la heatmap"
+            aria-disabled={!enabled}
             title={`Opacité ${pct}%`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -137,7 +143,7 @@ export function PlHeatmapControl({
             <div className="pl-heatmap-control__thumb" aria-hidden="true" />
           </div>
         </div>
-      ) : null}
+      </div>
     </div>
   )
 }

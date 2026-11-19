@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker, StyleSpecification } from 'maplibre-gl'
@@ -29,6 +29,8 @@ import { ensureLightPollutionProtocol } from './lightPollution/lightPollutionPro
 import { ensurePlMapOverlayProtocol } from './lightPollution/plMapOverlayProtocol'
 import {
   applyPlMapOverlay,
+  PL_HEATMAP_ENABLE_ZOOM,
+  PL_HEATMAP_MIN_ZOOM,
   PL_MAP_OVERLAY_ATTRIBUTION,
   PL_MAP_OVERLAY_LAYER_ID,
   PL_MAP_OVERLAY_MAX_ZOOM,
@@ -367,6 +369,7 @@ export function MapCanvas({
   const onModeChangeRef = useRef(onModeChange)
   const onSpotChangeRef = useRef(onSpotChange)
   const onThreeDimensionalChangeRef = useRef(onThreeDimensionalChange)
+  const onPlHeatmapEnabledChangeRef = useRef(onPlHeatmapEnabledChange)
   const onPlacePersonalSpotRef = useRef(onPlacePersonalSpot)
   const onSelectPersonalSpotRef = useRef(onSelectPersonalSpot)
   const onActivateWorkingPinRef = useRef(onActivateWorkingPin)
@@ -392,6 +395,7 @@ export function MapCanvas({
   onModeChangeRef.current = onModeChange
   onSpotChangeRef.current = onSpotChange
   onThreeDimensionalChangeRef.current = onThreeDimensionalChange
+  onPlHeatmapEnabledChangeRef.current = onPlHeatmapEnabledChange
   onPlacePersonalSpotRef.current = onPlacePersonalSpot
   onSelectPersonalSpotRef.current = onSelectPersonalSpot
   onActivateWorkingPinRef.current = onActivateWorkingPin
@@ -767,7 +771,16 @@ export function MapCanvas({
       // Terminator + light before first paint settle — don't wait for a user pan.
       applyPlayheadSkyRef.current()
       setBasemapMode(basemapModeRef.current)
-      setPlHeatmap(plHeatmapEnabledRef.current, plHeatmapOpacityRef.current)
+      // Don't restore PL at globe zoom — would flash the opacity bar then auto-close.
+      if (
+        plHeatmapEnabledRef.current &&
+        map.getZoom() < PL_HEATMAP_MIN_ZOOM
+      ) {
+        onPlHeatmapEnabledChangeRef.current(false)
+        setPlHeatmap(false, plHeatmapOpacityRef.current)
+      } else {
+        setPlHeatmap(plHeatmapEnabledRef.current, plHeatmapOpacityRef.current)
+      }
       // One re-apply after first tiles are in; never on every moveend (that
       // rewrote light/veil and looked like time jumping on drag-release).
       map.once('idle', () => applyPlayheadSkyRef.current())
@@ -929,8 +942,20 @@ export function MapCanvas({
       onSpotChangeRef.current({ ...current, heightM })
     }, 800)
 
+    /** Close PL + opacity bar when the user dezooms past the useful floor. */
+    const gatePlHeatmapZoom = () => {
+      if (!plHeatmapEnabledRef.current) return
+      if (map.getZoom() >= PL_HEATMAP_MIN_ZOOM) return
+      onPlHeatmapEnabledChangeRef.current(false)
+    }
+    map.on('zoomend', gatePlHeatmapZoom)
+    void waitForStyleLoaded(map).then(() => {
+      if (mapRef.current === map) gatePlHeatmapZoom()
+    })
+
     return () => {
       window.clearInterval(elevTimer)
+      map.off('zoomend', gatePlHeatmapZoom)
       // Keep MapLibre in sync when the spots rail resizes the map stage.
       containerResizeObserver?.disconnect()
       clearLongPressTimer()
@@ -980,6 +1005,27 @@ export function MapCanvas({
   useEffect(() => {
     apiRef.current?.setPlHeatmap(plHeatmapEnabled, plHeatmapOpacity)
   }, [plHeatmapEnabled, plHeatmapOpacity])
+
+  /**
+   * Enable PL from globe: ease into a useful zoom. Zooming back out past the
+   * floor closes the control (opacity bar animates shut via CSS).
+   */
+  const requestPlHeatmapEnabled = useCallback(
+    (next: boolean) => {
+      if (next) {
+        const map = mapRef.current
+        if (map && map.getZoom() < PL_HEATMAP_MIN_ZOOM) {
+          map.easeTo({
+            zoom: PL_HEATMAP_ENABLE_ZOOM,
+            duration: 900,
+            essential: true,
+          })
+        }
+      }
+      onPlHeatmapEnabledChange(next)
+    },
+    [onPlHeatmapEnabledChange],
+  )
 
   useEffect(() => {
     const map = mapRef.current
@@ -1146,7 +1192,7 @@ export function MapCanvas({
         onBasemapModeChange={onBasemapModeChange}
         plHeatmapEnabled={plHeatmapEnabled}
         plHeatmapOpacity={plHeatmapOpacity}
-        onPlHeatmapEnabledChange={onPlHeatmapEnabledChange}
+        onPlHeatmapEnabledChange={requestPlHeatmapEnabled}
         onPlHeatmapOpacityChange={onPlHeatmapOpacityChange}
         addressSearchOpen={addressSearchOpen}
         onAddressSearchOpenChange={onAddressSearchOpenChange}

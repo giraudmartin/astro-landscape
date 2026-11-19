@@ -9,8 +9,17 @@ import { LIGHT_POLLUTION_LAYER_ID } from './tiles'
 export const PL_MAP_OVERLAY_SOURCE_ID = 'plMapOverlay'
 export const PL_MAP_OVERLAY_LAYER_ID = 'plMapOverlay'
 
-/** Heatmap from globe overview when the overlay toggle is on. */
-export const PL_MAP_OVERLAY_MIN_ZOOM = 1
+/**
+ * Below this zoom the heatmap is useless (whole-planet burst of tiles) and the
+ * PL control auto-closes. Layer minzoom matches so MapLibre does not fetch.
+ */
+export const PL_HEATMAP_MIN_ZOOM = 6
+
+/** Ease target when enabling PL while still below {@link PL_HEATMAP_MIN_ZOOM}. */
+export const PL_HEATMAP_ENABLE_ZOOM = 7
+
+/** Heatmap paints from regional framing — not globe overview. */
+export const PL_MAP_OVERLAY_MIN_ZOOM = PL_HEATMAP_MIN_ZOOM
 
 /**
  * Native tile pyramid max — MapLibre overzooms beyond this so the overlay

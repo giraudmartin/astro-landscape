@@ -1,12 +1,40 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { APP_ATTRIBUTIONS } from './attributions'
+import { BugReportCard } from './BugReportCard'
 
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function BugIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 20v-9" />
+      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+      <path d="M14.12 3.88 16 2" />
+      <path d="M21 21a4 4 0 0 0-3.81-4" />
+      <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+      <path d="M22 13h-4" />
+      <path d="M3 21a4 4 0 0 1 3.81-4" />
+      <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+      <path d="M6 13H2" />
+      <path d="m8 2 1.88 1.88" />
+      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
     </svg>
   )
 }
@@ -21,10 +49,11 @@ function CloseIcon() {
 }
 
 /**
- * Map settings gear — attributions (Photo Sightline pattern).
+ * Map settings gear + bug report FAB — attributions (Photo Sightline pattern).
  */
 export function MapSettingsPanel() {
   const [open, setOpen] = useState(false)
+  const [bugReportOpen, setBugReportOpen] = useState(false)
   const titleId = useId()
   const closeRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -140,6 +169,23 @@ export function MapSettingsPanel() {
       <button
         type="button"
         className={
+          bugReportOpen
+            ? 'settings-anchor__toggle settings-anchor__toggle--active'
+            : 'settings-anchor__toggle'
+        }
+        aria-label="Signaler un bug"
+        title="Signaler un bug"
+        aria-expanded={bugReportOpen}
+        onClick={() => {
+          setOpen(false)
+          setBugReportOpen(true)
+        }}
+      >
+        <BugIcon />
+      </button>
+      <button
+        type="button"
+        className={
           open
             ? 'settings-anchor__toggle settings-anchor__toggle--active'
             : 'settings-anchor__toggle'
@@ -148,11 +194,18 @@ export function MapSettingsPanel() {
         title="Paramètres"
         aria-expanded={open}
         aria-controls="map-settings-panel"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setBugReportOpen(false)
+          setOpen((value) => !value)
+        }}
       >
         <SettingsIcon />
       </button>
       {dialog}
+      <BugReportCard
+        open={bugReportOpen}
+        onClose={() => setBugReportOpen(false)}
+      />
     </div>
   )
 }

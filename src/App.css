@@ -114,6 +114,8 @@
   --weather-layer-low: #5d7d8b;
 
   --map-control-size: 50px;
+  /* Settings + bug-report FABs stacked with 10px gap. */
+  --map-fab-stack-height: calc(2 * var(--map-control-size) + 10px);
   --map-control-icon: 22px;
   --map-control-stack-gap: 16px;
   --map-control-stack-inset: 16px;
@@ -262,8 +264,8 @@ html.is-rail-resizing .my-events-rail {
   position: absolute;
   z-index: 1;
   left: 0.9rem;
-  /* Sit above the bottom-left settings FAB (PS layout). */
-  bottom: calc(36px + var(--map-control-size) + 12px);
+  /* Sit above the bottom-left settings + bug FABs (PS layout). */
+  bottom: calc(36px + var(--map-fab-stack-height) + 12px);
   margin: 0;
   font-size: 0.7rem;
   line-height: 1.35;
@@ -420,8 +422,8 @@ html.is-rail-resizing .my-events-rail {
   position: absolute;
   z-index: 2;
   left: 0.9rem;
-  /* Sit above the bottom-left settings FAB (PS layout). */
-  bottom: calc(36px + var(--map-control-size) + 12px);
+  /* Sit above the bottom-left settings + bug FABs (PS layout). */
+  bottom: calc(36px + var(--map-fab-stack-height) + 12px);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -3318,7 +3320,8 @@ html.is-rail-resizing .rail-resize-handle::after {
     0 0 16px rgba(var(--ui-accent-rgb), 0.06);
 }
 
-.spot-save-card__field input {
+.spot-save-card__field input,
+.spot-save-card__field textarea {
   width: 100%;
   box-sizing: border-box;
   margin: 0;
@@ -3334,9 +3337,145 @@ html.is-rail-resizing .rail-resize-handle::after {
   text-transform: none;
 }
 
-.spot-save-card__field input::placeholder {
+.spot-save-card__field textarea {
+  resize: vertical;
+  min-height: 5.5rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.spot-save-card__field input::placeholder,
+.spot-save-card__field textarea::placeholder {
   color: rgba(255, 255, 255, 0.3);
   font-weight: 500;
+}
+
+.bug-report-card {
+  width: min(420px, 100%);
+}
+
+.bug-report-card__dropzone {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 7.5rem;
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.bug-report-card__dropzone:hover,
+.bug-report-card__dropzone.is-dragover {
+  border-color: rgba(var(--ui-accent-rgb), 0.42);
+  background: rgba(var(--ui-accent-rgb), 0.08);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.bug-report-card__dropzone.has-preview {
+  border-style: solid;
+  border-color: var(--ov-stroke-soft);
+  padding: 10px;
+  cursor: default;
+}
+
+.bug-report-card__file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.bug-report-card__dropzone.has-preview .bug-report-card__file-input {
+  pointer-events: none;
+}
+
+.bug-report-card__dropzone-copy {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.bug-report-card__dropzone-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.bug-report-card__dropzone-hint {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.bug-report-card__preview {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.bug-report-card__preview img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--ov-stroke-soft);
+  background: #0b0d12;
+}
+
+.bug-report-card__preview-meta {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bug-report-card__preview-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.78rem;
+  font-weight: 550;
+}
+
+.bug-report-card__remove {
+  justify-self: start;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--ov-stroke-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bug-report-card__remove:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.bug-report-card__error {
+  margin: 0;
+  color: var(--ui-action-danger-text);
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 .spot-save-card__coordinates {
@@ -7872,7 +8011,7 @@ button.ov-capsule:hover {
 
   .spot-bortle-card,
   .spot-readout {
-    bottom: calc(100px + var(--map-control-size) + 12px);
+    bottom: calc(100px + var(--map-fab-stack-height) + 12px);
   }
 
   .map-card {
@@ -8254,7 +8393,7 @@ button.ov-capsule:hover {
 
   .spot-bortle-card,
   .spot-readout {
-    bottom: calc(112px + var(--map-control-size) + 12px);
+    bottom: calc(112px + var(--map-fab-stack-height) + 12px);
   }
 
   .map-card {
@@ -8715,7 +8854,7 @@ button.ov-capsule:hover {
   .spot-readout {
     bottom: calc(
       max(118px, calc(110px + env(safe-area-inset-bottom, 0px))) +
-        var(--map-control-size) + 12px
+        var(--map-fab-stack-height) + 12px
     );
   }
 

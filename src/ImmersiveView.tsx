@@ -936,8 +936,9 @@ export function ImmersiveView({
       // Keep live ref in sync before React commits playhead — EQ start/seek
       // must not read a stale UTC if something re-enters buildSession mid-run.
       skyUtcLiveRef.current = utcMs
-      apiRef.current?.setSkyUtc(utcMs)
-      onSkyUtcChange?.(utcMs)
+      // The controlled playhead applies the sky in its effect after commit.
+      if (onSkyUtcChange) onSkyUtcChange(utcMs)
+      else apiRef.current?.setSkyUtc(utcMs)
     },
     onLookChange: (yaw, pitch, rollDeg = 0) => {
       apiRef.current?.setLook(
@@ -2179,7 +2180,7 @@ export function ImmersiveView({
     // to muddy preview. flatTerrain toggles a DEM-free sky test stub.
   }, [lat, lon, flatTerrain, LOCAL_HALO_PASS_REV])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     apiRef.current?.setSkyUtc(skyUtcMs)
   }, [
     skyUtcMs,

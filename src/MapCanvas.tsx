@@ -1077,7 +1077,8 @@ export function MapCanvas({
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    // The immersive renderer owns the visible sky while the map is covered.
+    if (!map || (mode === 'ground' && spot != null)) return
     let lastAppliedZoom = map.getZoom()
     let lastGround = groundViewAmount(lastAppliedZoom) >= 0.35
     const apply = () => {
@@ -1107,7 +1108,7 @@ export function MapCanvas({
       map.off('zoomend', apply)
       map.off('moveend', onMoveEnd)
     }
-  }, [skyUtcMs, spot?.lat, spot?.lon, spot?.heightM])
+  }, [mode, skyUtcMs, spot?.lat, spot?.lon, spot?.heightM])
 
   const [bortleSample, setBortleSample] = useState<LightPollutionSample | null>(
     null,

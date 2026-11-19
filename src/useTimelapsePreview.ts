@@ -186,12 +186,17 @@ export function useTimelapsePreview({
           }, Math.max(280, delayMs))
           return
         }
+        // Recover from a late timer without queuing a burst of overdue shots.
+        const nextDue = performance.now() + delayMs
         shotIndexRef.current = next
         setStatus((prev) =>
           prev.phase === 'playing' ? { ...prev, shotIndex: next } : prev,
         )
         applyShot(session, next)
-        timerRef.current = window.setTimeout(() => tick(next), delayMs)
+        timerRef.current = window.setTimeout(
+          () => tick(next),
+          Math.max(0, nextDue - performance.now()),
+        )
       }
 
       timerRef.current = window.setTimeout(() => tick(index), delayMs)

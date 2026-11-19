@@ -35,6 +35,7 @@ import {
   createFlatLocalTerrainMesh,
   createLocalTerrainMesh,
   NEAR_TERRAIN_RADIUS_M,
+  OFFSHORE_ALBEDO,
   parkLocalTerrain,
   takeParkedLocalTerrain,
   reviveLocalTerrainTextures,
@@ -1399,9 +1400,9 @@ export function ImmersiveView({
           }
           if (mat.userData.isSea) {
             mat.color.setRGB(
-              0.29 * groundTint.r,
-              0.48 * groundTint.g,
-              0.59 * groundTint.b,
+              OFFSHORE_ALBEDO.r * groundTint.r,
+              OFFSHORE_ALBEDO.g * groundTint.g,
+              OFFSHORE_ALBEDO.b * groundTint.b,
             )
             continue
           }

@@ -13,6 +13,8 @@ const ESRI =
 
 const TILE_SIZE = 512
 const VERTICAL_EXAGGERATION = 1.1
+// Linear RGB shared by the sea underlay and the offshore ortho repair.
+export const OFFSHORE_ALBEDO = new THREE.Color(0.022, 0.045, 0.066)
 
 /** Parallel Esri/DEM fetches â MapLibre streams; we batch hard for first paint. */
 const FETCH_CONCURRENCY = 28
@@ -1891,7 +1893,9 @@ async function buildTerrainLodRing(input: {
       const north = -radiusM + v * radiusM * 2
       const dist = Math.hypot(east, north)
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-      const elev = elevationFromCache(lat, lon, dist, cache, input.baseElev)
+      // An uncovered ocean tile is at MSL. Using the tripod altitude here
+      // lifts whole offshore patches above the sea mesh at mountain viewpoints.
+      const elev = elevationFromCache(lat, lon, dist, cache, 0)
       // Curvature: sphere sits below the ENU tangent plane â critical past ~20 km.
       const h =
         (elev - input.baseElev) * VERTICAL_EXAGGERATION - earthCurvatureDropM(dist)
@@ -1956,7 +1960,7 @@ async function buildTerrainLodRing(input: {
   material.userData.isOrthoTerrain = true
   // Overlap bands ? hard outer*0.995 left black gaps between LOD rings on pan.
   attachRadiusBandDiscard(material, ring.innerM * 0.88, ring.outerM)
-  attachWorldXZOrthoMap(material, radiusM)
+  attachOffshoreImageryRepair(material, input.baseElev)
   attachOrthoSlopeShade(material)
   // Match sky stereographic â terrain without stel = yellow disk + sea shards.
   attachStelProjector(material, { terrainSafe: true })
@@ -2039,7 +2043,7 @@ async function buildDetailTerrainDisc(input: {
       const north = -radiusM + v * radiusM * 2
       const dist = Math.hypot(east, north)
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-      const elev = elevationFromCache(lat, lon, dist, cache, input.baseElev)
+      const elev = elevationFromCache(lat, lon, dist, cache, 0)
       // Same height formula as the near disc â any lift here opened a sky slit
       // at the radius-band handoff under log-depth.
       const h =
@@ -2110,7 +2114,7 @@ async function buildDetailTerrainDisc(input: {
     input.innerRadiusM * 0.88,
     input.radiusM,
   )
-  attachWorldXZOrthoMap(material, radiusM)
+  attachOffshoreImageryRepair(material, input.baseElev)
   attachOrthoSlopeShade(material)
   attachStelProjector(material, { terrainSafe: true })
   const mesh = new THREE.Mesh(geometry, material)
@@ -2209,10 +2213,10 @@ function buildSeaMesh(input: {
   geometry.computeVertexNormals()
 
   const material = new THREE.MeshBasicMaterial({
-    color: 0x4a7a96,
+    color: OFFSHORE_ALBEDO,
     side: THREE.FrontSide,
-    // No depth write â never punch holes / flicker through land depth.
-    depthWrite: false,
+    // The sky dome renders later and depth-tests against opaque surfaces.
+    depthWrite: true,
     depthTest: true,
     polygonOffset: true,
     polygonOffsetFactor: 16,
@@ -2330,6 +2334,12 @@ const ORTHO_SLOPE_SHADE_GLSL = /* glsl */ `
   {
     vec3 nrm = normalize(vOrthoShadeNrm);
     float shade = clamp(0.72 + 0.38 * nrm.y, 0.55, 1.08);
+    #ifdef USE_MAP
+      // The ortho atlas supplies the interior shading; fade the slope
+      // adjustment in at its edge, as in the original two-sample blend.
+      vec2 edge = min(vMapUv, 1.0 - vMapUv);
+      shade = mix(shade, 1.0, smoothstep(0.0, 0.08, min(edge.x, edge.y)));
+    #endif
     diffuseColor.rgb *= shade;
   }
 `
@@ -2376,60 +2386,40 @@ function attachOrthoSlopeShade(material: THREE.Material): void {
 }
 
 /**
- * Sample the base ortho map from ENU XZ (not mesh UVs). Stereographic warps
- * gl_Position; interpolated vUv then smears cliffs into mud. World-XZ lookup
- * stays tied to geography even when verts move on the projection plane.
+ * Some Esri mosaics contain black and white coverage strips over open water.
+ * The annulus UVs already equal position.xz / diameter + 0.5, so the standard
+ * map sample supplies the same ortho without a second texture lookup.
  */
-function attachWorldXZOrthoMap(
-  material: THREE.Material,
-  radiusM: number,
-): void {
-  if (material.userData.worldXZOrtho) return
-  material.userData.worldXZOrtho = radiusM
-  const diam = (radiusM * 2).toFixed(1)
+function attachOffshoreImageryRepair(material: THREE.Material, baseElev: number): void {
   const previous = material.onBeforeCompile
-  const previousKey = material.customProgramCacheKey?.bind(material)
+  const previousKey = material.customProgramCacheKey.bind(material)
   material.onBeforeCompile = (shader, renderer) => {
-    previous?.call(material, shader, renderer)
-    if (shader.fragmentShader.includes('ASTRO_WORLD_XZ_ORTHO')) return
-    if (!shader.fragmentShader.includes('#include <map_fragment>')) return
+    previous.call(material, shader, renderer)
+    shader.uniforms.uTerrainSeaY = { value: -baseElev * VERTICAL_EXAGGERATION }
+    shader.uniforms.uOffshoreAlbedo = { value: OFFSHORE_ALBEDO }
     shader.vertexShader = shader.vertexShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-         varying vec2 vWorldOrthoXZ;`,
-      )
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-         vWorldOrthoXZ = position.xz;`,
-      )
+      .replace('#include <common>', `#include <common>
+        uniform float uTerrainSeaY;
+        varying vec2 vOffshore;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float mslHeight = position.y - uTerrainSeaY
+          + dot(position.xz, position.xz) / ${(2 * EARTH_RADIUS_M).toFixed(1)};
+        vOffshore = vec2(1.0 - step(0.02, abs(mslHeight)),
+          smoothstep(6000.0, 10000.0, length(position.xz)));`)
     shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-         #define ASTRO_WORLD_XZ_ORTHO 1
-         varying vec2 vWorldOrthoXZ;`,
-      )
-      .replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
-         #ifdef USE_MAP
-         {
-           vec2 wuv = vWorldOrthoXZ / ${diam} + vec2(0.5);
-           float edge = min(min(wuv.x, wuv.y), min(1.0 - wuv.x, 1.0 - wuv.y));
-           float ew = smoothstep(0.0, 0.08, edge);
-           if (ew > 0.001) {
-             vec4 worldTex = texture2D(map, clamp(wuv, 0.0, 1.0));
-             diffuseColor.rgb = mix(diffuseColor.rgb, worldTex.rgb * diffuse, ew);
-             diffuseColor.a = mix(diffuseColor.a, worldTex.a, ew);
-           }
-         }
-         #endif`,
-      )
+      .replace('#include <common>', '#include <common>\nvarying vec2 vOffshore;\nuniform vec3 uOffshoreAlbedo;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        #ifdef USE_MAP
+          if (vOffshore.x > 0.999) {
+            // Blue water, neutral coverage strips and their filtered edges.
+            // Retain warm and green shoreline imagery even at zero elevation.
+            float excess = max(sampledDiffuseColor.r, sampledDiffuseColor.g) - sampledDiffuseColor.b;
+            float water = 1.0 - smoothstep(0.0, 0.004, excess);
+            diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * uOffshoreAlbedo, water * vOffshore.y);
+          }
+        #endif`)
   }
-  material.customProgramCacheKey = () =>
-    `world-xz-ortho-v2|${radiusM}|${previousKey?.() ?? ''}`
+  material.customProgramCacheKey = () => `offshore-imagery-v1|${previousKey()}`
 }
 
 /**

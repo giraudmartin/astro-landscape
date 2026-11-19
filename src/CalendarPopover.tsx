@@ -17,6 +17,8 @@ import {
 type CalendarPopoverProps = {
   open: boolean
   selectedDate: string
+  /** Always-available readout for the app's selected date (any month). */
+  selectedDay: CalendarDay
   year: number
   month: number
   days: CalendarDay[]
@@ -83,6 +85,7 @@ function nightDuration(minutes: number): string {
 export function CalendarPopover({
   open,
   selectedDate,
+  selectedDay,
   year,
   month,
   days,
@@ -106,7 +109,7 @@ export function CalendarPopover({
   const next = shiftMonth(year, month, 1)
   const [pos, setPos] = useState<PopoverPos | null>(null)
 
-  const selectedDay = byDate.get(selectedDate) ?? null
+  const readoutDay = byDate.get(selectedDate) ?? selectedDay
 
   useLayoutEffect(() => {
     if (!open) {
@@ -260,18 +263,16 @@ export function CalendarPopover({
           })}
         </div>
 
-        {selectedDay ? (
-          <p className="moon-cal__readout" aria-live="polite">
-            <span className="moon-cal__readout-illum">
-              {selectedDay.phaseLabel} · {selectedDay.illuminationPercent} %
-            </span>
-            <span>
-              {selectedDay.moonInNightMinutes > 0
-                ? `Au-dessus de l’horizon pendant ${nightDuration(selectedDay.moonInNightMinutes)} cette nuit.`
-                : 'Sous l’horizon toute la nuit.'}
-            </span>
-          </p>
-        ) : null}
+        <p className="moon-cal__readout" aria-live="polite">
+          <span className="moon-cal__readout-illum">
+            {readoutDay.phaseLabel} · {readoutDay.illuminationPercent} %
+          </span>
+          <span>
+            {readoutDay.moonInNightMinutes > 0
+              ? `Au-dessus de l’horizon pendant ${nightDuration(readoutDay.moonInNightMinutes)} cette nuit.`
+              : 'Sous l’horizon toute la nuit.'}
+          </span>
+        </p>
       </div>
     </div>,
     document.body,

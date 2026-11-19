@@ -7,6 +7,7 @@ import {
   buildDayInfo,
   buildDaySchedule,
   buildMonthCalendar,
+  toCalendarDay,
   formatDurationMinutes,
   nearestScheduleKind,
 } from './celestial'
@@ -162,6 +163,7 @@ export function OverviewCard({
       <CalendarPopover
         open={calendarOpen}
         selectedDate={date}
+        selectedDay={toCalendarDay(dayInfo)}
         year={calYear}
         month={calMonth}
         days={calendarDays}

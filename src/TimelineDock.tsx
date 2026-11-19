@@ -8,6 +8,7 @@ import {
   isMorningAt,
   shiftIsoDate,
   sunAltitudeDegAt,
+  toCalendarDay,
   type DayInfo,
   type HorizonKind,
 } from './celestial'
@@ -347,6 +348,7 @@ export function TimelineDock({
       <CalendarPopover
         open={calendarOpen}
         selectedDate={date}
+        selectedDay={toCalendarDay(dayInfo)}
         year={calYear}
         month={calMonth}
         days={calendarDays}

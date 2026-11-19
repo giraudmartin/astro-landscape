@@ -364,6 +364,18 @@ export function moonInNightFromBounds(
   }
 }
 
+/** Calendar chip / readout fields from a full DayInfo. */
+export function toCalendarDay(info: DayInfo): CalendarDay {
+  return {
+    date: info.date,
+    waxing: info.waxing,
+    phaseLabel: info.phaseLabel,
+    illuminationPercent: info.illuminationPercent,
+    nightMinutes: info.nightMinutes,
+    moonInNightMinutes: info.moonInNightMinutes,
+  }
+}
+
 export function buildMonthCalendar(
   year: number,
   month: number,

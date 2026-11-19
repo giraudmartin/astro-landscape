@@ -51,11 +51,13 @@ import {
   clampGroundNightBrightness,
   clampGroundNightContrast,
   clampGroundNightTemperature,
+  clampGroundNightTint,
   clampLightPollutionAmount,
   clampZodiacalAmount,
   GROUND_NIGHT_BRIGHTNESS_DEFAULT,
   GROUND_NIGHT_CONTRAST_DEFAULT,
   GROUND_NIGHT_TEMPERATURE_DEFAULT,
+  GROUND_NIGHT_TINT_DEFAULT,
   LIGHT_POLLUTION_AMOUNT_DEFAULT,
   ZODIACAL_AMOUNT_DEFAULT,
 } from './skyLighting'
@@ -86,6 +88,10 @@ import {
   WEATHER_LAYER_DEFAULTS,
   type WeatherCloudLayer,
 } from './viewfinderWeather'
+import {
+  normalizeCompositionGuideMode,
+  type CompositionGuideMode,
+} from './compositionGuides'
 
 export const APP_SETTINGS_STORAGE_KEY = 'astro-landscape.settings.v1'
 
@@ -110,8 +116,10 @@ export type ImmersiveSettings = {
   groundNightBrightness: number
   /** Dusk/night ground contrast (1 = default). */
   groundNightContrast: number
-  /** Dusk/night ground temperature −1…+1 (0 = neutral). */
+  /** Dusk/night ground temperature −2…+2 (0 = neutral). */
   groundNightTemperature: number
+  /** Dusk/night ground tint −2…+2 (green ↔ violet). */
+  groundNightTint: number
   /**
    * Extra HYG magnitude depth (0 = default FOV curve).
    * Raises wide and tele limits together — denser sky, same zoom proportion.
@@ -162,6 +170,8 @@ export type ImmersiveSettings = {
   showConstellations: boolean
   showCelestialGrid: boolean
   showAzimuthGrid: boolean
+  /** Photo Sightline composition guide on the sensor FOV. */
+  compositionGuide: CompositionGuideMode
   /** Volumetric clouds (Chamonix prototype model) in the Three.js immersif. */
   weatherEnabled: boolean
   weatherAnimateClouds: boolean
@@ -217,6 +227,7 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   groundNightBrightness: GROUND_NIGHT_BRIGHTNESS_DEFAULT,
   groundNightContrast: GROUND_NIGHT_CONTRAST_DEFAULT,
   groundNightTemperature: GROUND_NIGHT_TEMPERATURE_DEFAULT,
+  groundNightTint: GROUND_NIGHT_TINT_DEFAULT,
   starMagDepth: STAR_MAG_DEPTH_DEFAULT,
   starZoomSpan: STAR_ZOOM_SPAN_DEFAULT,
   starBrightness: STAR_BRIGHTNESS_DEFAULT,
@@ -241,6 +252,7 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   showConstellations: true,
   showCelestialGrid: false,
   showAzimuthGrid: false,
+  compositionGuide: 'off',
   weatherEnabled: DEFAULT_VIEWFINDER_WEATHER.enabled,
   weatherAnimateClouds: DEFAULT_VIEWFINDER_WEATHER.animateClouds,
   weatherWind: DEFAULT_VIEWFINDER_WEATHER.wind,
@@ -403,6 +415,11 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
           DEFAULT_IMMERSIVE_SETTINGS.groundNightTemperature,
       ),
     ),
+    groundNightTint: clampGroundNightTint(
+      Number(
+        row.groundNightTint ?? DEFAULT_IMMERSIVE_SETTINGS.groundNightTint,
+      ),
+    ),
     starMagDepth: clampStarMagDepth(
       Number(row.starMagDepth ?? DEFAULT_IMMERSIVE_SETTINGS.starMagDepth),
     ),
@@ -496,6 +513,7 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
       row.showAzimuthGrid,
       DEFAULT_IMMERSIVE_SETTINGS.showAzimuthGrid,
     ),
+    compositionGuide: normalizeCompositionGuideMode(row.compositionGuide),
     weatherEnabled: readBoolean(
       row.weatherEnabled,
       DEFAULT_IMMERSIVE_SETTINGS.weatherEnabled,

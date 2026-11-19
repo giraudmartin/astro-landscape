@@ -92,14 +92,19 @@ export const GROUND_NIGHT_BRIGHTNESS_MIN = 0
 export const GROUND_NIGHT_BRIGHTNESS_MAX = 2
 export const GROUND_NIGHT_BRIGHTNESS_DEFAULT = 1
 
-export const GROUND_NIGHT_CONTRAST_MIN = 0.5
-export const GROUND_NIGHT_CONTRAST_MAX = 1.8
+export const GROUND_NIGHT_CONTRAST_MIN = 0.15
+export const GROUND_NIGHT_CONTRAST_MAX = 3.5
 export const GROUND_NIGHT_CONTRAST_DEFAULT = 1
 
-/** −1 = cool, 0 = neutral, +1 = warm */
-export const GROUND_NIGHT_TEMPERATURE_MIN = -1
-export const GROUND_NIGHT_TEMPERATURE_MAX = 1
+/** −2 = cool, 0 = neutral, +2 = warm */
+export const GROUND_NIGHT_TEMPERATURE_MIN = -2
+export const GROUND_NIGHT_TEMPERATURE_MAX = 2
 export const GROUND_NIGHT_TEMPERATURE_DEFAULT = 0
+
+/** −2 = green, 0 = neutral, +2 = violet / magenta */
+export const GROUND_NIGHT_TINT_MIN = -2
+export const GROUND_NIGHT_TINT_MAX = 2
+export const GROUND_NIGHT_TINT_DEFAULT = 0
 
 export function clampGroundNightBrightness(value: number): number {
   if (!Number.isFinite(value)) return GROUND_NIGHT_BRIGHTNESS_DEFAULT
@@ -122,6 +127,14 @@ export function clampGroundNightTemperature(value: number): number {
   return Math.min(
     GROUND_NIGHT_TEMPERATURE_MAX,
     Math.max(GROUND_NIGHT_TEMPERATURE_MIN, value),
+  )
+}
+
+export function clampGroundNightTint(value: number): number {
+  if (!Number.isFinite(value)) return GROUND_NIGHT_TINT_DEFAULT
+  return Math.min(
+    GROUND_NIGHT_TINT_MAX,
+    Math.max(GROUND_NIGHT_TINT_MIN, value),
   )
 }
 
@@ -226,8 +239,10 @@ export type GroundAlbedoOpts = {
   nightBrightness?: number
   /** Dusk/night contrast (1 = default). Day unchanged. */
   nightContrast?: number
-  /** Dusk/night temperature −1…+1 (0 = neutral). Day unchanged. */
+  /** Dusk/night temperature −2…+2 (0 = neutral). Day unchanged. */
   nightTemperature?: number
+  /** Dusk/night tint −2…+2 (green ↔ violet). Day unchanged. */
+  nightTint?: number
 }
 
 /**
@@ -236,8 +251,8 @@ export type GroundAlbedoOpts = {
  * night cools and dims. Kept gentle so satellite textures stay readable
  * (MeshBasic ignores lights — this is the only skylight path for ortho).
  *
- * Night dials (`nightBrightness` / `nightContrast` / `nightTemperature`)
- * only blend in after sunset.
+ * Night dials (`nightBrightness` / `nightContrast` / `nightTemperature` /
+ * `nightTint`) only blend in after sunset.
  */
 export function groundAlbedoFromSky(
   palette: SkyPalette,
@@ -253,6 +268,9 @@ export function groundAlbedoFromSky(
   )
   const nightTemperature = clampGroundNightTemperature(
     opts?.nightTemperature ?? GROUND_NIGHT_TEMPERATURE_DEFAULT,
+  )
+  const nightTint = clampGroundNightTint(
+    opts?.nightTint ?? GROUND_NIGHT_TINT_DEFAULT,
   )
   const night = palette.nightAmount
   const zenith = hexToRgb01(palette.zenith)
@@ -313,10 +331,17 @@ export function groundAlbedoFromSky(
     g = mid + (g - mid) * contrast
     b = mid + (b - mid) * contrast
 
+    // Temperature: cool ↔ warm (blue ↔ orange). Wider ±2 dial.
     const temp = nightTemperature * nightMix
-    r *= 1 + temp * 0.22
-    g *= 1 + temp * 0.04
-    b *= 1 - temp * 0.28
+    r *= 1 + temp * 0.28
+    g *= 1 + temp * 0.05
+    b *= 1 - temp * 0.36
+
+    // Tint: green ↔ violet / magenta (orthogonal to temperature).
+    const tint = nightTint * nightMix
+    r *= 1 + tint * 0.22
+    g *= 1 - tint * 0.32
+    b *= 1 + tint * 0.26
   }
 
   return {

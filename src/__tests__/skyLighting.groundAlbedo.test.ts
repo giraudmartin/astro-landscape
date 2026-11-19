@@ -88,4 +88,23 @@ describe('groundAlbedoFromSky', () => {
     })
     expect(warm.r / warm.b).toBeGreaterThan(cool.r / cool.b)
   })
+
+  it('violet tint raises R/B over G at night; green does the opposite', () => {
+    const green = groundAlbedoFromSky(skyPaletteFromSunAltitude(-18), -18, {
+      nightTint: -1.5,
+    })
+    const violet = groundAlbedoFromSky(skyPaletteFromSunAltitude(-18), -18, {
+      nightTint: 1.5,
+    })
+    expect(violet.r / violet.g).toBeGreaterThan(green.r / green.g)
+    expect(violet.b / violet.g).toBeGreaterThan(green.b / green.g)
+  })
+
+  it('nightTint leaves noon alone', () => {
+    const base = groundAlbedoFromSky(skyPaletteFromSunAltitude(40), 40)
+    const dialed = groundAlbedoFromSky(skyPaletteFromSunAltitude(40), 40, {
+      nightTint: 1.8,
+    })
+    expect(Math.abs(base.g - dialed.g)).toBeLessThan(0.02)
+  })
 })

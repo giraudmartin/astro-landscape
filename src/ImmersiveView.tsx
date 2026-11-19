@@ -73,6 +73,11 @@ import {
 import { createNightSky } from './nightSky'
 import { createSkyBodies } from './skyBodies'
 import { PhotoFrameOverlay } from './PhotoFrameOverlay'
+import {
+  COMPOSITION_GUIDE_LABEL,
+  nextCompositionGuideMode,
+  type CompositionGuideMode,
+} from './compositionGuides'
 import { clampEyeHeightM, EYE_HEIGHT_STEP_M } from './presets'
 import { ViewBearingHud } from './ViewBearingHud'
 import { type PanoramaPlan } from './panorama'
@@ -118,6 +123,8 @@ import { ViewPitchHud } from './ViewPitchHud'
 import {
   AzimuthGridIcon,
   ConstellationsIcon,
+  FrameLockIcon,
+  FrameRecenterIcon,
   MilkyWayIcon,
   RaDecGridIcon,
 } from './psIcons'
@@ -174,6 +181,7 @@ import {
   clampGroundNightBrightness,
   clampGroundNightContrast,
   clampGroundNightTemperature,
+  clampGroundNightTint,
   clampLightPollutionAmount,
   clampZodiacalAmount,
   groundAlbedoFromSky,
@@ -459,6 +467,13 @@ export function ImmersiveView({
     clampGroundNightTemperature(savedImmersive.groundNightTemperature),
   )
   groundNightTemperatureRef.current = groundNightTemperature
+  const [groundNightTint, setGroundNightTint] = useState(() =>
+    clampGroundNightTint(savedImmersive.groundNightTint),
+  )
+  const groundNightTintRef = useRef(
+    clampGroundNightTint(savedImmersive.groundNightTint),
+  )
+  groundNightTintRef.current = groundNightTint
   const [starMagDepth, setStarMagDepth] = useState(() =>
     clampStarMagDepth(savedImmersive.starMagDepth),
   )
@@ -552,6 +567,8 @@ export function ImmersiveView({
   const [showAzimuthGrid, setShowAzimuthGrid] = useState(
     savedImmersive.showAzimuthGrid,
   )
+  const [compositionGuide, setCompositionGuide] =
+    useState<CompositionGuideMode>(savedImmersive.compositionGuide)
   const [weatherSettings, setWeatherSettings] = useState<ViewfinderWeather>(
     () => ({
       enabled: savedImmersive.weatherEnabled,
@@ -659,6 +676,7 @@ export function ImmersiveView({
         groundNightBrightness,
         groundNightContrast,
         groundNightTemperature,
+        groundNightTint,
         starMagDepth,
         starZoomSpan,
         starBrightness,
@@ -683,6 +701,7 @@ export function ImmersiveView({
         showConstellations,
         showCelestialGrid,
         showAzimuthGrid,
+        compositionGuide,
         weatherEnabled: weatherSettings.enabled,
         weatherAnimateClouds: weatherSettings.animateClouds,
         weatherWind: weatherSettings.wind,
@@ -710,6 +729,7 @@ export function ImmersiveView({
     groundNightBrightness,
     groundNightContrast,
     groundNightTemperature,
+    groundNightTint,
     starMagDepth,
     starZoomSpan,
     starBrightness,
@@ -726,6 +746,7 @@ export function ImmersiveView({
     showConstellations,
     showCelestialGrid,
     showAzimuthGrid,
+    compositionGuide,
     weatherSettings,
   ])
 
@@ -1433,6 +1454,7 @@ export function ImmersiveView({
         nightBrightness: groundNightBrightnessRef.current,
         nightContrast: groundNightContrastRef.current,
         nightTemperature: groundNightTemperatureRef.current,
+        nightTint: groundNightTintRef.current,
       })
 
       if (atmosphereOn) {
@@ -2196,6 +2218,7 @@ export function ImmersiveView({
     groundNightBrightness,
     groundNightContrast,
     groundNightTemperature,
+    groundNightTint,
   ])
 
   // Target lock: re-aim whenever the playhead / selection / site changes.
@@ -2468,9 +2491,10 @@ export function ImmersiveView({
           opticalHfovDeg={optical.h}
           panorama={panorama}
           frameRollDeg={frameRollDeg + timelapseFrameRollDeg}
-          label={`${focalMm} mm · ${optical.h.toFixed(0)}° × ${optical.v.toFixed(0)}°`}
           hideGrid={timelapsePreviewActive}
-          hideMeta={timelapsePreviewActive}
+          compositionGuide={
+            frameMode === 'dslr' ? compositionGuide : 'off'
+          }
           outsideDimOpacity={timelapsePreviewActive ? 0.72 : 0.28}
           worldLock={{
             // Preview look tracks the sequence — keep the sensor FOV centered
@@ -2482,30 +2506,6 @@ export function ImmersiveView({
             lookYawDeg: yawDeg,
             lookPitchDeg: pitchDeg,
           }}
-          onToggleWorldLock={
-            timelapsePreviewActive
-              ? undefined
-              : () => {
-                  if (framesLocked) {
-                    setFramesLocked(false)
-                    return
-                  }
-                  const look = lookRef.current
-                  setLockLook({ yaw: look.yaw, pitch: look.pitch })
-                  setFramesLocked(true)
-                }
-          }
-          onRecenterWorldLock={
-            timelapsePreviewActive
-              ? undefined
-              : () => {
-                  const { yaw, pitch } = lockLook
-                  lookRef.current = { yaw, pitch, roll: 0 }
-                  setYawDeg(yaw)
-                  setPitchDeg(pitch)
-                  apiRef.current?.setLook(yaw, pitch, 0)
-                }
-          }
         />
       </div>
 
@@ -2604,6 +2604,107 @@ export function ImmersiveView({
         role="toolbar"
         aria-label="Ciel"
       >
+        {frameMode === 'dslr' || frameMode === 'pano' ? (
+          <div
+            className="moon-preview-hud-tools__group"
+            role="group"
+            aria-label="Cadrage"
+          >
+            <button
+              type="button"
+              className={
+                framesLocked
+                  ? 'moon-preview-hud-tool is-active'
+                  : 'moon-preview-hud-tool'
+              }
+              aria-pressed={framesLocked}
+              disabled={timelapsePreviewActive}
+              title={
+                framesLocked
+                  ? 'Déverrouiller le cadrage (suit le viseur)'
+                  : 'Verrouiller le cadrage sur le paysage'
+              }
+              aria-label={
+                framesLocked
+                  ? 'Déverrouiller le cadrage'
+                  : 'Verrouiller le cadrage sur le paysage'
+              }
+              onClick={() => {
+                if (framesLocked) {
+                  setFramesLocked(false)
+                  return
+                }
+                const look = lookRef.current
+                setLockLook({ yaw: look.yaw, pitch: look.pitch })
+                setFramesLocked(true)
+              }}
+            >
+              <FrameLockIcon open={!framesLocked} />
+            </button>
+            <button
+              type="button"
+              className="moon-preview-hud-tool"
+              disabled={!framesLocked || timelapsePreviewActive}
+              title="Recentrer la vue sur le cadrage verrouillé"
+              aria-label="Recentrer la vue sur le cadrage verrouillé"
+              onClick={() => {
+                const { yaw, pitch } = lockLook
+                lookRef.current = { yaw, pitch, roll: 0 }
+                setYawDeg(yaw)
+                setPitchDeg(pitch)
+                apiRef.current?.setLook(yaw, pitch, 0)
+              }}
+            >
+              <FrameRecenterIcon />
+            </button>
+            <button
+              type="button"
+              className={
+                frameMode === 'dslr' && compositionGuide !== 'off'
+                  ? 'moon-preview-hud-tool is-active'
+                  : 'moon-preview-hud-tool'
+              }
+              aria-pressed={frameMode === 'dslr' && compositionGuide !== 'off'}
+              disabled={frameMode !== 'dslr'}
+              title={
+                frameMode !== 'dslr'
+                  ? 'Guide de composition — disponible en mode Photo'
+                  : `Guide de composition : ${COMPOSITION_GUIDE_LABEL[compositionGuide]}. Cliquer pour changer.`
+              }
+              aria-label={
+                frameMode !== 'dslr'
+                  ? 'Guide de composition — disponible en mode Photo'
+                  : `Guide de composition : ${COMPOSITION_GUIDE_LABEL[compositionGuide]}. Cliquer pour changer.`
+              }
+              onClick={() =>
+                setCompositionGuide((mode) => nextCompositionGuideMode(mode))
+              }
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+              >
+                <rect
+                  x="2.5"
+                  y="2.5"
+                  width="11"
+                  height="11"
+                  rx="1"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                />
+                <path
+                  d="M2.5 6.17H13.5M2.5 9.83H13.5M6.17 2.5V13.5M9.83 2.5V13.5"
+                  stroke="currentColor"
+                  strokeWidth="1.15"
+                />
+              </svg>
+            </button>
+          </div>
+        ) : null}
         <div
           className="moon-preview-hud-tools__group"
           role="group"
@@ -3027,9 +3128,11 @@ export function ImmersiveView({
             brightness: groundNightBrightness,
             contrast: groundNightContrast,
             temperature: groundNightTemperature,
+            tint: groundNightTint,
             onBrightnessChange: setGroundNightBrightness,
             onContrastChange: setGroundNightContrast,
             onTemperatureChange: setGroundNightTemperature,
+            onTintChange: setGroundNightTint,
           }}
           sky={{
             atmosphereAmount,

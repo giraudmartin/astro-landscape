@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { MobileRailChrome } from './MobileRailChrome'
 import { FramingThumb } from './FramingThumb'
 import { shiftIsoDate } from './celestial'
@@ -73,6 +73,39 @@ function SquarePenIcon() {
     >
       <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+    </svg>
+  )
+}
+
+function SortOrderIcon({ newest }: { newest: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="15"
+      height="15"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M4.5 3.5v9"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path
+        d={newest ? 'M2.5 10.5 4.5 12.5 6.5 10.5' : 'M2.5 5.5 4.5 3.5 6.5 5.5'}
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 4.5h4.5M9 8h3.2M9 11.5h2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        opacity={newest ? 0.95 : 0.55}
+      />
     </svg>
   )
 }
@@ -243,12 +276,38 @@ export function FramingsPanel({
 }: FramingsPanelProps) {
   const [draftName, setDraftName] = useState('')
   const [draftWhen, setDraftWhen] = useState('')
+  const [spotMenuOpen, setSpotMenuOpen] = useState(false)
+  const [listSort, setListSort] = useState<'oldest' | 'newest'>('newest')
+  const spotMenuRef = useRef<HTMLDivElement | null>(null)
+  const spotLabelId = useId()
 
   useEffect(() => {
     if (!editor) return
     setDraftName(editor.name)
     setDraftWhen(datetimeLocalFromPeakLocal(editor.peakLocal))
   }, [editor])
+
+  useEffect(() => {
+    if (!open) setSpotMenuOpen(false)
+  }, [open])
+
+  useEffect(() => {
+    if (!spotMenuOpen) return
+    const onPointerDown = (event: PointerEvent) => {
+      const root = spotMenuRef.current
+      if (!root || root.contains(event.target as Node)) return
+      setSpotMenuOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSpotMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [spotMenuOpen])
 
   const visible = useMemo(() => {
     if (mode === 'immersive') {
@@ -259,7 +318,13 @@ export function FramingsPanel({
     return framings.filter((row) => row.spotId === filterSpotId)
   }, [framings, mode, currentSpotId, filterSpotId])
 
-  const groups = useMemo(() => groupFramingsByNight(visible), [visible])
+  const groups = useMemo(() => {
+    const base = groupFramingsByNight(visible)
+    if (listSort === 'oldest') return base
+    return [...base]
+      .reverse()
+      .map((group) => ({ ...group, items: [...group.items].reverse() }))
+  }, [visible, listSort])
   const markedDays = useMemo(() => {
     const set = new Set<string>()
     for (const g of groups) set.add(g.day)
@@ -424,53 +489,148 @@ export function FramingsPanel({
                     ) : null}
                   </>
                 ) : (
-                  <label className="framings-panel__filter">
-                    <span>Spot</span>
-                    <select
-                      value={filterSpotId}
-                      onChange={(e) => onFilterSpotIdChange(e.target.value)}
-                    >
-                      <option value="all">Tous les spots</option>
-                      {spotOptions.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="framings-panel__filter">
+                    <span id={spotLabelId}>Spot</span>
+                    <div className="moon-preview-select-wrap" ref={spotMenuRef}>
+                      <button
+                        type="button"
+                        className="moon-preview-select-trigger"
+                        aria-labelledby={spotLabelId}
+                        aria-label="Filtrer par spot"
+                        aria-haspopup="listbox"
+                        aria-expanded={spotMenuOpen}
+                        onClick={() => setSpotMenuOpen((value) => !value)}
+                      >
+                        <span>
+                          {filterSpotId === 'all'
+                            ? 'Tous les spots'
+                            : (spotOptions.find((opt) => opt.id === filterSpotId)
+                                ?.label ?? 'Tous les spots')}
+                        </span>
+                        <svg
+                          viewBox="0 0 16 16"
+                          width="12"
+                          height="12"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M4 6l4 4 4-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                      {spotMenuOpen ? (
+                        <ul
+                          className="moon-preview-select-menu moon-preview-select-menu--down"
+                          role="listbox"
+                          aria-labelledby={spotLabelId}
+                        >
+                          <li role="none">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={filterSpotId === 'all'}
+                              className={
+                                filterSpotId === 'all'
+                                  ? 'moon-preview-select-option moon-preview-select-option--active'
+                                  : 'moon-preview-select-option'
+                              }
+                              onClick={() => {
+                                onFilterSpotIdChange('all')
+                                setSpotMenuOpen(false)
+                              }}
+                            >
+                              Tous les spots
+                            </button>
+                          </li>
+                          {spotOptions.map((opt) => {
+                            const active = opt.id === filterSpotId
+                            return (
+                              <li key={opt.id} role="none">
+                                <button
+                                  type="button"
+                                  role="option"
+                                  aria-selected={active}
+                                  className={
+                                    active
+                                      ? 'moon-preview-select-option moon-preview-select-option--active'
+                                      : 'moon-preview-select-option'
+                                  }
+                                  onClick={() => {
+                                    onFilterSpotIdChange(opt.id)
+                                    setSpotMenuOpen(false)
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </div>
                 )}
 
-                <nav
-                  className="framings-panel__display"
-                  aria-label="Affichage des cadrages"
-                >
+                <div className="framings-panel__display-row">
+                  <nav
+                    className="framings-panel__display"
+                    aria-label="Affichage des cadrages"
+                  >
+                    <button
+                      type="button"
+                      className={
+                        display === 'list'
+                          ? 'framings-panel__display-btn is-active'
+                          : 'framings-panel__display-btn'
+                      }
+                      aria-pressed={display === 'list'}
+                      onClick={() => onDisplayChange('list')}
+                    >
+                      <ListIcon /> Liste
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        display === 'calendar'
+                          ? 'framings-panel__display-btn is-active'
+                          : 'framings-panel__display-btn'
+                      }
+                      aria-pressed={display === 'calendar'}
+                      onClick={() => onDisplayChange('calendar')}
+                    >
+                      <CalendarIcon size={14} /> Calendrier
+                    </button>
+                  </nav>
                   <button
                     type="button"
-                    className={
-                      display === 'list'
-                        ? 'framings-panel__display-btn is-active'
-                        : 'framings-panel__display-btn'
+                    className="framings-panel__sort"
+                    title={
+                      listSort === 'newest'
+                        ? 'Ordre : plus récents d’abord. Cliquer pour plus anciens.'
+                        : 'Ordre : plus anciens d’abord. Cliquer pour plus récents.'
                     }
-                    aria-pressed={display === 'list'}
-                    onClick={() => onDisplayChange('list')}
-                  >
-                    <ListIcon /> Liste
-                  </button>
-                  <button
-                    type="button"
-                    className={
-                      display === 'calendar'
-                        ? 'framings-panel__display-btn is-active'
-                        : 'framings-panel__display-btn'
+                    aria-label={
+                      listSort === 'newest'
+                        ? 'Tri du plus récent au plus ancien. Activer le tri inverse.'
+                        : 'Tri du plus ancien au plus récent. Activer le tri inverse.'
                     }
-                    aria-pressed={display === 'calendar'}
-                    onClick={() => onDisplayChange('calendar')}
+                    onClick={() =>
+                      setListSort((value) =>
+                        value === 'newest' ? 'oldest' : 'newest',
+                      )
+                    }
                   >
-                    <CalendarIcon size={14} /> Calendrier
+                    <SortOrderIcon newest={listSort === 'newest'} />
                   </button>
-                </nav>
+                </div>
               </div>
 
+              <div className="framings-panel__scroll">
               {display === 'calendar' ? (
                 <section
                   className="framings-cal"
@@ -588,6 +748,7 @@ export function FramingsPanel({
                   </p>
                 </div>
               )}
+              </div>
             </div>
           )}
         </div>

@@ -20,9 +20,11 @@ type ViewfinderSceneSettingsControlProps = {
     brightness: number
     contrast: number
     temperature: number
+    tint: number
     onBrightnessChange: (value: number) => void
     onContrastChange: (value: number) => void
     onTemperatureChange: (value: number) => void
+    onTintChange: (value: number) => void
   }
   sky: {
     atmosphereAmount: number
@@ -65,7 +67,7 @@ const PANEL_ITEMS: ReadonlyArray<{
   {
     id: 'landscape',
     label: 'Paysage',
-    hint: 'Luminosité, contraste, température',
+    hint: 'Luminosité, contraste, température, teinte',
   },
   {
     id: 'sky',

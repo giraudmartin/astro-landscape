@@ -187,8 +187,16 @@ export default function App() {
     const now = Date.now()
     return Math.floor(now / 60_000) * 60_000
   })
+  const [scrubbingMapTime, setScrubbingMapTime] = useState(false)
+  const [mapPreviewTime, setMapPreviewTime] = useState(playheadUtcMs)
   const playheadUtcMsRef = useRef(playheadUtcMs)
   playheadUtcMsRef.current = playheadUtcMs
+  useEffect(() => {
+    if (!scrubbingMapTime) return
+    setMapPreviewTime(playheadUtcMsRef.current)
+    const timer = window.setInterval(() => setMapPreviewTime(playheadUtcMsRef.current), 125)
+    return () => window.clearInterval(timer)
+  }, [scrubbingMapTime])
   const prevTimelineLonRef = useRef(timelineLon)
 
   // Spot (or clear): keep the UTC instant, only refresh the civil date label.
@@ -661,19 +669,28 @@ export default function App() {
   }, [spot, selectedPersonalSpotId, personalSpots, findSpotAt])
 
   const framingSpotOptions = useMemo(() => {
+    const spotNames = new Map(
+      personalSpots.map((spotRow) => [spotRow.id, spotRow.name] as const),
+    )
     const labels = new Map<string, string>()
-    for (const spotRow of personalSpots) {
-      labels.set(spotRow.id, spotRow.name)
-    }
     for (const framing of personalFramings) {
-      if (!labels.has(framing.spotId)) {
-        labels.set(framing.spotId, framing.spotName)
-      }
+      if (labels.has(framing.spotId)) continue
+      labels.set(
+        framing.spotId,
+        spotNames.get(framing.spotId) ?? framing.spotName,
+      )
     }
     return [...labels.entries()]
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label, 'fr'))
   }, [personalSpots, personalFramings])
+
+  // Drop a filter that no longer matches any framing (deleted last cadrage).
+  useEffect(() => {
+    if (framingsFilterSpotId === 'all') return
+    if (framingSpotOptions.some((opt) => opt.id === framingsFilterSpotId)) return
+    setFramingsFilterSpotId('all')
+  }, [framingsFilterSpotId, framingSpotOptions])
 
   const currentFramingSpot = useMemo(() => {
     if (!spot) return null
@@ -909,8 +926,15 @@ export default function App() {
 
   const immersive = mode === 'ground' && spot != null
 
+  // Map ↔ Three.js: always dismiss the right rail (Mes spots / Cadrages).
+  // Leaving it open carried an empty FramingsPanel into immersive, and
+  // restoring it on exit fought the map chrome.
   useEffect(() => {
+    setMySpotsOpen(false)
+    setFramingsOpen(false)
+    setFramingsEditor(null)
     if (immersive) setInfoDrawerOpen(false)
+    mapFramingsReturnRef.current = null
   }, [immersive])
 
   /**
@@ -1007,7 +1031,7 @@ export default function App() {
           onPlHeatmapEnabledChange={setPlHeatmapEnabled}
           onPlHeatmapOpacityChange={setPlHeatmapOpacity}
           onAddressSearchOpenChange={setAddressSearchOpen}
-          skyUtcMs={playheadUtcMs}
+          skyUtcMs={scrubbingMapTime ? mapPreviewTime : playheadUtcMs}
           mySpotsOpen={mySpotsOpen}
           onMySpotsOpenChange={(open) => {
             setMySpotsOpen(open)
@@ -1093,16 +1117,11 @@ export default function App() {
               setImmersiveLook(null)
               setImmersiveTerrainReady(false)
               setTimelapsePreviewPlaying(false)
+              setMySpotsOpen(false)
+              setFramingsOpen(false)
+              setFramingsEditor(null)
+              mapFramingsReturnRef.current = null
               setMode('orbit')
-              const ret = mapFramingsReturnRef.current
-              if (ret) {
-                setFramingsOpen(ret.open)
-                setFramingsDisplay(ret.display)
-                setFramingsCalendarDay(ret.day)
-                setFramingsCalendarMonth(ret.month)
-                setFramingsFilterSpotId(ret.filterSpotId)
-                mapFramingsReturnRef.current = null
-              }
             }}
           />
         </div>
@@ -1320,6 +1339,7 @@ export default function App() {
           date={date}
           playheadUtcMs={playheadUtcMs}
           clockIsUtc={clockIsUtc}
+          onScrubbingChange={setScrubbingMapTime}
           onDateChange={onDateChange}
           onPlayheadChange={onPlayheadChange}
         />

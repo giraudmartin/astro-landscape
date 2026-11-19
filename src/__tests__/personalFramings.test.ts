@@ -94,6 +94,36 @@ describe('personalFramings night grouping', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0]?.day).toBe('2026-12-11')
     expect(groups[0]?.items).toHaveLength(2)
-    expect(framingNightLabel('2026-12-11', groups[0]!.items)).toMatch(/Nuit du/)
+    expect(framingNightLabel('2026-12-11', groups[0]!.items)).toBe(
+      'Nuit du 11 au 12 décembre 2026',
+    )
+  })
+
+  it('includes both years when a night crosses New Year', () => {
+    const view = createPersonalFraming({
+      name: 'Réveillon',
+      lat: 45,
+      lon: 6,
+      peakUtc: '2025-12-31T23:30:00.000Z',
+      peakLocal: '2025-12-31T23:30:00',
+      localDate: '2025-12-31',
+      spotId: 's1',
+      spotName: 'Alpes',
+      view: {
+        frameMode: 'dslr',
+        focalMm: 24,
+        orientation: 'landscape',
+        sensorFormat: 'ff',
+        frameRollDeg: 0,
+        bearingDeg: 0,
+        pitchDeg: 0,
+        eyeHeightM: null,
+        panorama: null,
+        timelapse: null,
+      },
+    })
+    expect(framingNightLabel('2025-12-31', [view])).toBe(
+      'Nuit du 31 décembre 2025 au 1 janvier 2026',
+    )
   })
 })

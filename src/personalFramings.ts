@@ -304,11 +304,17 @@ export function framingNightLabel(
     return fullFmt.format(asUtc(day))
   }
   const next = shiftIsoDate(day, 1) ?? day
-  const start =
-    day.slice(0, 7) === next.slice(0, 7)
-      ? String(asUtc(day).getUTCDate())
-      : dayFmt.format(asUtc(day))
-  return `Nuit du ${start} au ${dayFmt.format(asUtc(next))}`
+  const sameYear = day.slice(0, 4) === next.slice(0, 4)
+  const sameMonth = day.slice(0, 7) === next.slice(0, 7)
+  const start = sameMonth
+    ? String(asUtc(day).getUTCDate())
+    : sameYear
+      ? dayFmt.format(asUtc(day))
+      : fullFmt.format(asUtc(day))
+  const end = sameYear
+    ? `${dayFmt.format(asUtc(next))} ${next.slice(0, 4)}`
+    : fullFmt.format(asUtc(next))
+  return `Nuit du ${start} au ${end}`
 }
 
 function defaultViewSnapshot(): FramingViewSnapshot {

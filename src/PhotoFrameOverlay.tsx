@@ -1,3 +1,9 @@
+import { CompositionGuideOverlay } from './CompositionGuideOverlay'
+import {
+  PHI_INV,
+  goldenTriangleFeet,
+  type CompositionGuideMode,
+} from './compositionGuides'
 import {
   viewfinderAspectRatio,
   viewfinderFrameSizeForProjection,
@@ -8,7 +14,6 @@ import {
 import { getStageProjection, stelProjectEye } from './stelProjector'
 import {
   clampPanoramaCount,
-  panoramaShotCount,
   panoramaStepDeg,
   type PanoramaPlan,
   type PanoramaProjectionMode,
@@ -33,7 +38,6 @@ type PhotoFrameOverlayProps = {
   orientation: ViewfinderOrientation
   /** Which overlay to draw. `off` hides the whole viewfinder chrome. */
   frameMode?: ViewfinderFrameMode
-  label: string
   /** Three.js stage vertical FOV (deg). When set with opticalVfovDeg, frame scales with focal. */
   stageVfovDeg?: number
   /** Lens vertical FOV (deg) for the selected focal length. */
@@ -42,18 +46,15 @@ type PhotoFrameOverlayProps = {
   opticalHfovDeg?: number
   panorama?: PanoramaPlan | null
   worldLock?: FrameWorldLock | null
-  onToggleWorldLock?: () => void
-  /** Look back at the locked framing (only meaningful while locked). */
-  onRecenterWorldLock?: () => void
   /**
    * Screen-space roll (deg) for the unlocked follow frame — used by
    * equatorial timelapse « Cadre seul » mode. Positive = CCW.
    */
   frameRollDeg?: number
-  /** Timelapse preview: hide FOV crosshair while the playback bar is up. */
+  /** Timelapse preview: hide FOV composition guides while the playback bar is up. */
   hideGrid?: boolean
-  /** Hide the mm / FOV pill under the frame (timelapse playback bar). */
-  hideMeta?: boolean
+  /** Photo Sightline composition guide cycle (thirds / phi / center / golden). */
+  compositionGuide?: CompositionGuideMode
   /** Outside-matte opacity 0…1 (default soft letterbox). */
   outsideDimOpacity?: number
 }
@@ -1534,68 +1535,104 @@ function pointsToSvg(points: Pt2[]): string {
   return points.map((p) => `${p.x},${p.y}`).join(' ')
 }
 
-function LockKeyholeIcon({ open }: { open: boolean }) {
-  if (open) {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="16" r="1" />
-        <rect width="18" height="12" x="3" y="10" rx="2" />
-        <path d="M7 10V7a5 5 0 0 1 9.33-2.5" />
-      </svg>
-    )
+/** Map normalized frame UV (top-left origin) into lock tan-space. */
+function uvToTan(
+  u: number,
+  v: number,
+  tanHalfH: number,
+  tanHalfV: number,
+): { x: number; y: number } {
+  return {
+    x: -tanHalfH + 2 * tanHalfH * u,
+    y: tanHalfV - 2 * tanHalfV * v,
   }
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="16" r="1" />
-      <rect x="3" y="10" width="18" height="12" rx="2" />
-      <path d="M7 10V7a5 5 0 0 1 10 0v3" />
-    </svg>
-  )
 }
 
-/** Lucide "scan" — recenter view on the locked framing. */
-function RecenterIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-    </svg>
-  )
+function projectUvLine(
+  bases: LockLookBases,
+  tanHalfH: number,
+  tanHalfV: number,
+  u0: number,
+  v0: number,
+  u1: number,
+  v1: number,
+  samples = 12,
+): Pt2[] {
+  const pts: Pt2[] = []
+  for (let i = 0; i <= samples; i += 1) {
+    const t = i / samples
+    const uv = {
+      u: u0 + (u1 - u0) * t,
+      v: v0 + (v1 - v0) * t,
+    }
+    const tan = uvToTan(uv.u, uv.v, tanHalfH, tanHalfV)
+    const pt = projectLockTanPoint(bases, tan.x, tan.y)
+    if (pt) pts.push(pt)
+  }
+  return pts
+}
+
+function lockedCompositionGuidePolylines(input: {
+  mode: CompositionGuideMode
+  orientation: ViewfinderOrientation
+  bases: LockLookBases
+  tanHalfH: number
+  tanHalfV: number
+}): Pt2[][] {
+  const { mode, orientation, bases, tanHalfH, tanHalfV } = input
+  if (mode === 'off') return []
+  const line = (u0: number, v0: number, u1: number, v1: number) =>
+    projectUvLine(bases, tanHalfH, tanHalfV, u0, v0, u1, v1)
+
+  if (mode === 'thirds') {
+    return [
+      line(1 / 3, 0, 1 / 3, 1),
+      line(2 / 3, 0, 2 / 3, 1),
+      line(0, 1 / 3, 1, 1 / 3),
+      line(0, 2 / 3, 1, 2 / 3),
+    ].filter((p) => p.length >= 2)
+  }
+  if (mode === 'phi') {
+    const a = 1 - PHI_INV
+    const b = PHI_INV
+    return [
+      line(a, 0, a, 1),
+      line(b, 0, b, 1),
+      line(0, a, 1, a),
+      line(0, b, 1, b),
+    ].filter((p) => p.length >= 2)
+  }
+  if (mode === 'center') {
+    const c = 0.5
+    const arm = 0.045
+    const corner = 0.06
+    const out: Pt2[][] = [
+      line(c, c - arm, c, c + arm),
+      line(c - arm, c, c + arm, c),
+      line(0, corner, 0, 0),
+      line(0, 0, corner, 0),
+      line(1 - corner, 0, 1, 0),
+      line(1, 0, 1, corner),
+      line(0, 1 - corner, 0, 1),
+      line(0, 1, corner, 1),
+      line(1 - corner, 1, 1, 1),
+      line(1, 1 - corner, 1, 1),
+    ]
+    return out.filter((p) => p.length >= 2)
+  }
+  const width = orientation === 'landscape' ? 3 : 2
+  const height = orientation === 'landscape' ? 2 : 3
+  const feet = goldenTriangleFeet(width, height)
+  return [
+    line(0, 1, 1, 0),
+    line(0, 0, feet.fromTopLeft.x / width, feet.fromTopLeft.y / height),
+    line(
+      1,
+      1,
+      feet.fromBottomRight.x / width,
+      feet.fromBottomRight.y / height,
+    ),
+  ].filter((p) => p.length >= 2)
 }
 
 /** SVG viewfinder rectangle — optical frame projected onto the stage. */
@@ -1604,17 +1641,14 @@ export function PhotoFrameOverlay({
   stageH,
   orientation,
   frameMode = 'dslr',
-  label,
   stageVfovDeg,
   opticalVfovDeg,
   opticalHfovDeg,
   panorama = null,
   worldLock = null,
-  onToggleWorldLock,
-  onRecenterWorldLock,
   frameRollDeg = 0,
   hideGrid = false,
-  hideMeta = false,
+  compositionGuide = 'off',
   outsideDimOpacity = 0.28,
 }: PhotoFrameOverlayProps) {
   if (stageW < 2 || stageH < 2) return null
@@ -1730,63 +1764,33 @@ export function PhotoFrameOverlay({
   const showFrames = panoOn && panorama.showFrames
   const showOverlap = panoOn && panorama.showOverlap
 
-  let envelopeBottom = top + frameH
-  let envelopeCenterX = left + frameW / 2
-  if (showProjectedPano && panoTiles.length > 0 && worldLock && stageVfovDeg != null) {
-    let maxY = -Infinity
-    for (const tile of panoTiles) {
-      for (const cell of tile.cells) {
-        for (const p of cell) maxY = Math.max(maxY, p.y)
-      }
-      for (const stroke of tile.strokes) {
-        for (const p of stroke) maxY = Math.max(maxY, p.y)
-      }
-    }
-    // Optical axis of the whole grid, not the first cell. An even
-    // column or row count has no middle tile, so the corner cell
-    // was sliding the caption sideways. A cell clipped to the stage
-    // edge must not drag the caption to the bottom of the screen.
-    const look = cameraBasis(worldLock.lookYawDeg, worldLock.lookPitchDeg)
-    const mid = projectWorldDirToScreen(
-      lookDirection(framingYawDeg, framingPitchDeg),
-      look,
-      stageW,
-      stageH,
-      stageVfovDeg,
-    )
-    envelopeCenterX = mid?.x ?? stageW / 2
-    const aimBottom = mid ? mid.y + frameH * 0.5 : maxY
-    envelopeBottom = maxY > aimBottom + frameH * 2 ? aimBottom : maxY
-  } else if (lockedPoly) {
-    let minX = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    for (const p of lockedPoly) {
-      minX = Math.min(minX, p.x)
-      maxX = Math.max(maxX, p.x)
-      maxY = Math.max(maxY, p.y)
-    }
-    envelopeBottom = maxY
-    envelopeCenterX = lockedProj?.center?.x ?? (minX + maxX) / 2
-  } else if (locked || showProjectedPano) {
-    envelopeCenterX = stageW / 2
-    envelopeBottom = stageH - 96
-  }
-
   const badgeR = Math.max(5, Math.min(frameW, frameH) * 0.018)
-  const shots = panoOn
-    ? panoramaShotCount(panorama.columns, panorama.rows)
-    : 0
 
   const quadPoints = lockedPoly ? pointsToSvg(lockedPoly) : ''
   const dimAlpha = Math.min(1, Math.max(0, outsideDimOpacity))
-  const showCrosshair =
-    !hideGrid &&
-    showLockedFrame &&
-    lockedProj?.midTop &&
-    lockedProj.midBottom &&
-    lockedProj.midLeft &&
-    lockedProj.midRight
+  const showGuides =
+    !hideGrid && compositionGuide !== 'off' && (showFollowFrame || showLockedFrame)
+
+  const lockedGuidePolys =
+    showGuides && showLockedFrame && canProjectAngles && locked
+      ? lockedCompositionGuidePolylines({
+          mode: compositionGuide,
+          orientation,
+          bases: {
+            lock: cameraBasis(worldLock!.lockYawDeg, worldLock!.lockPitchDeg),
+            look: cameraBasis(worldLock!.lookYawDeg, worldLock!.lookPitchDeg),
+            stageW,
+            stageH,
+            stageVfovDeg: stageVfovDeg!,
+          },
+          tanHalfH: Math.tan(
+            ((Math.max(derivedHfov!, 0.5) / 2) * Math.PI) / 180,
+          ),
+          tanHalfV: Math.tan(
+            ((Math.max(opticalVfovDeg!, 0.5) / 2) * Math.PI) / 180,
+          ),
+        })
+      : []
 
   return (
     <div className="photo-frame">
@@ -1911,26 +1915,17 @@ export function PhotoFrameOverlay({
               strokeWidth={2.5}
               strokeLinejoin="round"
             />
-            {showCrosshair ? (
-              <>
-                <line
-                  x1={lockedProj.midTop!.x}
-                  y1={lockedProj.midTop!.y}
-                  x2={lockedProj.midBottom!.x}
-                  y2={lockedProj.midBottom!.y}
-                  stroke={accentRgba(0.22)}
-                  strokeWidth={1}
-                />
-                <line
-                  x1={lockedProj.midLeft!.x}
-                  y1={lockedProj.midLeft!.y}
-                  x2={lockedProj.midRight!.x}
-                  y2={lockedProj.midRight!.y}
-                  stroke={accentRgba(0.22)}
-                  strokeWidth={1}
-                />
-              </>
-            ) : null}
+            {lockedGuidePolys.map((pts, i) => (
+              <polyline
+                key={`guide-${i}`}
+                points={pointsToSvg(pts)}
+                fill="none"
+                stroke="rgba(255, 255, 255, 0.48)"
+                strokeWidth={1}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            ))}
           </>
         ) : null}
 
@@ -1946,96 +1941,26 @@ export function PhotoFrameOverlay({
               strokeWidth={2.5}
               rx={2}
             />
-            {!hideGrid ? (
-              <>
-                <line
-                  x1={left + frameW / 2}
-                  y1={top}
-                  x2={left + frameW / 2}
-                  y2={top + frameH}
-                  stroke={accentRgba(0.22)}
-                  strokeWidth={1}
-                />
-                <line
-                  x1={left}
-                  y1={top + frameH / 2}
-                  x2={left + frameW}
-                  y2={top + frameH / 2}
-                  stroke={accentRgba(0.22)}
-                  strokeWidth={1}
-                />
-              </>
-            ) : null}
           </g>
         ) : null}
       </svg>
 
-      {!hideMeta ? (
+      {showGuides && showFollowFrame ? (
         <div
-          className="photo-frame__meta"
+          className="photo-frame__guide"
           style={{
-            /* Keep controls reachable if the framed patch pans off-screen. */
-            left: Math.min(stageW - 28, Math.max(28, envelopeCenterX)),
-            top: Math.min(stageH - 72, Math.max(12, envelopeBottom + 8)),
+            left,
+            top,
+            width: frameW,
+            height: frameH,
+            transform:
+              followRoll !== 0 ? `rotate(${followRoll}deg)` : undefined,
           }}
         >
-          <p className="photo-frame__label">
-            {panoOn
-              ? `${label} · ${shots} vues · overlap ${panorama.overlapPercent}%`
-              : `${label} · ${aspect.toFixed(2)}∶1`}
-            {locked ? ' · fixé' : ''}
-          </p>
-          {onToggleWorldLock || (locked && onRecenterWorldLock) ? (
-            <div className="photo-frame__actions">
-              {onToggleWorldLock ? (
-                <button
-                  type="button"
-                  className={
-                    locked
-                      ? 'photo-frame__lock is-locked'
-                      : 'photo-frame__lock'
-                  }
-                  aria-pressed={locked}
-                  title={
-                    locked
-                      ? 'Déverrouiller le cadrage (suit le viseur)'
-                      : 'Verrouiller le cadrage sur le paysage'
-                  }
-                  aria-label={
-                    locked
-                      ? 'Déverrouiller le cadrage'
-                      : 'Verrouiller le cadrage sur le paysage'
-                  }
-                  onPointerDown={(event) => {
-                    event.stopPropagation()
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onToggleWorldLock()
-                  }}
-                >
-                  <LockKeyholeIcon open={!locked} />
-                </button>
-              ) : null}
-              {locked && onRecenterWorldLock ? (
-                <button
-                  type="button"
-                  className="photo-frame__recenter"
-                  title="Recentrer la vue sur le cadrage verrouillé"
-                  aria-label="Recentrer la vue sur le cadrage verrouillé"
-                  onPointerDown={(event) => {
-                    event.stopPropagation()
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onRecenterWorldLock()
-                  }}
-                >
-                  <RecenterIcon />
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+          <CompositionGuideOverlay
+            mode={compositionGuide}
+            orientation={orientation}
+          />
         </div>
       ) : null}
     </div>

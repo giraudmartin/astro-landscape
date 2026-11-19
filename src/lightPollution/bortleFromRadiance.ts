@@ -64,6 +64,13 @@ export function bortleFromSkyBrightnessMag(magArcsec2: number): number {
   return 9
 }
 
+// ZLR expresses artificial zenith luminance in units of the 22 mag reference.
+// Classify site pollution on that same reference sky, independently of airglow.
+export function bortleFromZenithLightRatio(zlr: number): number {
+  const referenceMag = 22 - 2.5 * Math.log10(1 + Math.max(0, zlr))
+  return bortleFromSkyBrightnessMag(referenceMag)
+}
+
 export function bortleFromRadiance(radianceNwCm2Sr: number): number {
   return bortleFromSkyBrightnessMag(skyBrightnessMagFromRadiance(radianceNwCm2Sr))
 }

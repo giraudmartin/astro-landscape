@@ -6,13 +6,11 @@
  */
 
 import {
-  bortleFromSkyBrightnessMag,
+  bortleFromZenithLightRatio,
   bortleLabelFr,
-  clampBortle,
   glowFromBlackMarbleRgb,
   radianceFromSkyBrightnessMag,
 } from './bortleFromRadiance'
-import { preferTrueViirsCog } from './cogConfig'
 import {
   LIGHT_POLLUTION_MAX_ZOOM,
   lightPollutionTileUrl,
@@ -100,8 +98,9 @@ export async function sampleLightPollution(
     localLuminance01(lat, lon),
   ])
 
+  if (!zenith) return null
   const skyBrightnessMag = zenith.skyBrightnessMag
-  const bortle = clampBortle(bortleFromSkyBrightnessMag(skyBrightnessMag))
+  const bortle = bortleFromZenithLightRatio(zenith.zlr)
   const radianceNwCm2Sr = radianceFromSkyBrightnessMag(skyBrightnessMag)
 
   return {
@@ -112,7 +111,7 @@ export async function sampleLightPollution(
     skyBrightnessMag,
     bortle,
     bortleLabel: bortleLabelFr(bortle),
-    source: preferTrueViirsCog() ? 'viirs-cog' : 'black-marble',
+    source: zenith.method === 'first-rig-cog' ? 'viirs-cog' : 'black-marble',
     terrainApplied: zenith.terrainApplied,
   }
 }

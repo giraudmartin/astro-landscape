@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { bortleFromSkyBrightnessMag } from '../lightPollution/bortleFromRadiance'
+import { bortleFromZenithLightRatio } from '../lightPollution/bortleFromRadiance'
 import {
   FIRST_RIG_ALPHA_POWER,
   FIRST_RIG_ALPHA_SCALE,
   FIRST_RIG_NATURAL_MAG,
   FIRST_RIG_ZLR_DIVISOR,
   firstRigKernel,
-  skyBrightnessMagFromSumS,
   skyBrightnessMagFromZlr,
   sumSFromRingSamples,
   zlrFromSumS,
@@ -47,10 +46,10 @@ describe('skyBrightnessMagFromZlr (First Rig Table 3)', () => {
     expect(skyBrightnessMagFromZlr(100)).toBeCloseTo(16.99, 2)
   })
 
-  it('never claims Bortle 1 at zero artificial light (natural 21.83)', () => {
-    // Product Bortle table is LPM-compatible; 21.83 → class 3 there.
-    // First Rig’s own table would say 2 — either way not 1.
-    expect(bortleFromSkyBrightnessMag(skyBrightnessMagFromZlr(0))).toBeGreaterThanOrEqual(2)
+  it('distinguishes pristine water from weak regional skyglow', () => {
+    expect(bortleFromZenithLightRatio(0)).toBe(1)
+    expect(bortleFromZenithLightRatio(0.05)).toBe(2)
+    expect(bortleFromZenithLightRatio(0.2)).toBe(3)
   })
 })
 
@@ -70,7 +69,7 @@ describe('sumSFromRingSamples', () => {
     ])
     expect(nearTown).toBeGreaterThan(dark)
     expect(
-      bortleFromSkyBrightnessMag(skyBrightnessMagFromSumS(nearTown)),
+      bortleFromZenithLightRatio(zlrFromSumS(nearTown)),
     ).toBeGreaterThan(1)
   })
 

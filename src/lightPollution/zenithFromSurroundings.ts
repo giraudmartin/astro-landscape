@@ -20,7 +20,7 @@ import {
   firstRigKernel,
 } from './duriscoeZenith'
 import { sampleElevationM } from './sampleElevation'
-import { sampleRadianceFromCog, sumFirstRigFromCog } from './sampleFromCog'
+import { sumFirstRigFromCog } from './sampleFromCog'
 import {
   LIGHT_POLLUTION_MAX_ZOOM,
   lightPollutionTileUrl,
@@ -83,7 +83,9 @@ async function loadTile(
     }
   })()
   tileCache.set(key, pending)
-  return pending
+  const image = await pending
+  if (!image) tileCache.delete(key)
+  return image
 }
 
 function radianceFromTileAt(
@@ -125,10 +127,10 @@ async function sampleBmRadianceAt(
   lat: number,
   lon: number,
   footprintPx: number,
-): Promise<number> {
+): Promise<number | null> {
   const { z, x, y } = lonLatToTile(lon, lat, LIGHT_POLLUTION_MAX_ZOOM)
   const image = await loadTile(z, x, y)
-  if (!image) return 0
+  if (!image) return null
   return radianceFromTileAt(lat, lon, image, z, x, y, footprintPx)
 }
 
@@ -172,12 +174,13 @@ async function sampleZenithFromBmRings(
   lat: number,
   lon: number,
   eyeElevM: number | null,
-): Promise<ZenithSurroundings> {
+): Promise<ZenithSurroundings | null> {
   const localRadiance = await sampleBmRadianceAt(lat, lon, 0)
+  if (localRadiance == null) return null
   const ringResults = await Promise.all(
     DURISCOE_RINGS.map(async (ring) => {
       const azN = ring.d <= 0 ? 1 : DURISCOE_AZ_BINS
-      const tasks: Promise<number>[] = []
+      const tasks: Promise<number | null>[] = []
       for (let i = 0; i < azN; i++) {
         const az = (i / azN) * 360
         const p =
@@ -190,7 +193,9 @@ async function sampleZenithFromBmRings(
           ),
         )
       }
-      const radiances = await Promise.all(tasks)
+      const samples = await Promise.all(tasks)
+      const radiances = samples.filter((r): r is number => r != null)
+      if (radiances.length !== samples.length) return null
       return {
         distanceKm: ring.d,
         widthKm: ring.w,
@@ -198,7 +203,9 @@ async function sampleZenithFromBmRings(
       }
     }),
   )
-  const sumS = sumSFromRingSamples(ringResults)
+  const completeRings = ringResults.filter((ring) => ring != null)
+  if (completeRings.length !== ringResults.length) return null
+  const sumS = sumSFromRingSamples(completeRings)
   return {
     convolvedRadiance: sumS,
     zlr: sumS / FIRST_RIG_ZLR_DIVISOR,
@@ -217,7 +224,7 @@ export async function sampleZenithSurroundings(
   lat: number,
   lon: number,
   options?: SampleZenithOptions,
-): Promise<ZenithSurroundings> {
+): Promise<ZenithSurroundings | null> {
   let eyeElevM: number | null =
     options?.observerElevM != null && Number.isFinite(options.observerElevM)
       ? options.observerElevM
@@ -243,7 +250,7 @@ export async function sampleZenithSurroundings(
         terrainApplied: cog.terrainApplied,
       }
     }
-    await sampleRadianceFromCog(lat, lon, cogUrl)
+
   }
   return sampleZenithFromBmRings(lat, lon, eyeElevM)
 }

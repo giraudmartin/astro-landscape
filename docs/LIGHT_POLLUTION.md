@@ -84,10 +84,10 @@ invent mag scalars to force a Bortle class.
 
 ## Bortle class (UI)
 
-SQM → Bortle uses the same thresholds as GeoInsight / common LPM-style tables
+Site Bortle uses reference brightness `22 − 2.5 log10(1 + ZLR)` and the same thresholds as GeoInsight / common LPM-style tables
 (so our badge matches what users compare on lightpollutionmap.info):
 
-| Bortle | SQM (mag/arcsec²) |
+| Bortle | Reference brightness (mag/arcsec²) |
 |---|---|
 | 1 | ≥ 21.99 |
 | 2 | ≥ 21.89 |
@@ -101,7 +101,7 @@ SQM → Bortle uses the same thresholds as GeoInsight / common LPM-style tables
 
 **Note:** First Rig’s own Bortle edges differ slightly and never emit class 1
 (natural floor 21.83). We keep the LPM-compatible table for product consistency;
-the **SQM number** is the scientific output.
+the displayed zenith brightness still includes the modeled natural sky at 21.83 mag/arcsec². A site with zero modeled artificial light therefore receives class 1.
 
 ## Data sources (resolution & licence)
 

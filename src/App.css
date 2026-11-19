@@ -4767,6 +4767,7 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   transform: rotate(180deg);
 }
 
+/* Same chrome language as float panels; text-only items, soft glass */
 .vf-proj-control__menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -4774,28 +4775,28 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   z-index: 14;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  width: min(292px, calc(100vw - 24px));
+  gap: 6px;
+  width: min(280px, calc(100vw - 24px));
   padding: 8px;
-  border: 1px solid var(--ui-stroke);
-  border-radius: var(--r-lg);
-  background: var(--surface-float);
-  box-shadow: var(--ui-shadow);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(14, 16, 22, 0.82);
+  color: #e8f5ee;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .vf-proj-control__option {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 14px;
-  align-items: center;
-  gap: 10px;
+  display: block;
   width: 100%;
   margin: 0;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
   color: #e8f5ee;
   font: inherit;
   text-align: left;
@@ -4803,14 +4804,14 @@ html[data-qa-hide-chrome='1'] .photo-frame {
 }
 
 .vf-proj-control__option:hover {
-  border-color: var(--ui-border-strong);
-  background: var(--surface-glass);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .vf-proj-control__option.is-active {
-  border-color: var(--ui-accent-border);
-  background: var(--ui-accent-soft);
-  color: var(--ui-action-primary-text);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8f5ee;
 }
 
 .vf-proj-control__option:focus-visible {
@@ -4831,20 +4832,14 @@ html[data-qa-hide-chrome='1'] .photo-frame {
 }
 
 .vf-proj-control__option-copy small {
-  color: var(--ui-text-muted);
+  color: rgba(232, 245, 238, 0.55);
   font-size: 0.62rem;
   line-height: 1.25;
 }
 
 .vf-proj-control__option.is-active .vf-proj-control__option-copy small {
-  color: inherit;
-  opacity: 0.72;
-}
-
-.vf-proj-control__option em {
-  font-style: normal;
-  font-size: 0.72rem;
-  color: var(--ui-accent);
+  color: rgba(232, 245, 238, 0.55);
+  opacity: 1;
 }
 
 /* Sky settings — floating semi-transparent window */

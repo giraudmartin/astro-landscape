@@ -97,7 +97,6 @@ export function ViewfinderProjectionControl({
         >
           {STAGE_PROJECTIONS.map((mode) => {
             const selected = projection === mode.id
-            const Icon = PROJECTION_ICONS[mode.id]
             return (
               <button
                 key={mode.id}
@@ -115,12 +114,10 @@ export function ViewfinderProjectionControl({
                   setOpen(false)
                 }}
               >
-                <Icon size={16} />
                 <span className="vf-proj-control__option-copy">
                   <b>{mode.label}</b>
                   <small>{mode.title}</small>
                 </span>
-                <em aria-hidden="true">{selected ? '✓' : ''}</em>
               </button>
             )
           })}

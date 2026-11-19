@@ -1,4 +1,10 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import {
   clampStarBrightness,
   clampStarGlow,
@@ -89,6 +95,10 @@ type ViewfinderSkyControlProps = {
   onStarZoomSpanChange: (value: number) => void
   onStarBrightnessChange: (value: number) => void
   onStarGlowChange: (value: number) => void
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  showTrigger?: boolean
+  anchorRef?: RefObject<HTMLElement | null>
 }
 
 const FLOAT_POS_STORAGE_KEY = 'vf-sky-panel-float-pos'
@@ -121,7 +131,10 @@ function SkySection({
   )
 }
 
-type SkyPanelBodyProps = ViewfinderSkyControlProps
+type SkyPanelBodyProps = Omit<
+  ViewfinderSkyControlProps,
+  'open' | 'onOpenChange' | 'showTrigger' | 'anchorRef'
+>
 
 function SkyPanelBody({
   atmosphereAmount,
@@ -672,29 +685,50 @@ function SkyPanelBody({
  * Sky settings — floating, draggable, semi-transparent window.
  */
 export function ViewfinderSkyControl(props: ViewfinderSkyControlProps) {
-  const [open, setOpen] = useState(false)
+  const {
+    open: openProp,
+    onOpenChange,
+    showTrigger = true,
+    anchorRef,
+    ...panelProps
+  } = props
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = openProp ?? uncontrolledOpen
+  const setOpen = (next: boolean) => {
+    if (openProp === undefined) setUncontrolledOpen(next)
+    onOpenChange?.(next)
+  }
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const panelAnchor = anchorRef ?? rootRef
 
   return (
     <div
       ref={rootRef}
-      className={open ? 'vf-proj-control is-open' : 'vf-proj-control'}
+      className={
+        showTrigger
+          ? open
+            ? 'vf-proj-control is-open'
+            : 'vf-proj-control'
+          : undefined
+      }
     >
-      <button
-        type="button"
-        className={
-          open
-            ? 'vf-proj-control__trigger is-active'
-            : 'vf-proj-control__trigger'
-        }
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        title="Réglages du ciel"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <SettingsSlidersIcon size={16} />
-        <span className="vf-proj-control__muted">Ciel</span>
-      </button>
+      {showTrigger ? (
+        <button
+          type="button"
+          className={
+            open
+              ? 'vf-proj-control__trigger is-active'
+              : 'vf-proj-control__trigger'
+          }
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          title="Réglages du ciel"
+          onClick={() => setOpen(!open)}
+        >
+          <SettingsSlidersIcon size={16} />
+          <span className="vf-proj-control__muted">Ciel</span>
+        </button>
+      ) : null}
 
       <ViewfinderFloatPanel
         open={open}
@@ -702,9 +736,9 @@ export function ViewfinderSkyControl(props: ViewfinderSkyControlProps) {
         title="Ciel"
         storageKey={FLOAT_POS_STORAGE_KEY}
         defaultPos={DEFAULT_FLOAT_POS}
-        triggerRef={rootRef}
+        triggerRef={panelAnchor}
       >
-        <SkyPanelBody {...props} />
+        <SkyPanelBody {...panelProps} />
       </ViewfinderFloatPanel>
     </div>
   )

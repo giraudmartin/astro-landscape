@@ -91,16 +91,10 @@ import {
 } from './framingThumbStore'
 import type { FramingViewSnapshot } from './personalFramings'
 import { FrameModePhotoIcon } from './psIcons'
-import { ViewfinderLandscapeControl } from './ViewfinderLandscapeControl'
 import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
-import {
-  ViewfinderSkyControl,
-  type LocalHaloControls,
-} from './ViewfinderSkyControl'
-import {
-  ViewfinderWeatherControl,
-  weatherControlsFromSettings,
-} from './ViewfinderWeatherControl'
+import { ViewfinderSceneSettingsControl } from './ViewfinderSceneSettingsControl'
+import { type LocalHaloControls } from './ViewfinderSkyControl'
+import { weatherControlsFromSettings } from './ViewfinderWeatherControl'
 import { fetchWeatherForecast } from './weatherForecast'
 import {
   DEFAULT_VIEWFINDER_WEATHER,
@@ -2940,44 +2934,46 @@ export function ImmersiveView({
             />
           ) : null}
         </div>
-        <ViewfinderLandscapeControl
-          brightness={groundNightBrightness}
-          contrast={groundNightContrast}
-          temperature={groundNightTemperature}
-          onBrightnessChange={setGroundNightBrightness}
-          onContrastChange={setGroundNightContrast}
-          onTemperatureChange={setGroundNightTemperature}
-        />
-        <ViewfinderSkyControl
-          atmosphereAmount={atmosphereAmount}
-          moonlightEnabled={moonlightEnabled}
-          onMoonlightChange={setMoonlightEnabled}
-          airglowAmount={airglowAmount}
-          airglowHue={airglowHue}
-          airglowWaves={airglowWaves}
-          zodiacalAmount={zodiacalAmount}
-          lightPollutionAmount={lightPollutionAmount}
-          starMagDepth={starMagDepth}
-          starZoomSpan={starZoomSpan}
-          starBrightness={starBrightness}
-          starGlow={starGlow}
-          onAtmosphereAmountChange={setAtmosphereAmount}
-          onAirglowAmountChange={setAirglowAmount}
-          onAirglowHueChange={setAirglowHue}
-          onAirglowWavesChange={setAirglowWaves}
-          onZodiacalAmountChange={setZodiacalAmount}
-          onLightPollutionAmountChange={setLightPollutionAmount}
-          localHalo={localHalo}
-          onLocalHaloChange={patchLocalHalo}
-          onStarMagDepthChange={setStarMagDepth}
-          onStarZoomSpanChange={setStarZoomSpan}
-          onStarBrightnessChange={setStarBrightness}
-          onStarGlowChange={setStarGlow}
-        />
-        <ViewfinderWeatherControl
-          manual={weatherSettings}
-          weather={weatherControls}
-          onWeatherChange={setWeather}
+        <ViewfinderSceneSettingsControl
+          landscape={{
+            brightness: groundNightBrightness,
+            contrast: groundNightContrast,
+            temperature: groundNightTemperature,
+            onBrightnessChange: setGroundNightBrightness,
+            onContrastChange: setGroundNightContrast,
+            onTemperatureChange: setGroundNightTemperature,
+          }}
+          sky={{
+            atmosphereAmount,
+            moonlightEnabled,
+            onMoonlightChange: setMoonlightEnabled,
+            airglowAmount,
+            airglowHue,
+            airglowWaves,
+            zodiacalAmount,
+            lightPollutionAmount,
+            starMagDepth,
+            starZoomSpan,
+            starBrightness,
+            starGlow,
+            onAtmosphereAmountChange: setAtmosphereAmount,
+            onAirglowAmountChange: setAirglowAmount,
+            onAirglowHueChange: setAirglowHue,
+            onAirglowWavesChange: setAirglowWaves,
+            onZodiacalAmountChange: setZodiacalAmount,
+            onLightPollutionAmountChange: setLightPollutionAmount,
+            localHalo,
+            onLocalHaloChange: patchLocalHalo,
+            onStarMagDepthChange: setStarMagDepth,
+            onStarZoomSpanChange: setStarZoomSpan,
+            onStarBrightnessChange: setStarBrightness,
+            onStarGlowChange: setStarGlow,
+          }}
+          weather={{
+            manual: weatherSettings,
+            weather: weatherControls,
+            onWeatherChange: setWeather,
+          }}
         />
         <ViewfinderProjectionControl
           projection={projection}

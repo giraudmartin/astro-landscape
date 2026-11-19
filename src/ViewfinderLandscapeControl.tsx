@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import {
   clampGroundNightBrightness,
   clampGroundNightContrast,
@@ -20,6 +20,10 @@ type ViewfinderLandscapeControlProps = {
   onBrightnessChange: (value: number) => void
   onContrastChange: (value: number) => void
   onTemperatureChange: (value: number) => void
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  showTrigger?: boolean
+  anchorRef?: RefObject<HTMLElement | null>
 }
 
 const FLOAT_POS_STORAGE_KEY = 'vf-landscape-panel-float-pos'
@@ -35,9 +39,19 @@ export function ViewfinderLandscapeControl({
   onBrightnessChange,
   onContrastChange,
   onTemperatureChange,
+  open: openProp,
+  onOpenChange,
+  showTrigger = true,
+  anchorRef,
 }: ViewfinderLandscapeControlProps) {
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = openProp ?? uncontrolledOpen
+  const setOpen = (next: boolean) => {
+    if (openProp === undefined) setUncontrolledOpen(next)
+    onOpenChange?.(next)
+  }
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const panelAnchor = anchorRef ?? rootRef
 
   const temperatureLabel =
     temperature > 0 ? `+${temperature.toFixed(2)}` : temperature.toFixed(2)
@@ -53,23 +67,31 @@ export function ViewfinderLandscapeControl({
   return (
     <div
       ref={rootRef}
-      className={open ? 'vf-proj-control is-open' : 'vf-proj-control'}
+      className={
+        showTrigger
+          ? open
+            ? 'vf-proj-control is-open'
+            : 'vf-proj-control'
+          : undefined
+      }
     >
-      <button
-        type="button"
-        className={
-          open
-            ? 'vf-proj-control__trigger is-active'
-            : 'vf-proj-control__trigger'
-        }
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        title="Réglages du paysage"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <SettingsSlidersIcon size={16} />
-        <span className="vf-proj-control__muted">Paysage</span>
-      </button>
+      {showTrigger ? (
+        <button
+          type="button"
+          className={
+            open
+              ? 'vf-proj-control__trigger is-active'
+              : 'vf-proj-control__trigger'
+          }
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          title="Réglages du paysage"
+          onClick={() => setOpen(!open)}
+        >
+          <SettingsSlidersIcon size={16} />
+          <span className="vf-proj-control__muted">Paysage</span>
+        </button>
+      ) : null}
 
       <ViewfinderFloatPanel
         open={open}
@@ -77,7 +99,7 @@ export function ViewfinderLandscapeControl({
         title="Paysage"
         storageKey={FLOAT_POS_STORAGE_KEY}
         defaultPos={DEFAULT_FLOAT_POS}
-        triggerRef={rootRef}
+        triggerRef={panelAnchor}
       >
         <section className="vf-sky-panel__section">
           <h3 className="vf-sky-panel__section-title">Sol nuit</h3>

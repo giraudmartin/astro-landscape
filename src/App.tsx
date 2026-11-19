@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type CelestialObject } from './celestialObjects'
-import { ImmersiveView } from './ImmersiveView'
+import {
+  ImmersiveView,
+  type ImmersiveFramingApi,
+} from './ImmersiveView'
 import { MapCanvas, type CameraMode, type SpotState } from './MapCanvas'
 import { ConfirmCard } from './ConfirmCard'
 import { FolderSaveCard } from './FolderSaveCard'
 import { MobileTopDrawer } from './MobileTopDrawer'
+import {
+  FramingsPanel,
+  type FramingsEditorDraft,
+} from './FramingsPanel'
 import { MySpotsRail } from './MySpotsCard'
 import { OverviewCard } from './OverviewCard'
 import { SpotSaveCard } from './SpotSaveCard'
@@ -17,6 +24,23 @@ import {
 } from './celestial'
 import type { BasemapMode } from './basemapMode'
 import { loadAppSettings, patchAppSettings } from './appSettings'
+import {
+  deleteFramingThumb,
+  putFramingThumb,
+} from './framingThumbStore'
+import {
+  createPersonalFraming,
+  formatCivilLocalTimestamp,
+  framingNightGroupDay,
+  framingMonthFromDay,
+  loadPersonalFramings,
+  peakUtcFromCivilLocal,
+  removePersonalFraming,
+  savePersonalFramings,
+  upsertPersonalFraming,
+  type FramingViewSnapshot,
+  type PersonalFraming,
+} from './personalFramings'
 import {
   createPersonalSpot,
   createPersonalSpotFolder,
@@ -74,6 +98,7 @@ export default function App() {
   const [infoDrawerOpen, setInfoDrawerOpen] = useState(false)
 
   const [mySpotsOpen, setMySpotsOpen] = useState(false)
+  const [framingsOpen, setFramingsOpen] = useState(false)
   const [initialPersonalSpots] = useState(loadPersonalSpotsState)
   const [personalSpots, setPersonalSpots] = useState<PersonalSpot[]>(
     initialPersonalSpots.spots,
@@ -84,6 +109,32 @@ export default function App() {
   const [selectedPersonalSpotId, setSelectedPersonalSpotId] = useState<
     string | null
   >(null)
+  const [personalFramings, setPersonalFramings] = useState<PersonalFraming[]>(
+    () => loadPersonalFramings(),
+  )
+  const [framingsDisplay, setFramingsDisplay] = useState<'list' | 'calendar'>(
+    'list',
+  )
+  const [framingsFilterSpotId, setFramingsFilterSpotId] = useState('all')
+  const [framingsCalendarDay, setFramingsCalendarDay] = useState(() =>
+    civilDateFromUtc(Date.now(), 0),
+  )
+  const [framingsCalendarMonth, setFramingsCalendarMonth] = useState(() =>
+    civilDateFromUtc(Date.now(), 0).slice(0, 7),
+  )
+  const [activeFramingId, setActiveFramingId] = useState<string | null>(null)
+  const [framingsEditor, setFramingsEditor] =
+    useState<FramingsEditorDraft | null>(null)
+  const framingApiRef = useRef<ImmersiveFramingApi | null>(null)
+  const [immersiveCanSaveFraming, setImmersiveCanSaveFraming] = useState(false)
+  const pendingFramingRestoreRef = useRef<FramingViewSnapshot | null>(null)
+  const mapFramingsReturnRef = useRef<{
+    open: boolean
+    display: 'list' | 'calendar'
+    day: string
+    month: string
+    filterSpotId: string
+  } | null>(null)
   const [personalSpotPicking, setPersonalSpotPicking] = useState(false)
   const [flyToPersonalSpotId, setFlyToPersonalSpotId] = useState<string | null>(
     null,
@@ -103,7 +154,7 @@ export default function App() {
   } | null>(null)
   const [folderDialogName, setFolderDialogName] = useState('')
   const [confirmDialog, setConfirmDialog] = useState<{
-    kind: 'spot' | 'folder'
+    kind: 'spot' | 'folder' | 'framing'
     id: string
     name: string
   } | null>(null)
@@ -158,6 +209,10 @@ export default function App() {
   }, [personalSpots, personalSpotFolders])
 
   useEffect(() => {
+    savePersonalFramings(personalFramings)
+  }, [personalFramings])
+
+  useEffect(() => {
     installThreeGameTestHooks()
     const api: QaAppApi = {
       enterImmersive: (opts) => {
@@ -207,14 +262,15 @@ export default function App() {
   useEffect(() => {
     const root = document.documentElement
     // Phone sheets overlay the map — do not inset the stage.
+    const railOpen = (mySpotsOpen || framingsOpen) && !isPhone
     root.style.setProperty(
       '--map-rail-width',
-      mySpotsOpen && !isPhone ? `${MAP_RAIL_WIDTH_PX}px` : '0px',
+      railOpen ? `${MAP_RAIL_WIDTH_PX}px` : '0px',
     )
     return () => {
       root.style.setProperty('--map-rail-width', '0px')
     }
-  }, [mySpotsOpen, isPhone])
+  }, [mySpotsOpen, framingsOpen, isPhone])
 
   useEffect(() => {
     if (!isPhone) setInfoDrawerOpen(false)
@@ -280,6 +336,17 @@ export default function App() {
     setMode('orbit')
     setFlyToPersonalSpotId(saved.id)
   }, [])
+
+  /** Opening the pin panel: bind list selection if this pin matches a saved spot. */
+  const activateWorkingPin = useCallback(() => {
+    if (!spot) return
+    const match = findSpotAt(spot.lat, spot.lon)
+    if (match) {
+      setSelectedPersonalSpotId(match.id)
+      return
+    }
+    setSelectedPersonalSpotId(null)
+  }, [spot, findSpotAt])
 
   const closeEditDialog = useCallback(() => {
     const origin = editingOriginRef.current
@@ -519,6 +586,13 @@ export default function App() {
         setEditingName('')
         setPersonalSpotPicking(false)
       }
+    } else if (confirmDialog.kind === 'framing') {
+      const id = confirmDialog.id
+      const row = personalFramings.find((f) => f.id === id)
+      setPersonalFramings((list) => removePersonalFraming(list, id))
+      if (row?.thumbId) void deleteFramingThumb(row.thumbId)
+      if (activeFramingId === id) setActiveFramingId(null)
+      setFramingsEditor(null)
     } else {
       const next = removePersonalSpotFolder(
         personalSpots,
@@ -540,6 +614,8 @@ export default function App() {
     personalSpots,
     personalSpotFolders,
     folderDialog,
+    personalFramings,
+    activeFramingId,
   ])
 
   const onToggleFolderVisible = useCallback((folderId: string) => {
@@ -562,6 +638,246 @@ export default function App() {
     },
     [personalSpotFolders],
   )
+
+  const currentSavedSpot = useMemo(() => {
+    if (!spot) return null
+    return (
+      (selectedPersonalSpotId
+        ? personalSpots.find((row) => row.id === selectedPersonalSpotId)
+        : null) ?? findSpotAt(spot.lat, spot.lon)
+    )
+  }, [spot, selectedPersonalSpotId, personalSpots, findSpotAt])
+
+  const framingSpotOptions = useMemo(() => {
+    const labels = new Map<string, string>()
+    for (const spotRow of personalSpots) {
+      labels.set(spotRow.id, spotRow.name)
+    }
+    for (const framing of personalFramings) {
+      if (!labels.has(framing.spotId)) {
+        labels.set(framing.spotId, framing.spotName)
+      }
+    }
+    return [...labels.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr'))
+  }, [personalSpots, personalFramings])
+
+  const canSaveFraming =
+    mode === 'ground' && currentSavedSpot != null && immersiveCanSaveFraming
+
+  const openFramingsForSpot = useCallback((saved: PersonalSpot) => {
+    setFramingsFilterSpotId(saved.id)
+    setFramingsEditor(null)
+    setMySpotsOpen(false)
+    setFramingsOpen(true)
+  }, [])
+
+  const requestSaveCurrentFraming = useCallback(() => {
+    const api = framingApiRef.current
+    const saved = currentSavedSpot
+    if (!api || !saved || !spot) return
+    const view = api.getSnapshot()
+    if (!view) return
+    const peakLocal = formatCivilLocalTimestamp(playheadUtcMs, spot.lon)
+    const time = peakLocal.match(/T(\d{2}:\d{2})/)?.[1] ?? ''
+    setFramingsEditor({
+      name: time ? `${saved.name} · ${time}` : saved.name,
+      peakLocal,
+      view,
+      spotId: saved.id,
+      spotName: saved.name,
+    })
+  }, [currentSavedSpot, spot, playheadUtcMs])
+
+  const submitFramingEditor = useCallback(
+    async (draft: FramingsEditorDraft) => {
+      if (!spot && !draft.id) return
+      const lat = spot?.lat ?? personalFramings.find((f) => f.id === draft.id)?.lat
+      const lon = spot?.lon ?? personalFramings.find((f) => f.id === draft.id)?.lon
+      if (lat == null || lon == null) return
+      const peakLocal = draft.peakLocal
+      const peakUtc = peakUtcFromCivilLocal(peakLocal, lon)
+      const localDate = peakLocal.slice(0, 10)
+      let thumbId: string | null = null
+      if (!draft.id) {
+        const blob = await framingApiRef.current?.captureThumb()
+        if (blob) {
+          thumbId = crypto.randomUUID?.() ?? `thumb-${Date.now()}`
+          try {
+            await putFramingThumb(thumbId, blob)
+          } catch {
+            thumbId = null
+          }
+        }
+      } else {
+        thumbId =
+          personalFramings.find((f) => f.id === draft.id)?.thumbId ?? null
+      }
+      const heightM =
+        spot?.heightM ??
+        personalFramings.find((f) => f.id === draft.id)?.heightM ??
+        null
+      const created = createPersonalFraming({
+        name: draft.name,
+        lat,
+        lon,
+        peakUtc,
+        peakLocal,
+        localDate,
+        spotId: draft.spotId,
+        spotName: draft.spotName,
+        heightM,
+        view: draft.view,
+        thumbId,
+        source: 'immersive',
+      })
+      if (draft.id) {
+        const prev = personalFramings.find((f) => f.id === draft.id)
+        setPersonalFramings((list) =>
+          upsertPersonalFraming(list, {
+            ...created,
+            id: draft.id!,
+            createdAtIso: prev?.createdAtIso ?? created.createdAtIso,
+            thumbId: prev?.thumbId ?? thumbId,
+          }),
+        )
+        setActiveFramingId(draft.id)
+      } else {
+        setPersonalFramings((list) => upsertPersonalFraming(list, created))
+        setActiveFramingId(created.id)
+      }
+      const nightDay = framingNightGroupDay(peakLocal)
+      setFramingsCalendarDay(nightDay)
+      setFramingsCalendarMonth(framingMonthFromDay(nightDay))
+      setFramingsDisplay('list')
+      setFramingsEditor(null)
+      setFramingsOpen(true)
+    },
+    [spot, personalFramings],
+  )
+
+  const editFraming = useCallback((framing: PersonalFraming) => {
+    setFramingsEditor({
+      id: framing.id,
+      name: framing.name,
+      peakLocal: framing.peakLocal,
+      view: framing.view,
+      spotId: framing.spotId,
+      spotName: framing.spotName,
+    })
+  }, [])
+
+  const applyFramingInImmersive = useCallback(
+    (framing: PersonalFraming) => {
+      setDate(framing.localDate)
+      const peakMs = Date.parse(framing.peakUtc)
+      if (Number.isFinite(peakMs)) setPlayheadUtcMs(peakMs)
+      setActiveFramingId(framing.id)
+      setSelectedPersonalSpotId(framing.spotId)
+      setImmersiveLook({
+        bearingDeg: framing.view.bearingDeg,
+        pitchDeg: framing.view.pitchDeg,
+      })
+      const apply = () => framingApiRef.current?.applySnapshot(framing.view)
+      apply()
+      window.setTimeout(apply, 120)
+      window.setTimeout(apply, 400)
+    },
+    [],
+  )
+
+  const restoreFraming = useCallback(
+    (framing: PersonalFraming) => {
+      const linked = personalSpots.find((row) => row.id === framing.spotId)
+      const sameSpot =
+        spot != null &&
+        Math.abs(spot.lat - framing.lat) < 1e-5 &&
+        Math.abs(spot.lon - framing.lon) < 1e-5
+
+      if (mode === 'ground' && sameSpot) {
+        applyFramingInImmersive(framing)
+        setFramingsEditor(null)
+        return
+      }
+
+      // Leaving the map → remember panel UI for return.
+      if (mode !== 'ground') {
+        mapFramingsReturnRef.current = {
+          open: framingsOpen,
+          display: framingsDisplay,
+          day: framingsCalendarDay,
+          month: framingsCalendarMonth,
+          filterSpotId: framingsFilterSpotId,
+        }
+      }
+
+      pendingFramingRestoreRef.current = framing.view
+      setActiveFramingId(framing.id)
+      setFramingsEditor(null)
+      setFramingsOpen(false)
+      setMySpotsOpen(false)
+      setDate(framing.localDate)
+      const peakMs = Date.parse(framing.peakUtc)
+      if (Number.isFinite(peakMs)) setPlayheadUtcMs(peakMs)
+      setImmersiveLook({
+        bearingDeg: framing.view.bearingDeg,
+        pitchDeg: framing.view.pitchDeg,
+      })
+      if (linked) {
+        setSelectedPersonalSpotId(linked.id)
+        setSpot({
+          lat: linked.lat,
+          lon: linked.lon,
+          heightM: linked.heightM ?? framing.heightM ?? 0,
+          bearingDeg: framing.view.bearingDeg,
+          pitchDeg: linked.pitchDeg,
+        })
+      } else {
+        setSelectedPersonalSpotId(framing.spotId)
+        setSpot({
+          lat: framing.lat,
+          lon: framing.lon,
+          heightM: framing.heightM ?? 0,
+          bearingDeg: framing.view.bearingDeg,
+          pitchDeg: framing.view.pitchDeg,
+        })
+      }
+      setFlatTerrain(false)
+      setMode('ground')
+    },
+    [
+      personalSpots,
+      spot,
+      mode,
+      framingsOpen,
+      framingsDisplay,
+      framingsCalendarDay,
+      framingsCalendarMonth,
+      framingsFilterSpotId,
+      applyFramingInImmersive,
+    ],
+  )
+
+  // Apply pending framing once immersive API is ready.
+  useEffect(() => {
+    if (mode !== 'ground') return
+    const view = pendingFramingRestoreRef.current
+    if (!view) return
+    const tryApply = () => {
+      if (!framingApiRef.current) return false
+      framingApiRef.current.applySnapshot(view)
+      pendingFramingRestoreRef.current = null
+      return true
+    }
+    if (tryApply()) return
+    const t1 = window.setTimeout(() => tryApply(), 200)
+    const t2 = window.setTimeout(() => tryApply(), 800)
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+    }
+  }, [mode, spot?.lat, spot?.lon])
 
   const immersive = mode === 'ground' && spot != null
 
@@ -648,6 +964,7 @@ export default function App() {
               setSelectedPersonalSpotId(editingSpot.id)
               return
             }
+            // Map place → temporary pin (weather follows pin; list selection cleared if moved).
             const saved = selectedPersonalSpotId
               ? personalSpots.find((row) => row.id === selectedPersonalSpotId)
               : null
@@ -668,8 +985,20 @@ export default function App() {
             setMySpotsOpen(open)
             if (!open && !editingSpot) setPersonalSpotPicking(false)
             if (open) {
+              setFramingsOpen(false)
               setAddressSearchOpen(false)
               setInfoDrawerOpen(false)
+            }
+          }}
+          framingsOpen={framingsOpen}
+          onFramingsOpenChange={(open) => {
+            setFramingsOpen(open)
+            if (open) {
+              setMySpotsOpen(false)
+              if (!editingSpot) setPersonalSpotPicking(false)
+              setAddressSearchOpen(false)
+              setInfoDrawerOpen(false)
+              setFramingsEditor(null)
             }
           }}
           personalSpots={personalSpotsForMap}
@@ -678,6 +1007,7 @@ export default function App() {
           personalSpotPicking={personalSpotPicking || editingSpot != null}
           onPlacePersonalSpot={onPlacePersonalSpot}
           onSelectPersonalSpot={selectPersonalSpot}
+          onActivateWorkingPin={activateWorkingPin}
           flyToPersonalSpotId={flyToPersonalSpotId}
           onFlyToPersonalSpotHandled={onFlyToPersonalSpotHandled}
           showAllPersonalSpotsToken={showAllPersonalSpotsToken}
@@ -713,17 +1043,38 @@ export default function App() {
             skyUtcMs={playheadUtcMs}
             onSkyUtcChange={onPlayheadChange}
             date={date}
-            onDateChange={onDateChange}
             selectedCelestial={selectedCelestial}
             onSelectCelestial={setSelectedCelestial}
             onTerrainReadyChange={setImmersiveTerrainReady}
             onTimelapsePreviewPlayingChange={setTimelapsePreviewPlaying}
             flatTerrain={flatTerrain}
+            framingsOpen={framingsOpen}
+            onFramingsOpenChange={(open) => {
+              setFramingsOpen(open)
+              if (open) {
+                setMySpotsOpen(false)
+                setFramingsEditor(null)
+                if (currentSavedSpot) {
+                  setFramingsFilterSpotId(currentSavedSpot.id)
+                }
+              }
+            }}
+            onFramingCanSaveChange={setImmersiveCanSaveFraming}
+            framingApiRef={framingApiRef}
             onExit={() => {
               setImmersiveLook(null)
               setImmersiveTerrainReady(false)
               setTimelapsePreviewPlaying(false)
               setMode('orbit')
+              const ret = mapFramingsReturnRef.current
+              if (ret) {
+                setFramingsOpen(ret.open)
+                setFramingsDisplay(ret.display)
+                setFramingsCalendarDay(ret.day)
+                setFramingsCalendarMonth(ret.month)
+                setFramingsFilterSpotId(ret.filterSpotId)
+                mapFramingsReturnRef.current = null
+              }
             }}
           />
         </div>
@@ -736,6 +1087,7 @@ export default function App() {
             setInfoDrawerOpen(open)
             if (open) {
               setMySpotsOpen(false)
+              setFramingsOpen(false)
               if (!editingSpot) setPersonalSpotPicking(false)
               setAddressSearchOpen(false)
             }
@@ -809,8 +1161,56 @@ export default function App() {
           onShowAll={() =>
             setShowAllPersonalSpotsToken((token) => token + 1)
           }
+          onViewFramings={openFramingsForSpot}
         />
       ) : null}
+
+      <FramingsPanel
+        open={framingsOpen}
+        onClose={() => {
+          setFramingsOpen(false)
+          setFramingsEditor(null)
+        }}
+        mode={immersive ? 'immersive' : 'map'}
+        framings={personalFramings}
+        spotOptions={framingSpotOptions}
+        filterSpotId={framingsFilterSpotId}
+        onFilterSpotIdChange={setFramingsFilterSpotId}
+        currentSpotId={currentSavedSpot?.id ?? null}
+        currentSpotName={currentSavedSpot?.name ?? null}
+        display={framingsDisplay}
+        onDisplayChange={setFramingsDisplay}
+        calendarDay={framingsCalendarDay}
+        onCalendarDayChange={(day) => {
+          setFramingsCalendarDay(day)
+          setFramingsCalendarMonth(framingMonthFromDay(day))
+        }}
+        calendarMonth={framingsCalendarMonth}
+        onCalendarMonthChange={(month) => {
+          setFramingsCalendarMonth(month)
+          if (!framingsCalendarDay.startsWith(month)) {
+            setFramingsCalendarDay(`${month}-01`)
+          }
+        }}
+        activeId={activeFramingId}
+        canSaveCurrent={canSaveFraming}
+        onRequestSaveCurrent={requestSaveCurrentFraming}
+        editor={framingsEditor}
+        onEditorChange={setFramingsEditor}
+        onSubmitEditor={(draft) => {
+          void submitFramingEditor(draft)
+        }}
+        onDeleteFraming={(id) => {
+          const row = personalFramings.find((f) => f.id === id)
+          setConfirmDialog({
+            kind: 'framing',
+            id,
+            name: row?.name ?? 'Cadrage',
+          })
+        }}
+        onRestore={restoreFraming}
+        onEdit={editFraming}
+      />
 
       {!immersive && pendingSave ? (
         <SpotSaveCard
@@ -859,17 +1259,21 @@ export default function App() {
         />
       ) : null}
 
-      {!immersive && confirmDialog ? (
+      {confirmDialog ? (
         <ConfirmCard
           title={
             confirmDialog.kind === 'spot'
               ? 'Supprimer le spot'
-              : 'Supprimer le dossier'
+              : confirmDialog.kind === 'framing'
+                ? 'Supprimer le cadrage'
+                : 'Supprimer le dossier'
           }
           message={
             confirmDialog.kind === 'spot'
               ? `Supprimer « ${confirmDialog.name} » ? Cette action est définitive.`
-              : `Supprimer « ${confirmDialog.name} » ? Les spots seront conservés hors dossier.`
+              : confirmDialog.kind === 'framing'
+                ? `Supprimer « ${confirmDialog.name} » ? Cette action est définitive.`
+                : `Supprimer « ${confirmDialog.name} » ? Les spots seront conservés hors dossier.`
           }
           onConfirm={commitConfirmDialog}
           onClose={() => setConfirmDialog(null)}

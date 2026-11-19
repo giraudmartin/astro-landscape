@@ -312,11 +312,11 @@ export function filterMapVisiblePersonalSpots(
   return spots.filter((spot) => personalSpotMapVisible(spot, folders))
 }
 
-/** Same camera glyph as Photo Sightline personal-spot markers. */
-const PERSONAL_SPOT_CAMERA_ICON =
+/** Map pin — saved spots at rest; active working pin uses green camera. */
+const PERSONAL_SPOT_PIN_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">' +
-  '<path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/>' +
-  '<circle cx="12" cy="13" r="3"/>' +
+  '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>' +
+  '<circle cx="12" cy="10" r="3"/>' +
   '</svg>'
 
 export function createPersonalSpotMarkerElement(
@@ -329,7 +329,7 @@ export function createPersonalSpotMarkerElement(
   el.style.position = 'absolute'
   el.innerHTML =
     `<span class="personal-spot-marker__center" title="${escapeHtml(spot.name)}">` +
-    `<span class="personal-spot-marker__camera">${PERSONAL_SPOT_CAMERA_ICON}</span>` +
+    `<span class="personal-spot-marker__pin">${PERSONAL_SPOT_PIN_ICON}</span>` +
     '</span>' +
     `<span class="personal-spot-marker__label">${escapeHtml(spot.name)}</span>`
   el.setAttribute('role', 'button')
@@ -343,9 +343,21 @@ export function renderPersonalSpotMarkers(
   spots: PersonalSpot[],
   selectedId: string | null,
   onSelect: (spot: PersonalSpot) => void,
+  /** Hide the marker under the working pin when coords match. */
+  activeLocation?: { lat: number; lon: number } | null,
 ): Marker[] {
-  // Selected spot uses the main pin marker — skip its camera pin.
-  const visible = spots.filter((spot) => spot.id !== selectedId)
+  // Active / working pin is green camera — skip that location's map marker.
+  const visible = spots.filter((spot) => {
+    if (spot.id === selectedId) return false
+    if (
+      activeLocation &&
+      Math.abs(spot.lat - activeLocation.lat) < 1e-6 &&
+      Math.abs(spot.lon - activeLocation.lon) < 1e-6
+    ) {
+      return false
+    }
+    return true
+  })
   return visible.map((spot) => {
     const marker = new maplibregl.Marker({
       element: createPersonalSpotMarkerElement(spot),
@@ -354,7 +366,10 @@ export function renderPersonalSpotMarkers(
     })
       .setLngLat([spot.lon, spot.lat])
       .addTo(map)
-    marker.getElement().addEventListener('click', (event) => {
+    const el = marker.getElement()
+    // Left-click only selects. Right-click must reach the map to place a pin.
+    el.addEventListener('click', (event) => {
+      if (event.button !== 0) return
       event.preventDefault()
       event.stopPropagation()
       onSelect(spot)

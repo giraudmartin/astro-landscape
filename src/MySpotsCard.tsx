@@ -21,6 +21,7 @@ type MySpotsRailProps = {
   onToggleFolderVisible: (folderId: string) => void
   onMoveSpotToFolder: (spotId: string, folderId: string | null) => void
   onShowAll: () => void
+  onViewFramings?: (spot: PersonalSpot) => void
 }
 
 const SPOT_DRAG_MIME = 'application/x-astro-spot-id'
@@ -161,6 +162,7 @@ function SpotRow({
   onSelect,
   onRename,
   onToggleVisible,
+  onViewFramings,
   onDragStart,
   onDragEnd,
 }: {
@@ -170,6 +172,7 @@ function SpotRow({
   onSelect: () => void
   onRename: () => void
   onToggleVisible: () => void
+  onViewFramings?: () => void
   onDragStart: (event: DragEvent) => void
   onDragEnd: () => void
 }) {
@@ -216,6 +219,30 @@ function SpotRow({
         >
           {mapHidden ? <EyeOffIcon /> : <EyeIcon />}
         </button>
+        {onViewFramings ? (
+          <button
+            type="button"
+            className="my-spots-row__edit"
+            aria-label={`Voir les cadrages de ${spot.name}`}
+            title="Voir les cadrages"
+            onClick={onViewFramings}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect width="18" height="14" x="3" y="5" rx="2" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        ) : null}
         <button
           type="button"
           className="my-spots-row__edit"
@@ -244,6 +271,7 @@ export function MySpotsRail({
   onToggleFolderVisible,
   onMoveSpotToFolder,
   onShowAll,
+  onViewFramings,
 }: MySpotsRailProps) {
   const [query, setQuery] = useState('')
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(
@@ -350,6 +378,9 @@ export function MySpotsRail({
         onSelect={() => onSelect(spot)}
         onRename={() => onRename(spot)}
         onToggleVisible={() => onToggleSpotVisible(spot.id)}
+        onViewFramings={
+          onViewFramings ? () => onViewFramings(spot) : undefined
+        }
         onDragStart={(event) => beginSpotDrag(event, spot.id)}
         onDragEnd={endSpotDrag}
       />
@@ -376,8 +407,8 @@ export function MySpotsRail({
               </span>
             </h2>
             <p className="my-spots-rail__sub">
-              Clic droit (ou appui long) pour poser un marker · range-les dans
-              des dossiers.
+              Clic droit pose le pin actif (vert) · clic sur un spot le rend
+              actif · range-les dans des dossiers.
               {searching && spots.length > 0 ? (
                 <> · {matchingSpots.length} visible(s)</>
               ) : null}

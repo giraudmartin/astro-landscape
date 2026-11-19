@@ -138,6 +138,8 @@ type MapCanvasProps = {
   skyUtcMs: number
   mySpotsOpen: boolean
   onMySpotsOpenChange: (open: boolean) => void
+  framingsOpen: boolean
+  onFramingsOpenChange: (open: boolean) => void
   personalSpots: PersonalSpot[]
   personalSpotFolders: PersonalSpotFolder[]
   selectedPersonalSpotId: string | null
@@ -150,6 +152,8 @@ type MapCanvasProps = {
     pitchDeg: number
   }) => void
   onSelectPersonalSpot: (spot: PersonalSpot) => void
+  /** Opening the pin panel — sync saved-spot list selection if coords match. */
+  onActivateWorkingPin: () => void
   flyToPersonalSpotId: string | null
   onFlyToPersonalSpotHandled: () => void
   showAllPersonalSpotsToken: number
@@ -328,12 +332,15 @@ export function MapCanvas({
   skyUtcMs,
   mySpotsOpen,
   onMySpotsOpenChange,
+  framingsOpen,
+  onFramingsOpenChange,
   personalSpots,
   personalSpotFolders,
   selectedPersonalSpotId,
   personalSpotPicking,
   onPlacePersonalSpot,
   onSelectPersonalSpot,
+  onActivateWorkingPin,
   flyToPersonalSpotId,
   onFlyToPersonalSpotHandled,
   showAllPersonalSpotsToken,
@@ -362,9 +369,12 @@ export function MapCanvas({
   const onThreeDimensionalChangeRef = useRef(onThreeDimensionalChange)
   const onPlacePersonalSpotRef = useRef(onPlacePersonalSpot)
   const onSelectPersonalSpotRef = useRef(onSelectPersonalSpot)
+  const onActivateWorkingPinRef = useRef(onActivateWorkingPin)
   const onRequestSaveSpotRef = useRef(onRequestSaveSpot)
   const onRequestEditSpotRef = useRef(onRequestEditSpot)
   const onMarkerMenuOpenChangeRef = useRef(onMarkerMenuOpenChange)
+  /** Open radial after selecting a saved camera pin (working pin remounts). */
+  const pendingOpenMarkerMenuRef = useRef(false)
 
   const skyUtcMsRef = useRef(skyUtcMs)
   skyUtcMsRef.current = skyUtcMs
@@ -384,6 +394,7 @@ export function MapCanvas({
   onThreeDimensionalChangeRef.current = onThreeDimensionalChange
   onPlacePersonalSpotRef.current = onPlacePersonalSpot
   onSelectPersonalSpotRef.current = onSelectPersonalSpot
+  onActivateWorkingPinRef.current = onActivateWorkingPin
   onRequestSaveSpotRef.current = onRequestSaveSpot
   onRequestEditSpotRef.current = onRequestEditSpot
   onMarkerMenuOpenChangeRef.current = onMarkerMenuOpenChange
@@ -492,17 +503,12 @@ export function MapCanvas({
         const savedMatch = matchingSavedSpot(lat, lng)
         const markerUi = createSpotActionMarkerElement(Boolean(savedMatch), {
           onOpenChange: (open) => onMarkerMenuOpenChangeRef.current(open),
-          shouldBlockOpen: () => performance.now() < suppressSpotActionMenuUntil,
-          onSelectSaved: () => {
-            const current = spotRef.current
-            if (!current) return false
-            const match = matchingSavedSpot(current.lat, current.lon)
-            if (!match) return false
-            if (selectedPersonalSpotIdRef.current !== match.id) {
-              onSelectPersonalSpotRef.current(match)
-              return true
-            }
-            return false
+          shouldBlockOpen: () =>
+            performance.now() < suppressSpotActionMenuUntil ||
+            // Globe overview: never open the radial — click zooms the map instead.
+            groundViewAmount(map.getZoom()) < 0.35,
+          onActivate: () => {
+            onActivateWorkingPinRef.current()
           },
           onStreetView: () => {
             const current = spotRef.current
@@ -544,6 +550,10 @@ export function MapCanvas({
         const match = matchingSavedSpot(lat, lng)
         markerUiRef.current.setSaved(Boolean(match))
         markerUiRef.current.setLabel(match?.name ?? null)
+      }
+      if (pendingOpenMarkerMenuRef.current) {
+        pendingOpenMarkerMenuRef.current = false
+        markerUiRef.current?.open()
       }
     }
 
@@ -695,13 +705,20 @@ export function MapCanvas({
 
     const flyToPersonalSpot = (saved: PersonalSpot) => {
       onModeChangeRef.current('orbit')
+      const pitch = threeDimensionalRef.current
+        ? Math.min(Math.max(saved.pitchDeg, 45), 65)
+        : FLAT_PITCH
+
+      // Already on the map: activate pin only — no zoom. Globe: fly in.
+      if (groundViewAmount(map.getZoom()) >= 0.35) {
+        publishSpot(saved.lat, saved.lon, saved.bearingDeg, pitch)
+        return
+      }
+
       if (!threeDimensionalRef.current) {
         onThreeDimensionalChangeRef.current(true)
         threeDimensionalRef.current = true
       }
-      const pitch = threeDimensionalRef.current
-        ? Math.min(Math.max(saved.pitchDeg, 45), 65)
-        : FLAT_PITCH
       hideLightPollutionForGroundFly()
       const targetZoom = Math.max(map.getZoom(), 13.5)
       map.flyTo({
@@ -764,8 +781,9 @@ export function MapCanvas({
     // Inline style can finish before 'load' is attached — don't skip basemap/PL.
     if (map.isStyleLoaded()) onMapReady()
 
-    /** Place / move the working pin — no camera jump (PS: right-click pins in place). */
+    /** Place / move the working pin — temporary until saved; never opens panel. */
     const placeWorkingPin = (lat: number, lng: number) => {
+      selectedPersonalSpotIdRef.current = null
       const bearing = map.getBearing()
       const pitch = threeDimensionalRef.current
         ? Math.max(map.getPitch(), THREE_D_PITCH)
@@ -774,8 +792,24 @@ export function MapCanvas({
       publishSpot(lat, lng, bearing, pitch)
     }
 
+    /** Globe overview: left-click zooms toward the cursor — no pin, no panel. */
+    const zoomTowardCursor = (lng: number, lat: number) => {
+      const z = map.getZoom()
+      const nextZoom = Math.min(Math.max(z + 2.4, 5.8), 11.5)
+      map.easeTo({
+        center: [lng, lat],
+        zoom: nextZoom,
+        duration: 750,
+        essential: true,
+      })
+    }
+
     const onMapClick = (event: MapMouseEvent) => {
       if (performance.now() < suppressMapClickUntil) return
+      // Right-button / non-primary must never select or place via `click`
+      // (some stacks synthesize click after contextmenu).
+      const button = event.originalEvent?.button
+      if (typeof button === 'number' && button !== 0) return
 
       const { lng, lat } = event.lngLat
       const bearing = map.getBearing()
@@ -799,26 +833,25 @@ export function MapCanvas({
         return
       }
 
-      // Left-click does not drop a pin — right-click / long-press does.
+      // Globe: zoom to cursor only — do not place a pin or open the panel.
+      if (groundViewAmount(map.getZoom()) < 0.35) {
+        zoomTowardCursor(lng, lat)
+        return
+      }
+
+      // Left-click empty map does nothing — right-click / long-press places.
+      // Left-click on a pin selects + opens the panel.
     }
 
     const onMapContextMenu = (event: MapMouseEvent) => {
       event.preventDefault()
       if (personalSpotPickingRef.current) return
 
-      // Touch long-press can synthesize contextmenu + a follow-up click on the
-      // new pin; block that accidental open. Mouse right-click must NOT suppress:
-      // users left-click the pin right away to open the actions panel.
-      const original = event.originalEvent
-      const fromTouch =
-        typeof PointerEvent !== 'undefined' && original instanceof PointerEvent
-          ? original.pointerType !== 'mouse'
-          : typeof TouchEvent !== 'undefined' && original instanceof TouchEvent
-      if (fromTouch) {
-        const until = performance.now() + 900
-        suppressMapClickUntil = until
-        suppressSpotActionMenuUntil = until
-      }
+      // Always place — never select. Suppress a follow-up `click` so a
+      // right-click near a saved pin cannot be turned into a selection.
+      const until = performance.now() + 900
+      suppressMapClickUntil = until
+      suppressSpotActionMenuUntil = until
       placeWorkingPin(event.lngLat.lat, event.lngLat.lng)
     }
 
@@ -971,7 +1004,14 @@ export function MapCanvas({
         map,
         mapVisible,
         selectedPersonalSpotId,
-        (saved) => onSelectPersonalSpotRef.current(saved),
+        (saved) => {
+          // Globe click zooms in — don't also open the actions panel.
+          if (groundViewAmount(map.getZoom()) >= 0.35) {
+            pendingOpenMarkerMenuRef.current = true
+          }
+          onSelectPersonalSpotRef.current(saved)
+        },
+        spot,
       )
     }
 
@@ -987,7 +1027,7 @@ export function MapCanvas({
       for (const marker of personalMarkersRef.current) marker.remove()
       personalMarkersRef.current = []
     }
-  }, [personalSpots, personalSpotFolders, selectedPersonalSpotId])
+  }, [personalSpots, personalSpotFolders, selectedPersonalSpotId, spot])
 
   useEffect(() => {
     const ui = markerUiRef.current
@@ -1000,17 +1040,17 @@ export function MapCanvas({
     }
     if (!ui) return
     const match =
-      (selectedPersonalSpotId
-        ? personalSpots.find((row) => row.id === selectedPersonalSpotId)
-        : null) ??
       personalSpots.find(
         (row) =>
           Math.abs(row.lat - spot.lat) < 1e-6 &&
           Math.abs(row.lon - spot.lon) < 1e-6,
-      ) ??
-      null
+      ) ?? null
     ui.setSaved(Boolean(match))
     ui.setLabel(match?.name ?? null)
+    if (pendingOpenMarkerMenuRef.current) {
+      pendingOpenMarkerMenuRef.current = false
+      ui.open()
+    }
   }, [spot, personalSpots, selectedPersonalSpotId])
 
   useEffect(() => {
@@ -1113,6 +1153,8 @@ export function MapCanvas({
         onMyLocation={() => apiRef.current?.flyToMyLocation()}
         mySpotsOpen={mySpotsOpen}
         onMySpotsOpenChange={onMySpotsOpenChange}
+        framingsOpen={framingsOpen}
+        onFramingsOpenChange={onFramingsOpenChange}
       />
       <MapSettingsPanel />
       {plHeatmapEnabled ? <PlMapOverlayLegend /> : null}

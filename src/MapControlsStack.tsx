@@ -2,6 +2,7 @@ import { useRef, useState, type RefObject } from 'react'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import { MapAddressSearch } from './MapAddressSearch'
 import { MapCompass } from './MapCompass'
+import { FramingsToggle } from './FramingsPanel'
 import { MySpotsToggle } from './MySpotsCard'
 import { PlHeatmapControl } from './PlHeatmapControl'
 import type { AddressSearchResult } from './addressSearch'
@@ -29,6 +30,8 @@ type MapControlsStackProps = {
   onMyLocation: () => void
   mySpotsOpen: boolean
   onMySpotsOpenChange: (open: boolean) => void
+  framingsOpen: boolean
+  onFramingsOpenChange: (open: boolean) => void
 }
 
 export function MapControlsStack({
@@ -48,6 +51,8 @@ export function MapControlsStack({
   onMyLocation,
   mySpotsOpen,
   onMySpotsOpenChange,
+  framingsOpen,
+  onFramingsOpenChange,
 }: MapControlsStackProps) {
   const [locating, setLocating] = useState(false)
   const [clicked, setClicked] = useState(false)
@@ -187,6 +192,7 @@ export function MapControlsStack({
       />
 
       <MySpotsToggle open={mySpotsOpen} onOpenChange={onMySpotsOpenChange} />
+      <FramingsToggle open={framingsOpen} onOpenChange={onFramingsOpenChange} />
     </div>
   )
 }

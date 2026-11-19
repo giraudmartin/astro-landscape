@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
 } from 'react'
 import * as THREE from 'three'
 import { loadAppSettings, patchAppSettings } from './appSettings'
@@ -15,7 +16,7 @@ import {
   objectHorizontalAt,
   type CelestialObject,
 } from './celestialObjects'
-import { civilDayStartUtcMs, sunPositionAt } from './celestial'
+import { sunPositionAt } from './celestial'
 import {
   clampFrameRollDeg,
   horizontalFovDegFromFocalMm,
@@ -85,6 +86,11 @@ import {
   OPEN_TIMELAPSE_SETTINGS_EVENT,
   ViewfinderCaptureCapsule,
 } from './ViewfinderCaptureCapsule'
+import {
+  encodeFramingThumbWebp,
+} from './framingThumbStore'
+import type { FramingViewSnapshot } from './personalFramings'
+import { FrameModePhotoIcon } from './psIcons'
 import { ViewfinderLandscapeControl } from './ViewfinderLandscapeControl'
 import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
 import {
@@ -242,8 +248,6 @@ type ImmersiveViewProps = {
   /** Drive the shared timeline playhead (timelapse preview, etc.). */
   onSkyUtcChange?: (utcMs: number) => void
   date: string
-  /** Debug: jump the shared calendar/playhead to a civil date (YYYY-MM-DD). */
-  onDateChange?: (date: string) => void
   selectedCelestial: CelestialObject | null
   onSelectCelestial: (object: CelestialObject | null) => void
   onExit: () => void
@@ -260,6 +264,18 @@ type ImmersiveViewProps = {
    * Skip DEM/ortho — mount a flat disc instantly for sky / night testing.
    */
   flatTerrain?: boolean
+  framingsOpen?: boolean
+  onFramingsOpenChange?: (open: boolean) => void
+  onFramingCanSaveChange?: (canSave: boolean) => void
+  /** Imperative snapshot / restore / thumb capture for cadrages. */
+  framingApiRef?: MutableRefObject<ImmersiveFramingApi | null>
+}
+
+export type ImmersiveFramingApi = {
+  canSave: () => boolean
+  getSnapshot: () => FramingViewSnapshot | null
+  applySnapshot: (view: FramingViewSnapshot) => void
+  captureThumb: () => Promise<Blob | null>
 }
 
 const LOOK_PITCH_MIN = -85
@@ -283,7 +299,6 @@ export function ImmersiveView({
   skyUtcMs,
   onSkyUtcChange,
   date,
-  onDateChange,
   selectedCelestial,
   onSelectCelestial,
   onExit,
@@ -291,6 +306,10 @@ export function ImmersiveView({
   onTimelapsePreviewPlayingChange,
   active = true,
   flatTerrain = false,
+  framingsOpen = false,
+  onFramingsOpenChange,
+  onFramingCanSaveChange,
+  framingApiRef,
 }: ImmersiveViewProps) {
   const onTerrainReadyChangeRef = useRef(onTerrainReadyChange)
   onTerrainReadyChangeRef.current = onTerrainReadyChange
@@ -762,6 +781,68 @@ export function ImmersiveView({
     if (mode === 'off') setFramesLocked(false)
   }
 
+  useEffect(() => {
+    onFramingCanSaveChange?.(frameMode === 'dslr' || frameMode === 'pano')
+  }, [frameMode, onFramingCanSaveChange])
+
+  useEffect(() => {
+    if (!framingApiRef) return
+    const api: ImmersiveFramingApi = {
+      canSave: () => frameMode === 'dslr' || frameMode === 'pano',
+      getSnapshot: () => {
+        if (frameMode !== 'dslr' && frameMode !== 'pano') return null
+        const look = lookRef.current
+        return {
+          frameMode,
+          focalMm,
+          orientation,
+          sensorFormat,
+          frameRollDeg,
+          bearingDeg: look.yaw,
+          pitchDeg: look.pitch,
+          eyeHeightM,
+          panorama: frameMode === 'pano' ? panorama : null,
+          timelapse,
+        }
+      },
+      applySnapshot: (view) => {
+        applyFrameMode(view.frameMode)
+        setFocalMm(view.focalMm)
+        setOrientation(view.orientation)
+        setSensorFormat(view.sensorFormat)
+        setFrameRollDeg(clampFrameRollDeg(view.frameRollDeg))
+        if (view.panorama) setPanorama(view.panorama)
+        if (view.timelapse) setTimelapse(view.timelapse)
+        if (view.eyeHeightM != null) setEyeHeightM(view.eyeHeightM)
+        apiRef.current?.setLook(view.bearingDeg, view.pitchDeg)
+      },
+      captureThumb: async () => {
+        const host = hostRef.current
+        const canvas = host?.querySelector('canvas')
+        if (!(canvas instanceof HTMLCanvasElement)) return null
+        try {
+          return await encodeFramingThumbWebp(canvas, 320)
+        } catch {
+          return null
+        }
+      },
+    }
+    framingApiRef.current = api
+    return () => {
+      if (framingApiRef.current === api) framingApiRef.current = null
+    }
+  }, [
+    framingApiRef,
+    frameMode,
+    focalMm,
+    orientation,
+    sensorFormat,
+    frameRollDeg,
+    eyeHeightM,
+    panorama,
+    timelapse,
+  ])
+
   const applyPanorama = (next: PanoramaPlan) => {
     setPanorama(next)
     if (next.enabled) {
@@ -867,6 +948,8 @@ export function ImmersiveView({
       // near=0.08 / far=450km without log depth punches white holes through
       // mid-range ridges (z-fighting + depth precision collapse).
       logarithmicDepthBuffer: true,
+      // Needed so cadrage thumbnails can read the last presented frame.
+      preserveDrawingBuffer: true,
     })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     renderer.setClearColor(0x000000, 1)
@@ -2900,20 +2983,22 @@ export function ImmersiveView({
           projection={projection}
           onProjectionChange={setProjection}
         />
-        {onDateChange ? (
+        {onFramingsOpenChange ? (
           <button
             type="button"
-            className="hud-btn immersive__exit"
-            style={{ width: 'auto', minWidth: 40, padding: '0 10px', fontSize: '0.7rem' }}
-            onClick={() => {
-              onDateChange('2026-06-12')
-              onSkyUtcChange?.(
-                civilDayStartUtcMs('2026-06-12', lon) + 21 * 3600_000,
-              )
-            }}
-            title="Debug: calendrier → 12 juin 2026, 21h locale"
+            className={
+              framingsOpen
+                ? 'vf-proj-control__trigger immersive__framings-btn is-active'
+                : 'vf-proj-control__trigger immersive__framings-btn'
+            }
+            aria-expanded={framingsOpen}
+            aria-controls="framings-rail"
+            title="Cadrages"
+            aria-label="Cadrages"
+            onClick={() => onFramingsOpenChange(!framingsOpen)}
           >
-            12/06/26
+            <FrameModePhotoIcon size={16} />
+            <span className="vf-proj-control__value">Cadrages</span>
           </button>
         ) : null}
         <button

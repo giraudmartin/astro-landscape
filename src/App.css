@@ -1244,11 +1244,12 @@ html.is-rail-resizing .my-events-rail {
 }
 
 .pl-heatmap-control__toggle svg {
-  width: var(--map-control-icon);
-  height: var(--map-control-icon);
+  /* Match Mes spots / cadrages — not --map-control-icon (quick-actions pill). */
+  width: calc(var(--map-control-size) * 0.36);
+  height: calc(var(--map-control-size) * 0.36);
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }

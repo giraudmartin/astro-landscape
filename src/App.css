@@ -1,4 +1,4 @@
-/* Design tokens shared with Photo Sightline */
+﻿/* Design tokens shared with Photo Sightline */
 :root {
   --ui-bg: #07080c;
   --ui-text: #f4f6fb;
@@ -1269,6 +1269,8 @@ html.is-rail-resizing .my-events-rail {
 /* Opacity bar — collapse with the same 0fr/1fr pattern as map cards. */
 .pl-heatmap-control__slider {
   --pl-thumb: 14px;
+  /* Keep in sync with TRACK_PAD_PX in PlHeatmapControl.tsx */
+  --pl-track-pad: 9px;
   display: grid;
   grid-template-rows: 0fr;
   width: 100%;
@@ -1327,8 +1329,8 @@ html.is-rail-resizing .my-events-rail {
 .pl-heatmap-control__groove {
   position: absolute;
   left: 50%;
-  top: 9px;
-  bottom: 9px;
+  top: var(--pl-track-pad);
+  bottom: var(--pl-track-pad);
   width: 2px;
   transform: translateX(-50%);
   border-radius: 999px;
@@ -1350,7 +1352,11 @@ html.is-rail-resizing .my-events-rail {
 .pl-heatmap-control__thumb {
   position: absolute;
   left: 50%;
-  top: calc(9px + (1 - var(--pl-t, 0.5)) * (100% - 14px));
+  /* Same travel as groove + opacityFromTrackClientY (pad … height-pad). */
+  top: calc(
+    var(--pl-track-pad) + (1 - var(--pl-t, 0.5)) *
+      (100% - 2 * var(--pl-track-pad))
+  );
   width: var(--pl-thumb);
   height: var(--pl-thumb);
   transform: translate(-50%, -50%);

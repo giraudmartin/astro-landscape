@@ -9,9 +9,28 @@ type PlHeatmapControlProps = {
 
 const OP_MIN = 0.15
 const OP_MAX = 1
+/**
+ * Must match `.pl-heatmap-control__groove` top/bottom inset in App.css.
+ * Hit-testing and thumb travel share this pad so % matches the visual.
+ */
+const TRACK_PAD_PX = 9
 
 function clampOpacity(value: number): number {
   return Math.min(OP_MAX, Math.max(OP_MIN, value))
+}
+
+/** Map pointer Y on the track to opacity — same range as the thumb/groove. */
+export function opacityFromTrackClientY(
+  clientY: number,
+  trackTop: number,
+  trackHeight: number,
+): number {
+  if (trackHeight <= 0) return OP_MIN
+  const usable = trackHeight - 2 * TRACK_PAD_PX
+  if (usable <= 0) return OP_MIN
+  // Top of groove = max opacity, bottom = min.
+  const t = 1 - (clientY - trackTop - TRACK_PAD_PX) / usable
+  return clampOpacity(OP_MIN + Math.min(1, Math.max(0, t)) * (OP_MAX - OP_MIN))
 }
 
 /** Standalone control below the map button group — toggle + vertical opacity. */
@@ -31,11 +50,7 @@ export function PlHeatmapControl({
       const track = trackRef.current
       if (!track) return
       const rect = track.getBoundingClientRect()
-      if (rect.height <= 0) return
-      // Top = max opacity, bottom = min.
-      const next =
-        OP_MAX - ((clientY - rect.top) / rect.height) * (OP_MAX - OP_MIN)
-      onOpacityChange(clampOpacity(next))
+      onOpacityChange(opacityFromTrackClientY(clientY, rect.top, rect.height))
     },
     [onOpacityChange],
   )

@@ -1,3 +1,4 @@
+import { sampleMoonSkyAt } from "./skySamples"
 import {
   useCallback,
   useEffect,
@@ -449,6 +450,7 @@ export function ImmersiveView({
   const [atmosphereAmount, setAtmosphereAmount] = useState(() =>
     clampAtmosphereAmount(savedImmersive.atmosphereAmount),
   )
+  const [moonlightEnabled, setMoonlightEnabled] = useState(savedImmersive.moonlightEnabled)
   const [airglowAmount, setAirglowAmount] = useState(() =>
     clampAirglowAmount(savedImmersive.airglowAmount),
   )
@@ -563,6 +565,7 @@ export function ImmersiveView({
     showMilkyWay: savedImmersive.showMilkyWay,
     showHalpha: savedImmersive.showHalpha,
     atmosphereAmount: clampAtmosphereAmount(savedImmersive.atmosphereAmount),
+    moonlightEnabled: savedImmersive.moonlightEnabled,
     airglowAmount: clampAirglowAmount(savedImmersive.airglowAmount),
     airglowHue: clampAirglowHue(savedImmersive.airglowHue),
     airglowWaves: clampAirglowWaves(savedImmersive.airglowWaves),
@@ -578,6 +581,7 @@ export function ImmersiveView({
     showMilkyWay,
     showHalpha,
     atmosphereAmount,
+    moonlightEnabled,
     airglowAmount,
     airglowHue,
     airglowWaves,
@@ -620,6 +624,7 @@ export function ImmersiveView({
         showMilkyWay,
         showHalpha,
         atmosphereAmount,
+        moonlightEnabled,
         airglowAmount,
         airglowHue,
         airglowWaves,
@@ -670,6 +675,7 @@ export function ImmersiveView({
     showMilkyWay,
     showHalpha,
     atmosphereAmount,
+    moonlightEnabled,
     airglowAmount,
     airglowHue,
     airglowWaves,
@@ -945,6 +951,8 @@ export function ImmersiveView({
     let localHaloField: LocalHaloField | null = null
     let localHaloGen = 0
     let weatherLastFrameAt = performance.now()
+    const cloudMoonDirection = new THREE.Vector3()
+    let cloudMoonStrength = 0
     const latestSunDir = new THREE.Vector3(0, 1, 0)
     const latestSkyLight = new THREE.Color(0.45, 0.62, 0.82)
     const loadLocalHalo = () => {
@@ -1177,7 +1185,14 @@ export function ImmersiveView({
         eclipticPoleLocal,
       )
 
+      const moon = sampleMoonSkyAt({ latitude: lat, longitude: lon, elevationMeters: sceneGroundElevM, utcMs })
+      cloudMoonDirection.copy(sunDirectionFromAltAz(moon.altitudeApparentDeg, moon.azimuthDeg))
+      cloudMoonStrength = Number(skyTogglesRef.current.moonlightEnabled) * Math.pow(moon.illuminationFraction, 2.5)
+        * THREE.MathUtils.smoothstep(cloudMoonDirection.y, 0, 0.25)
+
       updateAstroSkyDome(sky, {
+        moonDirection: cloudMoonDirection,
+        moonStrength: cloudMoonStrength,
         sunAltitudeDeg: alt,
         sunDirection: dir,
         eyeElevationMslM: eyeGroundElevMsl + eyeHeightRef.current,
@@ -1832,7 +1847,9 @@ export function ImmersiveView({
           lpBortle,
           lpAmt,
         ),
-        lightPollutionMilkyWayMul: lightPollutionMilkyWayMul(lpBortle, lpAmt),
+        lightPollutionMilkyWayMul: lightPollutionMilkyWayMul(lpBortle, lpAmt)
+          / (1 + 4 * cloudMoonStrength * skyToggles.atmosphereAmount
+            * (1 - THREE.MathUtils.smoothstep(latestSunAltDeg, -14, -3))),
         viewSize: {
           width: host.clientWidth,
           height: host.clientHeight,
@@ -1918,6 +1935,8 @@ export function ImmersiveView({
                   weather: cloudsForPass,
                   skyLight: latestSkyLight,
                   sunDirection: latestSunDir,
+                  moonDirection: cloudMoonDirection,
+                  moonStrength: cloudMoonStrength,
                   deltaSec: cloudsForPass.animateClouds ? weatherDt : 0,
                   reference: localHaloSourceRef.current === 'reference',
                   skyLp: clampLightPollutionAmount(
@@ -2008,6 +2027,7 @@ export function ImmersiveView({
     weatherSettingsLive,
     localHaloSource,
     atmosphereAmount,
+    moonlightEnabled,
     airglowAmount,
     airglowHue,
     airglowWaves,
@@ -2847,6 +2867,8 @@ export function ImmersiveView({
         />
         <ViewfinderSkyControl
           atmosphereAmount={atmosphereAmount}
+          moonlightEnabled={moonlightEnabled}
+          onMoonlightChange={setMoonlightEnabled}
           airglowAmount={airglowAmount}
           airglowHue={airglowHue}
           airglowWaves={airglowWaves}

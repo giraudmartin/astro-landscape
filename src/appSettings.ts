@@ -131,6 +131,7 @@ export type ImmersiveSettings = {
   /** Rayleigh sky amount 0…1 (replaces the old on/off Atmo toggle). */
   atmosphereAmount: number
   /** Additive OI airglow amount 0…1 (on top of atmosphere, night only). */
+  moonlightEnabled: boolean
   airglowAmount: number
   /** Airglow hue 0…1 (green 557 nm → red 630 nm). */
   airglowHue: number
@@ -221,6 +222,7 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   showMilkyWay: true,
   showHalpha: false,
   atmosphereAmount: ATMOSPHERE_AMOUNT_DEFAULT,
+  moonlightEnabled: true,
   airglowAmount: AIRGLOW_AMOUNT_DEFAULT,
   airglowHue: AIRGLOW_HUE_DEFAULT,
   airglowWaves: AIRGLOW_WAVES_DEFAULT,
@@ -426,6 +428,7 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
             : DEFAULT_IMMERSIVE_SETTINGS.atmosphereAmount),
       ),
     ),
+    moonlightEnabled: row.moonlightEnabled !== false,
     airglowAmount: clampAirglowAmount(
       Number(row.airglowAmount ?? DEFAULT_IMMERSIVE_SETTINGS.airglowAmount),
     ),

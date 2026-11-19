@@ -76,6 +76,8 @@ export type LocalHaloTerrainFrame = {
 export type LocalHaloCloudFrame = {
   weather: ViewfinderWeather
   /** Display-referred sky colour driving cloud ambient (daytime). */
+  moonDirection: THREE.Vector3
+  moonStrength: number
   sunDirection: THREE.Vector3
   skyLight: THREE.Color
   /** Seconds to advance cloud wind (0 when animation frozen). */
@@ -144,7 +146,8 @@ uniform float uReference;
 uniform float uCloudOn;
 uniform float uCloudTime;
 
-uniform vec3 uSkyLight, uSunDir;
+uniform vec3 uSkyLight, uSunDir, uMoonDir;
+uniform float uMoonStrength;
 uniform vec4 uLayers[3];
 uniform float uCloudSteps;
 /** Max ray length for full-sky cloud slabs (scene metres). */
@@ -474,6 +477,27 @@ void main() {
           }
           ambient = mix(nightGrey, daylight, smoothstep(0.0, 0.65, uDayFactor));
         }
+        if (uMoonStrength > 0.001 && uDayFactor < 0.65) {
+          float moonDepth = cloudDensity(p + 0.26 * uMoonDir) * 0.75
+                          + cloudDensity(p + 0.94 * uMoonDir) * 1.35;
+          float ridgeLight = 1.0;
+          if (uHasVolume > 0.5 && uMoonDir.y < 0.65) {
+            float distanceKm = 0.5;
+            for (int k = 0; k < 5; ++k) {
+              vec3 probe = p + distanceKm * uMoonDir;
+              vec2 uv = probe.xz / uGroundExtentKm + 0.5;
+              if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)))) {
+                float clearance = probe.y - texture(uGround, uv).r;
+                ridgeLight = min(ridgeLight, smoothstep(-0.06, 0.12, clearance));
+              }
+              distanceKm *= 2.2;
+            }
+            ridgeLight = mix(ridgeLight, 1.0, smoothstep(0.5, 0.65, uMoonDir.y));
+          }
+          float rim = pow(max(dot(rd, uMoonDir), 0.0), 6.0);
+          ambient += vec3(0.94, 0.98, 1.0) * uMoonStrength * ridgeLight
+                     * (1.0 - smoothstep(0.0, 0.65, uDayFactor)) * exp(-moonDepth) * (0.035 + 0.045 * rim) * mix(0.3, 1.0, occ.x);
+        }
         float under = exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3));
         float cloudIll = ill;
         if (uReference < 0.5 && uHasVolume > 0.5 && uPower * uHaloAir > 0.0)
@@ -662,6 +686,8 @@ export function createLocalHaloPass(): LocalHaloPass {
     uReference: { value: 0 },
     uCloudOn: { value: 0 },
     uCloudTime: { value: 0 },
+    uMoonStrength: { value: 0 },
+    uMoonDir: { value: new THREE.Vector3(0, 1, 0) },
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uSkyLight: { value: new THREE.Color(0.4, 0.55, 0.75) },
     uLayers: {
@@ -874,6 +900,8 @@ export function createLocalHaloPass(): LocalHaloPass {
     if (clouds) {
       cloudTimeSec += Math.max(0, Math.min(0.1, clouds.deltaSec)) * clouds.weather.wind
       uniforms.uCloudTime.value = cloudTimeSec
+      uniforms.uMoonStrength.value = clouds.moonStrength
+      uniforms.uMoonDir.value.copy(clouds.moonDirection)
       uniforms.uSunDir.value.copy(clouds.sunDirection)
       uniforms.uSkyLight.value.copy(clouds.skyLight)
       const skyLp = clouds.reference ? 0 : Math.max(0, clouds.skyLp) * night01

@@ -588,6 +588,8 @@ export function createAstroSkyDome(): AstroSkyDome {
       uLpResolution: { value: new THREE.Vector2(1, 1) },
       uLpNdcScale: { value: new THREE.Vector2(1, 1) },
       uLpInvMv: { value: new THREE.Matrix3() },
+      uMoonDir: { value: new THREE.Vector3(0, 1, 0) },
+      uMoonStrength: { value: 0 },
       uLpCameraFar: { value: 450_000 },
     },
     vertexShader: /* glsl */ `
@@ -611,6 +613,8 @@ export function createAstroSkyDome(): AstroSkyDome {
       uniform float uStelMode;
       uniform float uSunAltitude;
       uniform float uEyeElevM;
+      uniform float uMoonStrength;
+      uniform vec3 uMoonDir;
       const float EARTH_R = 6371000.0;
       ${LIGHT_POLLUTION_GLSL}
 
@@ -628,6 +632,10 @@ export function createAstroSkyDome(): AstroSkyDome {
         float elevN = clamp(aboveHor / max(1.0 - horSin, 1e-3), 0.0, 1.0);
         float below = smoothstep(horSin + 0.004, horSin - 0.03, v.y);
         vec3 lpRgb = lightPollutionRgb(v, elevN, alt, below);
+        float alignment = max(dot(v, uMoonDir), 0.0);
+        float veil = uMoonStrength * (1.0 - smoothstep(-14.0, -3.0, alt))
+                   * (0.13 + 0.20 * pow(alignment, 3.0) + 0.17 * pow(alignment, 22.0));
+        lpRgb += vec3(0.80, 0.89, 1.0) * veil * (1.0 - below);
         if (dot(lpRgb, lpRgb) < 1.0e-8) discard;
         gl_FragColor = vec4(lpRgb, 1.0);
       }
@@ -825,7 +833,7 @@ export function renderImmersiveLightPollution(
 ): void {
   if (!sky.lightPollutionMesh.visible) return
   const amt = sky.lightPollutionMaterial.uniforms.uLightPollution.value as number
-  if (!(amt > 0.0005)) return
+  if (amt <= 0.0005 && sky.lightPollutionMaterial.uniforms.uMoonStrength.value <= 0.00001) return
   syncImmersiveLpScreenUniforms(sky, renderer, camera)
   const prevAutoClear = renderer.autoClear
   // Color + depth stay; only add sodium where terrain did not write closer depth.
@@ -899,6 +907,8 @@ export function updateAstroSkyDome(
     atmosphereAmount?: number
     showAtmosphere?: boolean
     /** Additive OI airglow 0…1 (independent of atmosphereAmount). */
+    moonStrength?: number
+    moonDirection?: THREE.Vector3
     airglowAmount?: number
     /** 0 = green 557 nm, 1 = red 630 nm. */
     airglowHue?: number
@@ -941,6 +951,8 @@ export function updateAstroSkyDome(
         ? 0
         : 1
   sky.material.uniforms.uAtmosphere.value = amount
+  sky.lightPollutionMaterial.uniforms.uMoonStrength.value = (input.moonStrength ?? 0) * amount
+  if (input.moonDirection) sky.lightPollutionMaterial.uniforms.uMoonDir.value.copy(input.moonDirection)
   const agAmt = clampAirglowAmount(input.airglowAmount ?? 0)
   const agHue = clampAirglowHue(input.airglowHue ?? 0)
   const agWaves = clampAirglowWaves(input.airglowWaves ?? 0.55)

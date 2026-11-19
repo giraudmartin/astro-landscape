@@ -66,6 +66,8 @@ export type LocalHaloControls = {
 
 type ViewfinderSkyControlProps = {
   atmosphereAmount: number
+  moonlightEnabled: boolean
+  onMoonlightChange: (enabled: boolean) => void
   airglowAmount: number
   airglowHue: number
   airglowWaves: number
@@ -123,6 +125,8 @@ type SkyPanelBodyProps = ViewfinderSkyControlProps
 
 function SkyPanelBody({
   atmosphereAmount,
+  moonlightEnabled,
+  onMoonlightChange,
   airglowAmount,
   airglowHue,
   airglowWaves,
@@ -151,6 +155,12 @@ function SkyPanelBody({
   return (
     <>
       <SkySection title="Ciel">
+        <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
+          <span className="vf-landscape-menu__label">Clair de lune</span>
+          <input type="checkbox" checked={moonlightEnabled}
+            onChange={(event) => onMoonlightChange(event.target.checked)}
+            title="Éclairage du ciel et des nuages par la Lune" />
+        </label>
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
             <span>Atmosphère</span>

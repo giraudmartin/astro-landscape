@@ -4,15 +4,7 @@
  * so city lights read on the globe’s night side only.
  */
 import * as maplibregl from 'maplibre-gl'
-import {
-  sunAltitudeFromSubsolar,
-} from '../nightShadeProtocol'
-import {
-  Body,
-  Equator,
-  Observer,
-  SiderealTime,
-} from 'astronomy-engine'
+import { fillSolarGrid, subsolarPoint } from '../nightShadeProtocol'
 /** Annual composite year used in the GIBS time dimension. */
 export const LIGHT_POLLUTION_YEAR = '2016-01-01'
 
@@ -20,7 +12,6 @@ export const LIGHT_POLLUTION_PROTOCOL = 'astro-lightpollution'
 export const LIGHT_POLLUTION_PROTOCOL_URL = `${LIGHT_POLLUTION_PROTOCOL}://{z}/{x}/{y}?t={t}`
 
 const TILE = 256
-const GEOCENTRIC = new Observer(0, 0, 0)
 const GIBS_BASE =
   `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/${LIGHT_POLLUTION_YEAR}/GoogleMapsCompatible_Level8`
 
@@ -28,33 +19,6 @@ let registered = false
 
 function clamp01(t: number): number {
   return Math.min(1, Math.max(0, t))
-}
-
-function wrapLon(degrees: number): number {
-  return ((((degrees + 180) % 360) + 360) % 360) - 180
-}
-
-function subsolarPoint(utcMs: number): { lon: number; lat: number } {
-  const at = new Date(utcMs)
-  const eq = Equator(Body.Sun, at, GEOCENTRIC, true, true)
-  return {
-    lon: wrapLon(15 * (eq.ra - SiderealTime(at))),
-    lat: eq.dec,
-  }
-}
-
-function pixelToLonLat(
-  z: number,
-  x: number,
-  y: number,
-  px: number,
-  py: number,
-): { lon: number; lat: number } {
-  const n = 2 ** z
-  const lon = ((x + px / TILE) / n) * 360 - 180
-  const mercY = Math.PI * (1 - (2 * (y + py / TILE)) / n)
-  const lat = (2 * Math.atan(Math.exp(mercY)) * 180) / Math.PI - 90
-  return { lon, lat: Math.max(-85.0511, Math.min(85.0511, lat)) }
 }
 
 /** 0 = day face, 1 = deep night — lights only where this is high. */
@@ -91,6 +55,9 @@ const EMPTY_PNG = new Uint8Array([
   0x60, 0x82,
 ])
 
+// 32 decoded RGBA tiles at 256 x 256 = 8 MiB. Keep the source alpha immutable.
+const sourcePixels = new Map<string, Uint8ClampedArray>()
+
 async function renderLightTile(
   z: number,
   x: number,
@@ -99,23 +66,32 @@ async function renderLightTile(
 ): Promise<ArrayBuffer> {
   // GIBS WMTS is {z}/{TileRow}/{TileCol} = {z}/{y}/{x}
   const gibsUrl = `${GIBS_BASE}/${z}/${y}/${x}.png`
-  const res = await fetch(gibsUrl)
-  if (!res.ok) return EMPTY_PNG.buffer.slice(0)
-
-  const blob = await res.blob()
-  const bitmap = await createImageBitmap(blob)
   const canvas = document.createElement('canvas')
   canvas.width = TILE
   canvas.height = TILE
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  if (!ctx) {
-    bitmap.close()
-    throw new Error('light pollution: no 2d context')
+  if (!ctx) throw new Error('light pollution: no 2d context')
+  let pixels = sourcePixels.get(gibsUrl)
+  let img: ImageData
+  if (pixels) {
+    sourcePixels.delete(gibsUrl)
+    sourcePixels.set(gibsUrl, pixels)
+    img = ctx.createImageData(TILE, TILE)
+    img.data.set(pixels)
+  } else {
+    const res = await fetch(gibsUrl)
+    if (!res.ok) return EMPTY_PNG.buffer.slice(0)
+    const bitmap = await createImageBitmap(await res.blob())
+    try {
+      ctx.drawImage(bitmap, 0, 0, TILE, TILE)
+    } finally {
+      bitmap.close()
+    }
+    img = ctx.getImageData(0, 0, TILE, TILE)
+    pixels = img.data.slice()
+    sourcePixels.set(gibsUrl, pixels)
+    if (sourcePixels.size > 32) sourcePixels.delete(sourcePixels.keys().next().value!)
   }
-  ctx.drawImage(bitmap, 0, 0, TILE, TILE)
-  bitmap.close()
-
-  const img = ctx.getImageData(0, 0, TILE, TILE)
   const data = img.data
   const subsolar = subsolarPoint(utcMs)
 
@@ -123,19 +99,9 @@ async function renderLightTile(
   const STEP = 4
   const coarse = TILE / STEP
   const gates = new Float32Array(coarse * coarse)
-  for (let cy = 0; cy < coarse; cy += 1) {
-    for (let cx = 0; cx < coarse; cx += 1) {
-      const place = pixelToLonLat(
-        z,
-        x,
-        y,
-        (cx + 0.5) * STEP,
-        (cy + 0.5) * STEP,
-      )
-      const alt = sunAltitudeFromSubsolar(place, subsolar)
-      gates[cy * coarse + cx] = lightNightGate(alt)
-    }
-  }
+  fillSolarGrid(z, x, y, subsolar, (index, altitude) => {
+    gates[index] = lightNightGate(altitude)
+  })
 
   for (let py = 0; py < TILE; py += 1) {
     const cy = Math.min(coarse - 1, (py / STEP) | 0)

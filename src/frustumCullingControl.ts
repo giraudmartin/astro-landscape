@@ -9,15 +9,13 @@ function applyTo(obj: Object3D): void {
 }
 
 function arm(obj: Object3D): void {
-  if (armed.has(obj)) {
-    applyTo(obj)
-    return
-  }
-  armed.add(obj)
   applyTo(obj)
-  obj.addEventListener('childadded', (event: { child?: Object3D }) => {
-    if (event.child) arm(event.child)
-  })
+  if (!armed.has(obj)) {
+    armed.add(obj)
+    obj.addEventListener('childadded', (event: { child?: Object3D }) => {
+      if (event.child) arm(event.child)
+    })
+  }
   for (const child of obj.children) arm(child)
 }
 

@@ -40,29 +40,13 @@ function wrapLon(degrees: number): number {
   return ((((degrees + 180) % 360) + 360) % 360) - 180
 }
 
-function subsolarPoint(utcMs: number): LngLat {
+export function subsolarPoint(utcMs: number): LngLat {
   const at = new Date(utcMs)
   const eq = Equator(Body.Sun, at, GEOCENTRIC, true, true)
   return {
     lon: wrapLon(15 * (eq.ra - SiderealTime(at))),
     lat: eq.dec,
   }
-}
-
-/** WebMercator tile pixel → lon/lat. */
-function pixelToLonLat(
-  z: number,
-  x: number,
-  y: number,
-  px: number,
-  py: number,
-): LngLat {
-  const n = 2 ** z
-  const lon = ((x + px / TILE) / n) * 360 - 180
-  const mercY = Math.PI * (1 - (2 * (y + py / TILE)) / n)
-  const lat =
-    (2 * Math.atan(Math.exp(mercY)) * 180) / Math.PI - 90
-  return { lon, lat: Math.max(-85.0511, Math.min(85.0511, lat)) }
 }
 
 /** Sun altitude at a place given the subsolar point (°). */
@@ -78,6 +62,34 @@ export function sunAltitudeFromSubsolar(
     Math.cos(lat1) * Math.cos(lat2) * Math.cos(dLon)
   const ang = Math.acos(Math.max(-1, Math.min(1, cosAng))) / RAD
   return 90 - ang
+}
+
+/** Sample the same Mercator cell centers for both globe overlays. */
+export function fillSolarGrid(
+  z: number, x: number, y: number, subsolar: LngLat,
+  write: (index: number, altitude: number) => void,
+): void {
+  const n = 2 ** z
+  const coarse = TILE / STEP
+  const sunLat = subsolar.lat * RAD
+  const sinSun = Math.sin(sunLat)
+  const cosSun = Math.cos(sunLat)
+  const longitudeCosines = new Float64Array(coarse)
+  for (let cx = 0; cx < coarse; cx++) {
+    const lon = ((x + ((cx + 0.5) * STEP) / TILE) / n) * 360 - 180
+    longitudeCosines[cx] = Math.cos((subsolar.lon - lon) * RAD)
+  }
+  for (let cy = 0; cy < coarse; cy++) {
+    const mercY = Math.PI * (1 - (2 * (y + ((cy + 0.5) * STEP) / TILE)) / n)
+    const degrees = (2 * Math.atan(Math.exp(mercY)) * 180) / Math.PI - 90
+    const lat = Math.max(-85.0511, Math.min(85.0511, degrees)) * RAD
+    const offset = Math.sin(lat) * sinSun
+    const scale = Math.cos(lat) * cosSun
+    for (let cx = 0; cx < coarse; cx++) {
+      const cosAng = offset + scale * longitudeCosines[cx]!
+      write(cy * coarse + cx, 90 - Math.acos(Math.max(-1, Math.min(1, cosAng))) / RAD)
+    }
+  }
 }
 
 /**
@@ -129,25 +141,13 @@ async function renderShadeTile(
   const img = ctx.createImageData(coarse, coarse)
   const data = img.data
 
-  for (let cy = 0; cy < coarse; cy += 1) {
-    for (let cx = 0; cx < coarse; cx += 1) {
-      const place = pixelToLonLat(
-        z,
-        x,
-        y,
-        (cx + 0.5) * STEP,
-        (cy + 0.5) * STEP,
-      )
-      const alt = sunAltitudeFromSubsolar(place, subsolar)
-      const a = Math.round(255 * nightVeilOpacity(alt))
-      const i = (cy * coarse + cx) * 4
-      // Cool night navy, not pure black — keeps terrain readable.
-      data[i] = 4
-      data[i + 1] = 8
-      data[i + 2] = 18
-      data[i + 3] = a
-    }
-  }
+  fillSolarGrid(z, x, y, subsolar, (index, altitude) => {
+    const i = index * 4
+    data[i] = 4
+    data[i + 1] = 8
+    data[i + 2] = 18
+    data[i + 3] = Math.round(255 * nightVeilOpacity(altitude))
+  })
 
   // Draw coarse buffer scaled up with smoothing for a soft terminator.
   const tmp = document.createElement('canvas')

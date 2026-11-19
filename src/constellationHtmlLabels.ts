@@ -166,14 +166,6 @@ export function createConstellationHtmlLabels(
           continue
         }
 
-        // Hide names whose sightline hits a ridge before the sky shell.
-        if (terrainOccluded && _dir.y < OCCLUSION_MAX_DIR_Y) {
-          if (terrainOccluded(_camPos, _dir, dist)) {
-            a.el.style.display = 'none'
-            continue
-          }
-        }
-
         const eye = {
           x: _dir.dot(_right),
           y: _dir.dot(_up),
@@ -187,6 +179,13 @@ export function createConstellationHtmlLabels(
           Math.abs(ndc.ndcX) > 1 + margin ||
           Math.abs(ndc.ndcY) > 1 + margin
         ) {
+          a.el.style.display = 'none'
+          continue
+        }
+
+        // Only sample ridges for labels inside the projection and its margin.
+        if (terrainOccluded && _dir.y < OCCLUSION_MAX_DIR_Y &&
+            terrainOccluded(_camPos, _dir, dist)) {
           a.el.style.display = 'none'
           continue
         }

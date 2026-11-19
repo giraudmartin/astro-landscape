@@ -182,6 +182,7 @@ export function createNightSky(opts?: {
 
   let milkyWayTiles: NasaSkyTileLayerHandle | null = null
   let milkyReady = false
+  let lastRotation: { utcMs: number; lat: number; lon: number; elevationM: number } | undefined
   let disposed = false
 
   const blackHalpha = createBlackDataTexture()
@@ -354,14 +355,14 @@ export function createNightSky(opts?: {
     }) => {
       if (disposed) return
       root.position.copy(camera.position)
-      celestialLayers.quaternion.setFromRotationMatrix(
-        getNasaCelestialToThreeLocalMatrix(
-          new Date(utcMs),
-          lat,
-          lon,
-          elevationM,
-        ),
-      )
+      if (!lastRotation || lastRotation.utcMs !== utcMs ||
+          lastRotation.lat !== lat || lastRotation.lon !== lon ||
+          lastRotation.elevationM !== elevationM) {
+        celestialLayers.quaternion.setFromRotationMatrix(
+          getNasaCelestialToThreeLocalMatrix(new Date(utcMs), lat, lon, elevationM),
+        )
+        lastRotation = { utcMs, lat, lon, elevationM }
+      }
 
       // Stars start appearing from civil/nautical twilight (−4° → −16°).
       const deepNight = THREE.MathUtils.clamp(

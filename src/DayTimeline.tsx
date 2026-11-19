@@ -94,6 +94,7 @@ type DayTimelineProps = {
   dayInfo: DayInfo
   elevationM: number
   playheadUtcMs: number
+  onScrubbingChange?: (active: boolean) => void
   onPlayheadChange: (utcMs: number) => void
   zoomIndex: number
   jumpRequest?: number
@@ -112,6 +113,7 @@ export function DayTimeline({
   elevationM,
   playheadUtcMs,
   onPlayheadChange,
+  onScrubbingChange,
   zoomIndex,
   jumpRequest = 0,
   onHorizonEventClick,
@@ -290,18 +292,23 @@ export function DayTimeline({
       scrub.setUtcMs(drag.utcMs)
     }
     const onUp = () => {
+      if (!dragRef.current.active) return
       dragRef.current.active = false
+      onScrubbingChange?.(false)
       setScrubbing(false)
     }
     window.addEventListener('pointermove', onMove)
+    window.addEventListener('blur', onUp)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onUp)
     return () => {
+      if (dragRef.current.active) onUp()
+      window.removeEventListener('blur', onUp)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
     }
-  }, [])
+  }, [onScrubbingChange])
 
   const chartHeight = advanced ? CHART_BAND_HEIGHT_PX : 0
   const plotHeight = Math.max(
@@ -359,6 +366,7 @@ export function DayTimeline({
             lastX: event.clientX,
             utcMs: playheadUtcMs,
           }
+          onScrubbingChange?.(true)
           setScrubbing(true)
           event.currentTarget.setPointerCapture?.(event.pointerId)
         }}

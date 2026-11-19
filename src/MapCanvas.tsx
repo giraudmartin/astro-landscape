@@ -46,6 +46,7 @@ import {
   filterMapVisiblePersonalSpots,
   fitPersonalSpots,
   renderPersonalSpotMarkers,
+  type PersonalMarkerEntry,
   type PersonalSpot,
   type PersonalSpotFolder,
 } from './personalSpots'
@@ -182,7 +183,7 @@ function demSource(): maplibregl.RasterDEMSourceSpecification {
     tiles: [MAPTERHORN_DEM_URL],
     encoding: 'terrarium',
     tileSize: 512,
-    maxzoom: DEM_MAX_ZOOM,
+    maxzoom: DEM_MAX_ZOOM - 1,
     attribution: '<a href="https://mapterhorn.com/attribution">© Mapterhorn</a>',
   }
 }
@@ -355,7 +356,8 @@ export function MapCanvas({
   const mapRef = useRef<Map | null>(null)
   const markerRef = useRef<Marker | null>(null)
   const markerUiRef = useRef<SpotActionMarkerController | null>(null)
-  const personalMarkersRef = useRef<Marker[]>([])
+  const personalMarkersRef = useRef(new globalThis.Map<string, PersonalMarkerEntry>())
+  const scheduleElevationRef = useRef<() => void>(() => {})
   const modeRef = useRef(mode)
   const spotRef = useRef(spot)
   const threeDimensionalRef = useRef(threeDimensional)
@@ -464,12 +466,11 @@ export function MapCanvas({
       bearing: DEFAULT_MAP_VIEW.bearingDeg,
       maxPitch: 85,
       minZoom: 0.8,
-      // DEM tiles are 512px → MapLibre fetches ~mapZoom−1; 18 unlocks Mapterhorn z17
+      // Keep imagery zoomable to 18 while the map overzooms the z16 relief.
       maxZoom: 18,
       // Instant paint — night dim must not ease from noon ortho after flyTo.
       fadeDuration: 0,
       attributionControl: false,
-      fadeDuration: 0,
     })
 
     mapRef.current = map
@@ -784,11 +785,7 @@ export function MapCanvas({
       // One re-apply after first tiles are in; never on every moveend (that
       // rewrote light/veil and looked like time jumping on drag-release).
       map.once('idle', () => applyPlayheadSkyRef.current())
-      // Permanent: spot-list fly sets React spot at globe zoom (day paint). The
-      // spot-effect zoomend can miss the landing; this always re-dims on settle.
-      map.on('zoomend', () => {
-        applyPlayheadSkyRef.current()
-      })
+
     }
     map.on('load', onMapReady)
     // Inline style can finish before 'load' is attached — don't skip basemap/PL.
@@ -932,7 +929,9 @@ export function MapCanvas({
       canvas.addEventListener('lostpointercapture', onCanvasPointerEnd)
     }
 
-    const elevTimer = window.setInterval(() => {
+    let elevationFrame = 0
+    const updateElevation = () => {
+      elevationFrame = 0
       // Never rewrite height while immersive — that remounts the Three.js scene.
       if (modeRef.current === 'ground') return
       const current = spotRef.current
@@ -940,7 +939,18 @@ export function MapCanvas({
       const heightM = readElevation(current.lon, current.lat)
       if (heightM === null || Math.abs(heightM - current.heightM) < 1) return
       onSpotChangeRef.current({ ...current, heightM })
-    }, 800)
+    }
+    const scheduleElevation = () => {
+      if (!elevationFrame && spotRef.current && modeRef.current !== 'ground') {
+        elevationFrame = requestAnimationFrame(updateElevation)
+      }
+    }
+    const onTerrainData = (event: maplibregl.MapSourceDataEvent) => {
+      if (event.sourceId === 'terrain') scheduleElevation()
+    }
+    scheduleElevationRef.current = scheduleElevation
+    map.on('sourcedata', onTerrainData)
+    map.on('idle', scheduleElevation)
 
     /** Close PL + opacity bar when the user dezooms past the useful floor. */
     const gatePlHeatmapZoom = () => {
@@ -954,8 +964,11 @@ export function MapCanvas({
     })
 
     return () => {
-      window.clearInterval(elevTimer)
+      scheduleElevationRef.current = () => {}
+      map.off('sourcedata', onTerrainData)
+      map.off('idle', scheduleElevation)
       map.off('zoomend', gatePlHeatmapZoom)
+      cancelAnimationFrame(elevationFrame)
       // Keep MapLibre in sync when the spots rail resizes the map stage.
       containerResizeObserver?.disconnect()
       clearLongPressTimer()
@@ -970,8 +983,8 @@ export function MapCanvas({
         canvas.removeEventListener('lostpointercapture', onCanvasPointerEnd)
       }
       apiRef.current = null
-      for (const marker of personalMarkersRef.current) marker.remove()
-      personalMarkersRef.current = []
+      for (const { marker } of personalMarkersRef.current.values()) marker.remove()
+      personalMarkersRef.current.clear()
       markerUiRef.current?.destroy()
       markerUiRef.current = null
       markerRef.current?.remove()
@@ -988,6 +1001,10 @@ export function MapCanvas({
   useEffect(() => {
     apiRef.current?.setThreeDimensional(threeDimensional)
   }, [threeDimensional])
+
+  useEffect(() => {
+    scheduleElevationRef.current()
+  }, [spot, mode])
 
   const [basemapApplying, setBasemapApplying] = useState(false)
   const basemapApplySeqRef = useRef(0)
@@ -1041,12 +1058,11 @@ export function MapCanvas({
     if (!map) return
 
     const sync = () => {
-      for (const marker of personalMarkersRef.current) marker.remove()
       const mapVisible = filterMapVisiblePersonalSpots(
         personalSpots,
         personalSpotFolders,
       )
-      personalMarkersRef.current = renderPersonalSpotMarkers(
+      renderPersonalSpotMarkers(
         map,
         mapVisible,
         selectedPersonalSpotId,
@@ -1058,20 +1074,19 @@ export function MapCanvas({
           onSelectPersonalSpotRef.current(saved)
         },
         spot,
+        personalMarkersRef.current,
       )
     }
 
     // Prefer style.load over load: another load handler throwing must not
     // leave Mes spots without markers (applyPlayheadSky bare-name burn).
-    if (map.isStyleLoaded()) sync()
+    sync()
     map.on('load', sync)
     map.on('style.load', sync)
 
     return () => {
       map.off('load', sync)
       map.off('style.load', sync)
-      for (const marker of personalMarkersRef.current) marker.remove()
-      personalMarkersRef.current = []
     }
   }, [personalSpots, personalSpotFolders, selectedPersonalSpotId, spot])
 
@@ -1128,7 +1143,11 @@ export function MapCanvas({
     let lastAppliedZoom = map.getZoom()
     let lastGround = groundViewAmount(lastAppliedZoom) >= 0.35
     const apply = () => {
-      if (!map.isStyleLoaded()) return
+      map.off('idle', apply)
+      if (!map.isStyleLoaded()) {
+        map.once('idle', apply)
+        return
+      }
       lastAppliedZoom = map.getZoom()
       lastGround = groundViewAmount(lastAppliedZoom) >= 0.35
       // Use the live ref so night dim matches current zoom after flyTo landing.
@@ -1147,10 +1166,13 @@ export function MapCanvas({
       if (Math.abs(z - lastAppliedZoom) < 0.15) return
       apply()
     }
-    void waitForStyleLoaded(map).then(apply)
+    let active = true
+    void waitForStyleLoaded(map).then(() => { if (active) apply() })
     map.on('zoomend', apply)
     map.on('moveend', onMoveEnd)
     return () => {
+      active = false
+      map.off('idle', apply)
       map.off('zoomend', apply)
       map.off('moveend', onMoveEnd)
     }

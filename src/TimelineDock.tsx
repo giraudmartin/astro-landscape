@@ -37,6 +37,7 @@ type TimelineDockProps = {
   /** When true, clock/day are UTC (no spot yet). */
   clockIsUtc?: boolean
   onDateChange: (date: string) => void
+  onScrubbingChange: (active: boolean) => void
   onPlayheadChange: (utcMs: number) => void
 }
 
@@ -55,6 +56,7 @@ export function TimelineDock({
   clockIsUtc = false,
   onDateChange,
   onPlayheadChange,
+  onScrubbingChange,
 }: TimelineDockProps) {
   const [zoomIndex, setZoomIndex] = useState(
     () => loadAppSettings().timeline.zoomIndex,
@@ -359,6 +361,7 @@ export function TimelineDock({
             dayInfo={dayInfo}
             elevationM={elevationM}
             playheadUtcMs={playheadUtcMs}
+            onScrubbingChange={onScrubbingChange}
             onPlayheadChange={onPlayheadChange}
             zoomIndex={zoomIndex}
             jumpRequest={jumpRequest}

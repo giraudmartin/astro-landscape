@@ -267,6 +267,8 @@ export function createNasaSkyTileLayer(input: {
   let lastFootprintKey = ''
   let targetZ = coverZ
   let fovDetailKeys: TileKey[] = []
+  let lastView: { u: number; v: number; fov: number; aspect: number } | undefined
+  const wanted = new Map<TileKey, QueuedTile>()
   const lookLocal = new THREE.Vector3()
 
   const pathFor = (z: number, x: number, y: number): string =>
@@ -386,6 +388,7 @@ export function createNasaSkyTileLayer(input: {
   return {
     root,
     setOpacity: (next) => {
+      if (opacity === next) return
       opacity = next
       for (const tile of residents.values()) {
         tile.material.opacity = next
@@ -421,56 +424,60 @@ export function createNasaSkyTileLayer(input: {
       targetZ = chooseTileZoom(fovYDeg, camera.aspect, meta.maxZ, coverZ)
       const footprintKey = `${targetZ}:${imageU.toFixed(2)}:${v.toFixed(2)}`
 
-      const wanted = new Map<TileKey, QueuedTile>()
-      const addWanted = (z: number, x: number, y: number) => {
-        const key = tileKey(z, x, y)
-        const priority = tileLoadPriority(
-          z,
-          x,
-          y,
-          coverZ,
-          targetZ,
-          imageU,
-          v,
-        )
-        const prev = wanted.get(key)
-        if (!prev || priority < prev.priority) {
-          wanted.set(key, { z, x, y, key, priority })
+      if (!lastView || lastView.u !== imageU || lastView.v !== v ||
+          lastView.fov !== fovYDeg || lastView.aspect !== camera.aspect) {
+        lastView = { u: imageU, v, fov: fovYDeg, aspect: camera.aspect }
+        wanted.clear()
+        const addWanted = (z: number, x: number, y: number) => {
+          const key = tileKey(z, x, y)
+          const priority = tileLoadPriority(
+            z,
+            x,
+            y,
+            coverZ,
+            targetZ,
+            imageU,
+            v,
+          )
+          const prev = wanted.get(key)
+          if (!prev || priority < prev.priority) {
+            wanted.set(key, { z, x, y, key, priority })
+          }
         }
-      }
 
-      // Level A — full sky, low zoom (always).
-      for (const tile of allTilesAtZoom(coverZ)) {
-        addWanted(coverZ, tile.x, tile.y)
-      }
-
-      // Level B/C — sharper zooms only where the camera looks.
-      fovDetailKeys = []
-      if (targetZ > coverZ) {
-        const detail = tilesForView({
-          centerU: imageU,
-          centerV: v,
-          fovYDeg,
-          aspect: camera.aspect,
-          z: targetZ,
-          pad: 2,
-          spanScale: 2.4,
-        })
-        for (const tile of detail) {
-          addWanted(targetZ, tile.x, tile.y)
-          fovDetailKeys.push(tileKey(targetZ, tile.x, tile.y))
+        // Level A — full sky, low zoom (always).
+        for (const tile of allTilesAtZoom(coverZ)) {
+          addWanted(coverZ, tile.x, tile.y)
         }
-        if (targetZ - 1 > coverZ) {
-          const mid = tilesForView({
+
+        // Level B/C — sharper zooms only where the camera looks.
+        fovDetailKeys = []
+        if (targetZ > coverZ) {
+          const detail = tilesForView({
             centerU: imageU,
             centerV: v,
             fovYDeg,
             aspect: camera.aspect,
-            z: targetZ - 1,
-            pad: 1,
+            z: targetZ,
+            pad: 2,
             spanScale: 2.4,
           })
-          for (const tile of mid) addWanted(targetZ - 1, tile.x, tile.y)
+          for (const tile of detail) {
+            addWanted(targetZ, tile.x, tile.y)
+            fovDetailKeys.push(tileKey(targetZ, tile.x, tile.y))
+          }
+          if (targetZ - 1 > coverZ) {
+            const mid = tilesForView({
+              centerU: imageU,
+              centerV: v,
+              fovYDeg,
+              aspect: camera.aspect,
+              z: targetZ - 1,
+              pad: 1,
+              spanScale: 2.4,
+            })
+            for (const tile of mid) addWanted(targetZ - 1, tile.x, tile.y)
+          }
         }
       }
 
@@ -488,15 +495,20 @@ export function createNasaSkyTileLayer(input: {
       }
 
       // Evict old detail tiles; never evict the cover level.
-      const detailResidents = [...residents.values()]
-        .filter((tile) => tile.z > coverZ)
-        .sort((a, b) => a.lastWantedFrame - b.lastWantedFrame)
-      while (detailResidents.length > MAX_DETAIL_RESIDENTS) {
-        const victim = detailResidents.shift()!
-        if (wanted.has(victim.key)) continue
-        if (frame - victim.lastWantedFrame < 45) continue
-        residents.delete(victim.key)
-        release(victim)
+      if (residents.size > MAX_DETAIL_RESIDENTS) {
+        const detailResidents = [...residents.values()]
+          .filter((tile) => tile.z > coverZ)
+        if (detailResidents.length > MAX_DETAIL_RESIDENTS) {
+          detailResidents.sort((a, b) => a.lastWantedFrame - b.lastWantedFrame)
+          const excess = detailResidents.length - MAX_DETAIL_RESIDENTS
+          for (let i = 0; i < excess; i++) {
+            const victim = detailResidents[i]!
+            if (wanted.has(victim.key)) continue
+            if (frame - victim.lastWantedFrame < 45) continue
+            residents.delete(victim.key)
+            release(victim)
+          }
+        }
       }
       for (const [key, tile] of [...residents]) {
         if (

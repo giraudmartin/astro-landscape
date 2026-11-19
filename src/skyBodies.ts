@@ -215,7 +215,14 @@ export function createSkyBodies(): SkyBodiesHandle {
   root.add(sunPath, moonPath)
 
   let cachedPathKey = ''
-  let pathSamples: SkySample[] = []
+  let lastObservation: {
+    utcMs: number
+    lat: number
+    lon: number
+    elevationM: number
+    sample: SkySample
+  } | undefined
+  const recentPaths = new Map<string, SkySample[]>()
   const localSun = new THREE.Vector3()
   const localMoon = new THREE.Vector3()
   const moonLightView = new THREE.Vector3()
@@ -229,17 +236,21 @@ export function createSkyBodies(): SkyBodiesHandle {
   ): void => {
     const civilDate = civilDateFromUtc(utcMs, lon)
     const key = pathKey(lat, lon, elevationM, civilDate)
-    if (key === cachedPathKey && pathSamples.length > 0) return
+    if (key === cachedPathKey) return
     const dayStart = civilDayStartUtcMs(civilDate, lon)
     const nextDate = shiftIsoDate(civilDate, 1) ?? civilDate
     const dayEnd = civilDayStartUtcMs(nextDate, lon)
-    pathSamples = sampleMoonSkyPath({
+    const exactKey = JSON.stringify([lat, lon, elevationM, dayStart, dayEnd])
+    const pathSamples = recentPaths.get(exactKey) ?? sampleMoonSkyPath({
       latitude: lat,
       longitude: lon,
       elevationMeters: elevationM,
       startUtc: new Date(dayStart),
       endUtc: new Date(dayEnd),
     })
+    recentPaths.delete(exactKey)
+    recentPaths.set(exactKey, pathSamples)
+    if (recentPaths.size > 4) recentPaths.delete(recentPaths.keys().next().value!)
     updatePaths(sunPath, moonPath, pathSamples)
     cachedPathKey = key
   }
@@ -249,14 +260,19 @@ export function createSkyBodies(): SkyBodiesHandle {
     update: ({ utcMs, lat, lon, elevationM, camera }) => {
       if (disposed) return
       root.position.copy(camera.position)
-      ensurePathSamples(utcMs, lat, lon, elevationM)
-
-      const sample = sampleMoonSkyAt({
-        latitude: lat,
-        longitude: lon,
-        elevationMeters: elevationM,
-        utcMs,
-      })
+      if (!lastObservation || lastObservation.utcMs !== utcMs ||
+          lastObservation.lat !== lat || lastObservation.lon !== lon ||
+          lastObservation.elevationM !== elevationM) {
+        ensurePathSamples(utcMs, lat, lon, elevationM)
+        const sample = sampleMoonSkyAt({
+          latitude: lat,
+          longitude: lon,
+          elevationMeters: elevationM,
+          utcMs,
+        })
+        lastObservation = { utcMs, lat, lon, elevationM, sample }
+      }
+      const { sample } = lastObservation
 
       const sunDir = sunDirectionFromAltAz(
         sample.sunAltitudeDeg,

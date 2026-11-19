@@ -338,6 +338,8 @@ export function createPersonalSpotMarkerElement(
   return el
 }
 
+export type PersonalMarkerEntry = { marker: Marker; spot: PersonalSpot }
+
 export function renderPersonalSpotMarkers(
   map: MapLibreMap,
   spots: PersonalSpot[],
@@ -345,6 +347,7 @@ export function renderPersonalSpotMarkers(
   onSelect: (spot: PersonalSpot) => void,
   /** Hide the marker under the working pin when coords match. */
   activeLocation?: { lat: number; lon: number } | null,
+  entries = new Map<string, PersonalMarkerEntry>(),
 ): Marker[] {
   // Active / working pin is green camera — skip that location's map marker.
   const visible = spots.filter((spot) => {
@@ -358,7 +361,22 @@ export function renderPersonalSpotMarkers(
     }
     return true
   })
+  const visibleIds = new Set(visible.map(spot => spot.id))
+  for (const [id, entry] of entries) {
+    if (visibleIds.has(id)) continue
+    entry.marker.remove()
+    entries.delete(id)
+  }
   return visible.map((spot) => {
+    const previous = entries.get(spot.id)
+    if (previous && previous.spot.name === spot.name) {
+      if (previous.spot.lon !== spot.lon || previous.spot.lat !== spot.lat) {
+        previous.marker.setLngLat([spot.lon, spot.lat])
+      }
+      previous.spot = spot
+      return previous.marker
+    }
+    previous?.marker.remove()
     const marker = new maplibregl.Marker({
       element: createPersonalSpotMarkerElement(spot),
       anchor: 'center',
@@ -366,13 +384,15 @@ export function renderPersonalSpotMarkers(
     })
       .setLngLat([spot.lon, spot.lat])
       .addTo(map)
+    const entry = { spot, marker }
+    entries.set(spot.id, entry)
     const el = marker.getElement()
     // Left-click only selects. Right-click must reach the map to place a pin.
     el.addEventListener('click', (event) => {
       if (event.button !== 0) return
       event.preventDefault()
       event.stopPropagation()
-      onSelect(spot)
+      onSelect(entry.spot)
     })
     return marker
   })

@@ -18,6 +18,16 @@ pano-*.png
 test-*.png
 artifacts/
 
+# LPM all-sky fetch / calib cache (scripts/fetch-lpm-allsky.mjs)
+scripts/lpm-allsky-cache/
+
+# One-off script outputs / scratch
+scripts/_compare_*
+scripts/_restore_*
+scripts/diag-*.json
+scripts/sample-*.json
+scripts/bench-render-passes.mjs
+
 # Offline Hα source (53 MB TIFF) — rebuild with scripts/build_halpha_texture.py
 raw-sky/
 

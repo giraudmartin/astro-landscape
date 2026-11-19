@@ -406,7 +406,8 @@ void main() {
     int steps = int(uCloudSteps + 0.5);
     float stride = total / float(steps);
     float strideKm = stride * 0.001 * length(vec3(rd.x, rd.y / uExag, rd.z));
-    float jitter = hash(gl_FragCoord.xy);
+    // A common midpoint keeps adjacent cloud rays coherent at grazing angles.
+    float jitter = uCloudOn > 0.5 ? 0.5 : hash(gl_FragCoord.xy);
     int band = 0;
     float offset = 0.0;
     for (int i = 0; i < ${STEPS_CLOUDS}; i++) {
@@ -435,11 +436,13 @@ void main() {
       float air = uHaloAir > 0.0
         ? exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3)) * uHaloAir * uHaze * edge * 0.045
         : 0.0;
-      float rangeKm = length(pScene.xz - uEye.xz) * 0.001;
-      float distant = exp(-rangeKm / 95.0) * (1.0 - smoothstep(120.0, 390.0, rangeKm));
       float midDensity = cloudLayer(p, 1) * uCloudOn;
       float lowDensity = cloudLayer(p, 0) * uCloudOn;
       float density = midDensity + lowDensity + uCloudOn * cloudLayer(p, 2);
+      // Empty space contributes neither light nor extinction.
+      if (density == 0.0 && air == 0.0) continue;
+      float rangeKm = length(pScene.xz - uEye.xz) * 0.001;
+      float distant = exp(-rangeKm / 95.0) * (1.0 - smoothstep(120.0, 390.0, rangeKm));
       float cd = density * mix(distant, edge, uReference);
       float cloudExt = cd * 2.2;
       vec3 cloudColour = vec3(0.0);
@@ -451,19 +454,7 @@ void main() {
         vec3 skyAmb = mix(nightSky, srgbToLinear(uSkyLight), clamp(uDayFactor, 0.0, 1.0));
         vec3 ambient = (skyAmb * 3.2 + vec3(0.009, 0.012, 0.019))
           * mix(0.16, 1.0, occ.x) * selfShade;
-        vec3 cityTint = uTint;
         if (uReference < 0.5) {
-          float luminance = dot(ambient, vec3(0.2126, 0.7152, 0.0722));
-          // Diffuse skylight reaches the underside of a thick mid-level bank
-          // even where the direct sky path is strongly self-shadowed.
-          float midFraction = midDensity / max(density, 1e-6);
-          float lowFraction = lowDensity / max(density, 1e-6);
-          luminance += midFraction * mix(0.016, 0.025, occ.x);
-          luminance += lowFraction * mix(0.016, 0.025, occ.x);
-          // Keep the intensity of city light, with a softer amber on low banks.
-          float tintLuma = dot(uTint, vec3(0.2126, 0.7152, 0.0722));
-          cityTint = mix(uTint, vec3(tintLuma), 0.85 * lowFraction * (1.0 - uDayFactor));
-          vec3 nightGrey = luminance * vec3(0.95, 1.00, 1.04);
           vec3 daylight = ambient * 0.55;
           if (uDayFactor > 0.001) {
             // Two sunward samples distinguish a lit rim from a shaded interior.
@@ -475,7 +466,7 @@ void main() {
                                 smoothstep(0.0, 0.32, uSunDir.y));
             daylight += sunColor * sun * exp(-tau) * (0.50 + 0.55 * silver) * mix(0.28, 1.0, occ.x);
           }
-          ambient = mix(nightGrey, daylight, smoothstep(0.0, 0.65, uDayFactor));
+          ambient = mix(ambient, daylight, smoothstep(0.0, 0.65, uDayFactor));
         }
         if (uMoonStrength > 0.001 && uDayFactor < 0.65) {
           float moonDepth = cloudDensity(p + 0.26 * uMoonDir) * 0.75
@@ -503,7 +494,7 @@ void main() {
         if (uReference < 0.5 && uHasVolume > 0.5 && uPower * uHaloAir > 0.0)
           cloudIll = diffuseCloudLight(p);
         float cityAmt = cloudIll * uPower * uHaloAir + uSkyLp * 1.25 * under;
-        vec3 city = cityTint * cityAmt * 0.9 * mix(0.12, 1.0, occ.y);
+        vec3 city = uTint * cityAmt * 0.9 * mix(0.12, 1.0, occ.y);
         cloudColour = ambient + city;
       }
       float extinction = air + cloudExt;
@@ -563,8 +554,10 @@ export type LocalHaloPass = {
   dispose: () => void
 }
 
-function makeNoise3D(): THREE.Data3DTexture {
-  const size = 32
+const NOISE_SIZE = 32
+let cachedNoise: Uint8Array<ArrayBuffer> | undefined
+
+function generateNoise(size: number) {
   const bytes = new Uint8Array(size ** 3 * 2)
   let seed = 7823
   for (let i = 0; i < size ** 3; i++) {
@@ -596,7 +589,12 @@ function makeNoise3D(): THREE.Data3DTexture {
     }
     bytes[i * 2 + 1] = Math.round(255 * (1 - Math.sqrt(nearest)))
   }
-  const tex = new THREE.Data3DTexture(bytes, size, size, size)
+  return bytes
+}
+
+function makeNoise3D(): THREE.Data3DTexture {
+  cachedNoise ??= generateNoise(NOISE_SIZE)
+  const tex = new THREE.Data3DTexture(cachedNoise, NOISE_SIZE, NOISE_SIZE, NOISE_SIZE)
   tex.format = THREE.RGFormat
   tex.type = THREE.UnsignedByteType
   tex.minFilter = THREE.LinearFilter

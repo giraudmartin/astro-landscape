@@ -12,10 +12,11 @@ export const PL_MAP_OVERLAY_LAYER_ID = 'plMapOverlay'
 /** Heatmap from globe overview when the overlay toggle is on. */
 export const PL_MAP_OVERLAY_MIN_ZOOM = 1
 
-/** Useful overzoom of the ~500 m VIIRS COG. */
+/**
+ * Native tile pyramid max — MapLibre overzooms beyond this so the overlay
+ * stays visible at every map zoom (no layer maxzoom cutoff).
+ */
 export const PL_MAP_OVERLAY_MAX_ZOOM = 11
-
-export const PL_MAP_OVERLAY_LAYER_MAX_ZOOM = 12
 
 export const PL_MAP_OVERLAY_TILE_URL = PL_MAP_OVERLAY_PROTOCOL_URL
 

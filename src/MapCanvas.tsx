@@ -31,7 +31,6 @@ import {
   applyPlMapOverlay,
   PL_MAP_OVERLAY_ATTRIBUTION,
   PL_MAP_OVERLAY_LAYER_ID,
-  PL_MAP_OVERLAY_LAYER_MAX_ZOOM,
   PL_MAP_OVERLAY_MAX_ZOOM,
   PL_MAP_OVERLAY_MIN_ZOOM,
   PL_MAP_OVERLAY_OPACITY_DEFAULT,
@@ -258,12 +257,11 @@ function buildStyle(): StyleSpecification {
         },
       },
       {
-        // Coloured PL heatmap — plan basemap + zoomed map only (not globe).
+        // Coloured PL heatmap — no layer maxzoom; source maxzoom overzooms past z11.
         id: PL_MAP_OVERLAY_LAYER_ID,
         type: 'raster',
         source: PL_MAP_OVERLAY_SOURCE_ID,
         minzoom: PL_MAP_OVERLAY_MIN_ZOOM,
-        maxzoom: PL_MAP_OVERLAY_LAYER_MAX_ZOOM,
         layout: { visibility: 'none' },
         paint: {
           'raster-opacity': PL_MAP_OVERLAY_OPACITY_DEFAULT,

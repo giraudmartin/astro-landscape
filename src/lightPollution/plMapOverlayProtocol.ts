@@ -399,9 +399,6 @@ export function ensurePlMapOverlayProtocol(): void {
   maplibregl.addProtocol(PL_MAP_OVERLAY_PROTOCOL, async (params) => {
     const parsed = parseTileUrl(params.url)
     if (!parsed) throw new Error(`Bad pl-map URL: ${params.url}`)
-    if (parsed.z > 12) {
-      return { data: EMPTY_PNG.buffer.slice(0) }
-    }
     const data = await renderPlMapTile(parsed.z, parsed.x, parsed.y)
     return { data }
   })

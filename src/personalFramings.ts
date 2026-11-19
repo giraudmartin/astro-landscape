@@ -8,7 +8,6 @@ import {
   DEFAULT_FRAME_ROLL_DEG,
   DEFAULT_ORIENTATION,
   DEFAULT_SENSOR_FORMAT,
-  VIEWFINDER_FRAME_MODE_LABEL,
   clampFrameRollDeg,
   normalizeViewfinderFrameMode,
   type SensorFormat,
@@ -34,9 +33,12 @@ export const PERSONAL_FRAMINGS_STORAGE_KEY =
 
 export type FramingSource = 'immersive' | 'manual' | 'migrated'
 
+/** Cadrage kinds — Timelapse is Photo-framed + plan, stored as its own type. */
+export type FramingCaptureMode = 'dslr' | 'pano' | 'timelapse'
+
 /** Snapshot of viewfinder + look needed to restore a cadrage. */
 export type FramingViewSnapshot = {
-  frameMode: Exclude<ViewfinderFrameMode, 'off'>
+  frameMode: FramingCaptureMode
   focalMm: number
   orientation: ViewfinderOrientation
   sensorFormat: SensorFormat
@@ -92,6 +94,18 @@ export function framingMonthFromDay(day: string): string {
   return day.slice(0, 7)
 }
 
+/** Stable id for an unsaved map pin (geo-only cadrages). */
+export function framingGeoSpotId(lat: number, lon: number): string {
+  return `geo:${lat.toFixed(5)},${lon.toFixed(5)}`
+}
+
+/** Compact coords label when the pin has no saved spot name. */
+export function framingCoordsLabel(lat: number, lon: number): string {
+  const ns = lat >= 0 ? 'N' : 'S'
+  const ew = lon >= 0 ? 'E' : 'W'
+  return `${Math.abs(lat).toFixed(5)}°${ns} · ${Math.abs(lon).toFixed(5)}°${ew}`
+}
+
 /** Night bucket: before 06:00 local → previous civil day. */
 export function framingNightGroupDay(peakLocal: string): string {
   const day = peakLocal.slice(0, 10)
@@ -111,8 +125,63 @@ export function isNightLocalTime(peakLocal: string): boolean {
   return hour < 6 || hour >= 18
 }
 
+/** Display label for cadrage type (list tags + default names). */
+export type FramingTypeKind = 'photo' | 'pano' | 'timelapse'
+
+export function framingTypeKind(frameMode: FramingCaptureMode): FramingTypeKind {
+  if (frameMode === 'pano') return 'pano'
+  if (frameMode === 'timelapse') return 'timelapse'
+  return 'photo'
+}
+
+export function framingTypeLabel(frameMode: FramingCaptureMode): string {
+  const kind = framingTypeKind(frameMode)
+  if (kind === 'pano') return 'Pano'
+  if (kind === 'timelapse') return 'Timelapse'
+  return 'Photo'
+}
+
+/** List badge: `Pano 5×2` when grid is known, else plain type label. */
+export function framingTypeBadgeLabel(view: FramingViewSnapshot): string {
+  if (view.frameMode !== 'pano') return framingTypeLabel(view.frameMode)
+  const columns = view.panorama?.columns
+  const rows = view.panorama?.rows
+  if (
+    typeof columns === 'number' &&
+    typeof rows === 'number' &&
+    Number.isFinite(columns) &&
+    Number.isFinite(rows) &&
+    columns > 0 &&
+    rows > 0
+  ) {
+    return `Pano ${Math.round(columns)}×${Math.round(rows)}`
+  }
+  return 'Pano'
+}
+
+/** Default name: `Photo 1`, `Pano 2`, … — next free index among existingNames. */
+export function suggestFramingName(
+  view: FramingViewSnapshot,
+  existingNames: readonly string[] = [],
+): string {
+  const type = framingTypeLabel(view.frameMode)
+  const re = new RegExp(`^${escapeRegExp(type)}(?:\\s+(\\d+))?$`, 'i')
+  let max = 0
+  for (const raw of existingNames) {
+    const m = raw.trim().match(re)
+    if (!m) continue
+    const n = m[1] ? Number(m[1]) : 1
+    if (Number.isFinite(n) && n > max) max = n
+  }
+  return `${type} ${max + 1}`
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function framingViewSummary(view: FramingViewSnapshot): string {
-  const mode = VIEWFINDER_FRAME_MODE_LABEL[view.frameMode]
+  const mode = framingTypeLabel(view.frameMode)
   const orient = view.orientation === 'portrait' ? 'Portrait' : 'Paysage'
   return `${mode} · ${Math.round(view.focalMm)} mm · ${orient}`
 }
@@ -261,9 +330,12 @@ function normalizeViewSnapshot(value: unknown): FramingViewSnapshot {
   const base = defaultViewSnapshot()
   if (!value || typeof value !== 'object') return base
   const row = value as Record<string, unknown>
-  const modeRaw = normalizeViewfinderFrameMode(row.frameMode)
-  const frameMode: FramingViewSnapshot['frameMode'] =
-    modeRaw === 'pano' ? 'pano' : 'dslr'
+  const frameMode: FramingCaptureMode =
+    row.frameMode === 'timelapse'
+      ? 'timelapse'
+      : normalizeViewfinderFrameMode(row.frameMode) === 'pano'
+        ? 'pano'
+        : 'dslr'
   const focal = Number(row.focalMm)
   const bearing = Number(row.bearingDeg)
   const pitch = Number(row.pitchDeg)

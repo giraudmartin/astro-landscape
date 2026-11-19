@@ -22,6 +22,8 @@ type MySpotsRailProps = {
   onMoveSpotToFolder: (spotId: string, folderId: string | null) => void
   onShowAll: () => void
   onViewFramings?: (spot: PersonalSpot) => void
+  railWidthPx?: number
+  onRailWidthChange?: (widthPx: number) => void
 }
 
 const SPOT_DRAG_MIME = 'application/x-astro-spot-id'
@@ -272,6 +274,8 @@ export function MySpotsRail({
   onMoveSpotToFolder,
   onShowAll,
   onViewFramings,
+  railWidthPx,
+  onRailWidthChange,
 }: MySpotsRailProps) {
   const [query, setQuery] = useState('')
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(
@@ -394,7 +398,12 @@ export function MySpotsRail({
       role="complementary"
       aria-label="Mes spots"
     >
-      <MobileRailChrome onClose={onClose} sheetClassName="my-spots-rail__sheet">
+      <MobileRailChrome
+        onClose={onClose}
+        sheetClassName="my-spots-rail__sheet"
+        desktopWidthPx={railWidthPx}
+        onDesktopWidthChange={onRailWidthChange}
+      >
         <header className="my-spots-rail__header">
           <div>
             <h2 className="my-spots-rail__title">

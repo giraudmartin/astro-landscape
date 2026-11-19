@@ -59,6 +59,8 @@ type ViewfinderCaptureCapsuleProps = {
   onTimelapseChange: (next: TimelapsePlan) => void
   onStartTimelapsePreview: () => void
   timelapsePreviewPlaying?: boolean
+  /** True while the Timelapse settings sheet is open (cadrage save intent). */
+  onTimelapseSettingsOpenChange?: (open: boolean) => void
   selectedCelestial: CelestialObject | null
 }
 
@@ -85,12 +87,20 @@ export function ViewfinderCaptureCapsule({
   onTimelapseChange,
   onStartTimelapsePreview,
   timelapsePreviewPlaying = false,
+  onTimelapseSettingsOpenChange,
   selectedCelestial,
 }: ViewfinderCaptureCapsuleProps) {
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const frameModeRef = useRef(frameMode)
   frameModeRef.current = frameMode
+
+  useEffect(() => {
+    // Only notify on open — sticky Timelapse save kind lives in ImmersiveView.
+    if (settingsPanel === 'timelapse') {
+      onTimelapseSettingsOpenChange?.(true)
+    }
+  }, [settingsPanel, onTimelapseSettingsOpenChange])
 
   useEffect(() => {
     if (!settingsPanel) return

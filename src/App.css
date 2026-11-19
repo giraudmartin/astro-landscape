@@ -187,6 +187,15 @@
   transition: inset var(--motion-panel, 220ms) var(--motion-ease-out, ease);
 }
 
+html.is-rail-resizing .map-host {
+  transition: none;
+}
+
+html.is-rail-resizing .my-spots-rail,
+html.is-rail-resizing .my-events-rail {
+  transition: none;
+}
+
 .map-host.is-covered {
   inset: 0;
   visibility: hidden;
@@ -1973,6 +1982,7 @@
 
 .my-spots-rail__sheet,
 .my-events-rail__sheet {
+  position: relative;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
@@ -1987,6 +1997,38 @@
   overflow: hidden;
   font-family: var(--font-ui);
   animation: ui-enter-rail-right var(--motion-panel) var(--motion-ease-out) both;
+}
+
+/* Left-edge drag — same idea as Photo Sightline rails. */
+.rail-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  z-index: 2;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.rail-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 2px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.rail-resize-handle:hover::after,
+html.is-rail-resizing .rail-resize-handle::after {
+  opacity: 1;
+  background: rgba(var(--ui-accent-rgb), 0.55);
 }
 
 .my-spots-rail__header,
@@ -2396,10 +2438,11 @@
   cursor: pointer;
 }
 
+/* Same language as Libre/Photo/Pano capsule — fill + accent text, no green box. */
 .framings-panel__display-btn.is-active {
-  border-color: rgba(var(--ui-accent-rgb), 0.4);
-  background: rgba(var(--ui-accent-rgb), 0.12);
-  color: var(--ui-action-primary-text);
+  border-color: transparent;
+  background: var(--ui-accent-active-fill);
+  color: var(--ui-accent);
 }
 
 .framings-empty {
@@ -2423,27 +2466,30 @@
 
 .framings-night {
   display: grid;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 12px;
+  margin-top: 6px;
 }
 
 .framings-night__header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
+  margin: 0 2px;
 }
 
 .framings-night__header h3 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
   font-weight: 650;
-  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .framings-night__header small {
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
 }
 
 .framings-list {
@@ -2451,97 +2497,174 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 6px;
+  gap: 12px;
 }
 
+/* Prototype card shell — select row + edit, tokens only. */
 .framings-item {
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: stretch;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  margin: 0;
+  padding-right: 8px;
+  border: 1px solid var(--ov-stroke);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.framings-item:hover {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.framings-item.is-active {
+  border-color: rgba(var(--ui-accent-rgb), 0.42);
+  background: color-mix(in srgb, var(--ui-accent) 10%, #12141a);
 }
 
 .framings-item__row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  min-width: 0;
+  width: 100%;
   margin: 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 12px 10px 12px 12px;
+  border: 0;
+  border-radius: 15px;
+  background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
   font: inherit;
 }
 
-.framings-item__row:hover {
-  background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(255, 255, 255, 0.12);
+.framings-item__row:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: -3px;
 }
 
-.framings-item__row.is-active {
-  border-color: rgba(var(--ui-accent-rgb), 0.35);
-  background: rgba(var(--ui-accent-rgb), 0.1);
-}
-
-.framings-item__info {
+.framings-item__details {
   display: grid;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
 }
 
-.framings-item__info strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.84rem;
-  font-weight: 650;
+.framings-item__name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+  line-height: 1.24;
+  font-weight: 630;
+  letter-spacing: -0.02em;
   color: #fff;
 }
 
-.framings-item__info small {
+.framings-item__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 7px;
   font-size: 0.72rem;
+  line-height: 1.3;
   color: rgba(255, 255, 255, 0.45);
+}
+
+.framings-item__type {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.framings-item.is-active .framings-item__type {
+  color: #d0e4d9;
+  background: rgba(var(--ui-accent-rgb), 0.16);
+}
+
+.framings-item__focal {
   font-variant-numeric: tabular-nums;
 }
 
 .framings-item__spot {
-  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.framings-item__clock {
+  flex-shrink: 0;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.9rem;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.framings-item.is-active .framings-item__clock {
+  color: var(--ui-accent);
 }
 
 .framings-item__edit {
   display: grid;
   place-items: center;
-  width: 34px;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
   margin: 0;
   padding: 0;
-  border: 0;
-  border-radius: 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.45);
   cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.framings-item__edit svg {
+  width: 17px;
+  height: 17px;
 }
 
 .framings-item__edit:hover {
   background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
   color: #fff;
+}
+
+.framings-item.is-active .framings-item__edit:hover {
+  background: rgba(var(--ui-accent-rgb), 0.14);
+  border-color: rgba(var(--ui-accent-rgb), 0.28);
+  color: var(--ui-accent);
+}
+
+.framings-item__edit:focus-visible {
+  outline: 2px solid rgba(var(--ui-accent-rgb), 0.55);
+  outline-offset: 1px;
 }
 
 .framings-thumb {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 58px;
+  height: 58px;
   border-radius: 10px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 0;
   color: rgba(255, 255, 255, 0.55);
   flex: 0 0 auto;
 }
@@ -2551,6 +2674,35 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+@media (max-width: 460px) {
+  .framings-item {
+    padding-right: 4px;
+  }
+
+  .framings-item__row {
+    gap: 10px;
+    padding: 11px 4px 11px 10px;
+  }
+
+  .framings-thumb {
+    width: 44px;
+    height: 44px;
+  }
+
+  .framings-item__name {
+    font-size: 0.84rem;
+  }
+
+  .framings-item__clock {
+    font-size: 0.78rem;
+  }
+
+  .framings-item__edit {
+    width: 40px;
+    height: 40px;
+  }
 }
 
 .framings-cal {
@@ -2617,9 +2769,9 @@
 }
 
 .framings-cal__day--selected {
-  border-color: rgba(var(--ui-accent-rgb), 0.45);
-  background: rgba(var(--ui-accent-rgb), 0.14);
-  color: var(--ui-action-primary-text);
+  border-color: transparent;
+  background: var(--ui-accent-active-fill);
+  color: var(--ui-accent);
 }
 
 .framings-cal__dot {
@@ -2658,54 +2810,12 @@
   font-size: 0.84rem;
 }
 
-.framings-form__summary {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 10px;
-  align-items: center;
-  padding: 10px;
-  border: 1px solid var(--ov-stroke-soft);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.framings-form__summary strong {
-  display: block;
-  font-size: 0.8rem;
-  color: #fff;
-}
-
-.framings-form__summary small {
-  display: block;
-  margin-top: 2px;
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.framings-form__hint {
+.framings-form__meta {
   margin: 0;
   font-size: 0.72rem;
+  line-height: 1.35;
   color: rgba(255, 255, 255, 0.45);
-}
-
-.framings-form__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.framings-form__cancel {
-  margin: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--ov-stroke-soft);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.78);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
+  font-variant-numeric: tabular-nums;
 }
 
 .my-spots-tree {
@@ -3343,6 +3453,19 @@
 }
 
 /* —— Immersive Three viewfinder —— */
+/* Shrink with the cadrages / spots rail (desktop), like the map stage. */
+.immersive-host {
+  position: absolute;
+  inset: 0 var(--map-rail-width) 0 0;
+  z-index: 5;
+  overflow: hidden;
+  transition: inset var(--motion-panel, 220ms) var(--motion-ease-out, ease);
+}
+
+html.is-rail-resizing .immersive-host {
+  transition: none;
+}
+
 .immersive {
   position: absolute;
   inset: 0;
@@ -4767,7 +4890,7 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   transform: rotate(180deg);
 }
 
-/* Same chrome language as float panels; text-only items, soft glass */
+/* Same chrome language as float panels, more opaque for readability */
 .vf-proj-control__menu {
   position: absolute;
   top: calc(100% + 8px);

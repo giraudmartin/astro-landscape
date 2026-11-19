@@ -25,18 +25,25 @@ import {
 import type { BasemapMode } from './basemapMode'
 import { loadAppSettings, patchAppSettings } from './appSettings'
 import {
+  loadMapRailWidthPx,
+  saveMapRailWidthPx,
+} from './mapRailWidth'
+import {
   deleteFramingThumb,
   putFramingThumb,
 } from './framingThumbStore'
 import {
   createPersonalFraming,
   formatCivilLocalTimestamp,
+  framingCoordsLabel,
+  framingGeoSpotId,
   framingNightGroupDay,
   framingMonthFromDay,
   loadPersonalFramings,
   peakUtcFromCivilLocal,
   removePersonalFraming,
   savePersonalFramings,
+  suggestFramingName,
   upsertPersonalFraming,
   type FramingViewSnapshot,
   type PersonalFraming,
@@ -65,7 +72,6 @@ import {
 import './App.css'
 import './timelineCalendar.css'
 
-const MAP_RAIL_WIDTH_PX = 320
 
 type PendingSave = {
   lat: number
@@ -99,6 +105,7 @@ export default function App() {
 
   const [mySpotsOpen, setMySpotsOpen] = useState(false)
   const [framingsOpen, setFramingsOpen] = useState(false)
+  const [mapRailWidthPx, setMapRailWidthPx] = useState(loadMapRailWidthPx)
   const [initialPersonalSpots] = useState(loadPersonalSpotsState)
   const [personalSpots, setPersonalSpots] = useState<PersonalSpot[]>(
     initialPersonalSpots.spots,
@@ -265,12 +272,17 @@ export default function App() {
     const railOpen = (mySpotsOpen || framingsOpen) && !isPhone
     root.style.setProperty(
       '--map-rail-width',
-      railOpen ? `${MAP_RAIL_WIDTH_PX}px` : '0px',
+      railOpen ? `${mapRailWidthPx}px` : '0px',
     )
     return () => {
       root.style.setProperty('--map-rail-width', '0px')
     }
-  }, [mySpotsOpen, framingsOpen, isPhone])
+  }, [mySpotsOpen, framingsOpen, isPhone, mapRailWidthPx])
+
+  const onMapRailWidthChange = useCallback((widthPx: number) => {
+    setMapRailWidthPx(widthPx)
+    saveMapRailWidthPx(widthPx)
+  }, [])
 
   useEffect(() => {
     if (!isPhone) setInfoDrawerOpen(false)
@@ -663,8 +675,22 @@ export default function App() {
       .sort((a, b) => a.label.localeCompare(b.label, 'fr'))
   }, [personalSpots, personalFramings])
 
+  const currentFramingSpot = useMemo(() => {
+    if (!spot) return null
+    if (currentSavedSpot) {
+      return {
+        id: currentSavedSpot.id,
+        name: currentSavedSpot.name,
+      }
+    }
+    return {
+      id: framingGeoSpotId(spot.lat, spot.lon),
+      name: framingCoordsLabel(spot.lat, spot.lon),
+    }
+  }, [spot, currentSavedSpot])
+
   const canSaveFraming =
-    mode === 'ground' && currentSavedSpot != null && immersiveCanSaveFraming
+    mode === 'ground' && currentFramingSpot != null && immersiveCanSaveFraming
 
   const openFramingsForSpot = useCallback((saved: PersonalSpot) => {
     setFramingsFilterSpotId(saved.id)
@@ -675,20 +701,22 @@ export default function App() {
 
   const requestSaveCurrentFraming = useCallback(() => {
     const api = framingApiRef.current
-    const saved = currentSavedSpot
-    if (!api || !saved || !spot) return
+    const place = currentFramingSpot
+    if (!api || !place || !spot) return
     const view = api.getSnapshot()
     if (!view) return
     const peakLocal = formatCivilLocalTimestamp(playheadUtcMs, spot.lon)
-    const time = peakLocal.match(/T(\d{2}:\d{2})/)?.[1] ?? ''
+    const existingNames = personalFramings
+      .filter((row) => row.spotId === place.id)
+      .map((row) => row.name)
     setFramingsEditor({
-      name: time ? `${saved.name} · ${time}` : saved.name,
+      name: suggestFramingName(view, existingNames),
       peakLocal,
       view,
-      spotId: saved.id,
-      spotName: saved.name,
+      spotId: place.id,
+      spotName: place.name,
     })
-  }, [currentSavedSpot, spot, playheadUtcMs])
+  }, [currentFramingSpot, spot, playheadUtcMs, personalFramings])
 
   const submitFramingEditor = useCallback(
     async (draft: FramingsEditorDraft) => {
@@ -1054,8 +1082,8 @@ export default function App() {
               if (open) {
                 setMySpotsOpen(false)
                 setFramingsEditor(null)
-                if (currentSavedSpot) {
-                  setFramingsFilterSpotId(currentSavedSpot.id)
+                if (currentFramingSpot) {
+                  setFramingsFilterSpotId(currentFramingSpot.id)
                 }
               }
             }}
@@ -1162,6 +1190,8 @@ export default function App() {
             setShowAllPersonalSpotsToken((token) => token + 1)
           }
           onViewFramings={openFramingsForSpot}
+          railWidthPx={mapRailWidthPx}
+          onRailWidthChange={onMapRailWidthChange}
         />
       ) : null}
 
@@ -1173,11 +1203,13 @@ export default function App() {
         }}
         mode={immersive ? 'immersive' : 'map'}
         framings={personalFramings}
+        railWidthPx={mapRailWidthPx}
+        onRailWidthChange={onMapRailWidthChange}
         spotOptions={framingSpotOptions}
         filterSpotId={framingsFilterSpotId}
         onFilterSpotIdChange={setFramingsFilterSpotId}
-        currentSpotId={currentSavedSpot?.id ?? null}
-        currentSpotName={currentSavedSpot?.name ?? null}
+        currentSpotId={currentFramingSpot?.id ?? null}
+        currentSpotName={currentFramingSpot?.name ?? null}
         display={framingsDisplay}
         onDisplayChange={setFramingsDisplay}
         calendarDay={framingsCalendarDay}

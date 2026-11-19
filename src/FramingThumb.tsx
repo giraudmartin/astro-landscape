@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { getFramingThumb } from './framingThumbStore'
 import type { FramingViewSnapshot } from './personalFramings'
-import { FrameModePanoIcon, FrameModePhotoIcon } from './psIcons'
+import {
+  FrameModePanoIcon,
+  FrameModePhotoIcon,
+  TimelapseIcon,
+} from './psIcons'
 
 type FramingThumbProps = {
   thumbId: string | null
@@ -55,6 +59,8 @@ export function FramingThumb({ thumbId, view, className }: FramingThumbProps) {
     >
       {view.frameMode === 'pano' ? (
         <FrameModePanoIcon size={16} />
+      ) : view.frameMode === 'timelapse' ? (
+        <TimelapseIcon size={16} />
       ) : (
         <FrameModePhotoIcon size={16} />
       )}

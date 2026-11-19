@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   framingNightGroupDay,
   framingNightLabel,
+  framingTypeBadgeLabel,
+  framingTypeKind,
+  framingTypeLabel,
   groupFramingsByNight,
   createPersonalFraming,
+  suggestFramingName,
 } from '../personalFramings'
 
 const view = {
@@ -18,6 +22,43 @@ const view = {
   panorama: null,
   timelapse: null,
 }
+
+describe('personalFramings naming', () => {
+  it('suggests type + increment names per existing list', () => {
+    expect(suggestFramingName(view)).toBe('Photo 1')
+    expect(suggestFramingName(view, ['Photo 1', 'Photo'])).toBe('Photo 2')
+    expect(suggestFramingName({ ...view, frameMode: 'pano' }, ['Pano 1'])).toBe(
+      'Pano 2',
+    )
+    expect(
+      suggestFramingName({ ...view, frameMode: 'timelapse' }, [
+        'Timelapse 3',
+        'Other',
+      ]),
+    ).toBe('Timelapse 4')
+    expect(framingTypeLabel('dslr')).toBe('Photo')
+    expect(framingTypeKind('pano')).toBe('pano')
+    expect(framingTypeKind('timelapse')).toBe('timelapse')
+    expect(
+      framingTypeBadgeLabel({
+        ...view,
+        frameMode: 'pano',
+        panorama: {
+          enabled: true,
+          columns: 5,
+          rows: 2,
+          overlapPercent: 30,
+          showOverlap: true,
+          showFrames: true,
+          projectionMode: 'optical',
+        },
+      }),
+    ).toBe('Pano 5×2')
+    expect(
+      framingTypeBadgeLabel({ ...view, frameMode: 'pano', panorama: null }),
+    ).toBe('Pano')
+  })
+})
 
 describe('personalFramings night grouping', () => {
   it('assigns pre-6h shots to the previous civil night', () => {

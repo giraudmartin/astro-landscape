@@ -5,8 +5,8 @@ import { shiftIsoDate } from './celestial'
 import {
   datetimeLocalFromPeakLocal,
   framingAngleSummary,
-  framingNightGroupDay,
   framingNightLabel,
+  framingTypeBadgeLabel,
   framingViewSummary,
   groupFramingsByNight,
   peakLocalFromDatetimeLocal,
@@ -54,6 +54,8 @@ type FramingsPanelProps = {
   onDeleteFraming: (id: string) => void
   onRestore: (framing: PersonalFraming) => void
   onEdit: (framing: PersonalFraming) => void
+  railWidthPx?: number
+  onRailWidthChange?: (widthPx: number) => void
 }
 
 function SquarePenIcon() {
@@ -122,17 +124,19 @@ function formatTime(peakLocal: string): string {
   return hm ? hm.replace(':', ' h ') : ''
 }
 
-function formatAfterMidnightPrefix(peakLocal: string): string {
-  const cal = peakLocal.slice(0, 10)
-  const group = framingNightGroupDay(peakLocal)
-  if (cal === group) return ''
-  const d = new Date(`${cal}T12:00:00Z`)
-  const day = d.getUTCDate()
-  const month = new Intl.DateTimeFormat('fr-FR', {
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(d)
-  return `${day} ${month} · `
+/** Card clock — HH:MM, date lives in the night group header. */
+function formatCardClock(peakLocal: string): string {
+  const hm = peakLocal.slice(11, 16)
+  return /^\d{2}:\d{2}$/.test(hm) ? hm : ''
+}
+
+/** Read-only timeline stamp for the save form (no native date picker). */
+function formatFramingWhenLabel(peakLocal: string): string {
+  const day = peakLocal.slice(0, 10)
+  const hm = peakLocal.slice(11, 16)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return peakLocal
+  const [y, m, d] = day.split('-')
+  return hm ? `${d}/${m}/${y} · ${hm.replace(':', ' h ')}` : `${d}/${m}/${y}`
 }
 
 function monthLabel(month: string): string {
@@ -234,6 +238,8 @@ export function FramingsPanel({
   onDeleteFraming,
   onRestore,
   onEdit,
+  railWidthPx,
+  onRailWidthChange,
 }: FramingsPanelProps) {
   const [draftName, setDraftName] = useState('')
   const [draftWhen, setDraftWhen] = useState('')
@@ -269,8 +275,8 @@ export function FramingsPanel({
 
   const title = editor
     ? editor.id
-      ? 'Modifier le cadrage'
-      : 'Enregistrer le cadrage actuel'
+      ? 'Renommer'
+      : 'Nouveau cadrage'
     : mode === 'map'
       ? 'Mes cadrages'
       : 'Cadrages'
@@ -291,7 +297,12 @@ export function FramingsPanel({
       role="complementary"
       aria-label={title}
     >
-      <MobileRailChrome onClose={onClose} sheetClassName="my-events-rail__sheet">
+      <MobileRailChrome
+        onClose={onClose}
+        sheetClassName="my-events-rail__sheet"
+        desktopWidthPx={railWidthPx}
+        onDesktopWidthChange={onRailWidthChange}
+      >
         <header className="my-events-rail__header framings-rail__header">
           <div className="framings-rail__heading">
             {editor ? (
@@ -341,46 +352,39 @@ export function FramingsPanel({
                 onSubmitEditor({
                   ...editor,
                   name: draftName.trim() || editor.name || 'Cadrage',
-                  peakLocal: peakLocalFromDatetimeLocal(draftWhen),
+                  peakLocal: editor.id
+                    ? editor.peakLocal
+                    : peakLocalFromDatetimeLocal(draftWhen),
                 })
               }}
             >
               <label className="framings-form__field">
-                <span>Nom du cadrage</span>
+                <span>Nom</span>
                 <input
                   autoFocus
                   required
                   maxLength={68}
                   value={draftName}
-                  placeholder="Ex. Orion au-dessus des crêtes"
+                  placeholder="Ex. Photo 1"
                   onChange={(e) => setDraftName(e.target.value)}
                 />
               </label>
-              <label className="framings-form__field">
-                <span>Date et heure au spot</span>
-                <input
-                  type="datetime-local"
-                  required
-                  min="1900-01-02T00:00"
-                  max="2099-12-31T23:59"
-                  value={draftWhen}
-                  onChange={(e) => setDraftWhen(e.target.value)}
-                />
-              </label>
-              <div className="framings-form__summary">
-                <FramingThumb thumbId={null} view={editor.view} />
-                <div>
-                  <strong>{framingViewSummary(editor.view)}</strong>
-                  <small>{framingAngleSummary(editor.view)}</small>
-                </div>
-              </div>
               {!editor.id ? (
-                <p className="framings-form__hint">
-                  La date, l’heure et les réglages sont repris de ta vue
-                  trépied.
+                <p className="framings-form__meta">
+                  {formatFramingWhenLabel(draftWhen || editor.peakLocal)}
+                  {' · '}
+                  {framingViewSummary(editor.view)}
+                  {' · '}
+                  {framingAngleSummary(editor.view)}
                 </p>
               ) : null}
-              <div className="framings-form__actions">
+              <div
+                className={
+                  editor.id
+                    ? 'spot-save-card__actions spot-save-card__actions--edit'
+                    : 'spot-save-card__actions'
+                }
+              >
                 {editor.id ? (
                   <button
                     type="button"
@@ -390,13 +394,6 @@ export function FramingsPanel({
                     Supprimer
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className="framings-form__cancel"
-                  onClick={() => onEditorChange(null)}
-                >
-                  Annuler
-                </button>
                 <button type="submit" className="control-panel__primary">
                   Enregistrer
                 </button>
@@ -414,15 +411,15 @@ export function FramingsPanel({
                       title={
                         canSaveCurrent
                           ? 'Enregistrer le cadrage actuel'
-                          : 'Passe en Photo ou Pano et sélectionne un spot enregistré'
+                          : 'Passe en Photo, Pano ou Timelapse pour enregistrer'
                       }
                       onClick={onRequestSaveCurrent}
                     >
-                      + Enregistrer le cadrage actuel
+                      + Enregistrer
                     </button>
                     {!canSaveCurrent ? (
                       <p className="framings-panel__hint">
-                        Passe en Photo ou Pano pour enregistrer un cadrage.
+                        Passe en Photo / Pano, ou ouvre Timelapse.
                       </p>
                     ) : null}
                   </>
@@ -622,19 +619,22 @@ function NightSection({
           {items.length} cadrage{items.length === 1 ? '' : 's'}
         </small>
       </header>
-      <ul className="framings-list">
+      <ul className="framings-list" aria-label="Cadrages de la nuit">
         {items.map((framing) => {
           const active = framing.id === activeId
-          const prefix = formatAfterMidnightPrefix(framing.peakLocal)
+          const clock = formatCardClock(framing.peakLocal)
+          const typeLabel = framingTypeBadgeLabel(framing.view)
           return (
-            <li key={framing.id} className="framings-item">
+            <li
+              key={framing.id}
+              className={
+                active ? 'framings-item is-active' : 'framings-item'
+              }
+            >
               <button
                 type="button"
-                className={
-                  active
-                    ? 'framings-item__row is-active'
-                    : 'framings-item__row'
-                }
+                className="framings-item__row"
+                aria-pressed={active}
                 aria-current={active ? 'true' : undefined}
                 title="Rouvrir le cadrage"
                 onClick={() => onRestore(framing)}
@@ -643,25 +643,36 @@ function NightSection({
                   thumbId={framing.thumbId}
                   view={framing.view}
                 />
-                <span className="framings-item__info">
-                  <strong>{framing.name}</strong>
-                  <small>
-                    {prefix}
-                    {formatTime(framing.peakLocal)} ·{' '}
-                    {Math.round(framing.view.focalMm)} mm ·{' '}
-                    {framing.view.frameMode === 'pano' ? 'Pano' : 'Photo'}
-                  </small>
+                <span className="framings-item__details">
+                  <strong className="framings-item__name">
+                    {framing.name}
+                  </strong>
+                  <span className="framings-item__meta">
+                    <span className="framings-item__type">{typeLabel}</span>
+                    <span className="framings-item__focal">
+                      {Math.round(framing.view.focalMm)} mm
+                    </span>
+                  </span>
                   {showSpot ? (
                     <small className="framings-item__spot">
                       {framing.spotName}
                     </small>
                   ) : null}
                 </span>
+                {clock ? (
+                  <time className="framings-item__clock" dateTime={clock}>
+                    {clock}
+                  </time>
+                ) : null}
               </button>
               <button
                 type="button"
                 className="framings-item__edit"
-                aria-label={`Modifier ${framing.name}`}
+                aria-label={
+                  clock
+                    ? `Renommer le cadrage ${typeLabel} « ${framing.name} » à ${clock}`
+                    : `Modifier ${framing.name}`
+                }
                 title="Modifier"
                 onClick={() => onEdit(framing)}
               >

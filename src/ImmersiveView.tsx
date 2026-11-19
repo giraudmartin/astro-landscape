@@ -77,6 +77,7 @@ import { clampEyeHeightM, EYE_HEIGHT_STEP_M } from './presets'
 import { ViewBearingHud } from './ViewBearingHud'
 import { type PanoramaPlan } from './panorama'
 import {
+  DEFAULT_TIMELAPSE_PLAN,
   normalizeTimelapsePlan,
   timelapseStarTrailArcRad,
   type TimelapsePlan,
@@ -90,7 +91,10 @@ import {
 import {
   encodeFramingThumbWebp,
 } from './framingThumbStore'
-import type { FramingViewSnapshot } from './personalFramings'
+import type {
+  FramingCaptureMode,
+  FramingViewSnapshot,
+} from './personalFramings'
 import { FrameModePhotoIcon } from './psIcons'
 import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
 import { ViewfinderSceneSettingsControl } from './ViewfinderSceneSettingsControl'
@@ -332,7 +336,30 @@ export function ImmersiveView({
   const [timelapse, setTimelapse] = useState<TimelapsePlan>(
     savedImmersive.timelapse,
   )
+  /**
+   * Sticky cadrage kind for save/restore.
+   * Opening Timelapse locks this to `timelapse` until Libre / Photo / Pano is
+   * chosen again — panel close alone must not fall back to Photo.
+   */
+  const [cadrageSaveMode, setCadrageSaveMode] =
+    useState<FramingCaptureMode | null>(() =>
+      savedImmersive.frameMode === 'pano'
+        ? 'pano'
+        : savedImmersive.frameMode === 'dslr'
+          ? 'dslr'
+          : null,
+    )
+  const cadrageSaveModeRef = useRef(cadrageSaveMode)
+  cadrageSaveModeRef.current = cadrageSaveMode
   const [frameRollDeg, setFrameRollDeg] = useState(() =>
+    clampFrameRollDeg(savedImmersive.frameRollDeg),
+  )
+  /**
+   * Composition frame roll for cadrage save.
+   * Timelapse preview parks the angle in `savedFrameRollRef` and forces
+   * `frameRollDeg` to 0 — without this ref, snapshots would store 0°.
+   */
+  const compositionFrameRollRef = useRef(
     clampFrameRollDeg(savedImmersive.frameRollDeg),
   )
   /** Extra overlay roll from equatorial timelapse « Cadre seul ». */
@@ -768,6 +795,10 @@ export function ImmersiveView({
 
   const applyFrameMode = (mode: ViewfinderFrameMode) => {
     setFrameMode(mode)
+    // Mode radios own the sticky save kind (clears a prior Timelapse lock).
+    setCadrageSaveMode(
+      mode === 'pano' ? 'pano' : mode === 'dslr' ? 'dslr' : null,
+    )
     setPanorama((plan) =>
       plan.enabled === (mode === 'pano')
         ? plan
@@ -776,38 +807,85 @@ export function ImmersiveView({
     if (mode === 'off') setFramesLocked(false)
   }
 
+  const onTimelapseSettingsOpenChange = useCallback((open: boolean) => {
+    // Opening Timelapse locks save kind; closing the sheet must not unlock.
+    if (open) setCadrageSaveMode('timelapse')
+  }, [])
+
   useEffect(() => {
-    onFramingCanSaveChange?.(frameMode === 'dslr' || frameMode === 'pano')
-  }, [frameMode, onFramingCanSaveChange])
+    onFramingCanSaveChange?.(cadrageSaveMode != null)
+  }, [cadrageSaveMode, onFramingCanSaveChange])
 
   useEffect(() => {
     if (!framingApiRef) return
     const api: ImmersiveFramingApi = {
-      canSave: () => frameMode === 'dslr' || frameMode === 'pano',
+      canSave: () => cadrageSaveModeRef.current != null,
       getSnapshot: () => {
-        if (frameMode !== 'dslr' && frameMode !== 'pano') return null
+        const kind = cadrageSaveModeRef.current
+        if (kind == null) return null
         const look = lookRef.current
+        const rollDeg = clampFrameRollDeg(
+          timelapsePreviewLookLockedRef.current
+            ? savedFrameRollRef.current
+            : compositionFrameRollRef.current,
+        )
+        if (kind === 'timelapse') {
+          return {
+            frameMode: 'timelapse',
+            focalMm,
+            orientation,
+            sensorFormat,
+            frameRollDeg: rollDeg,
+            bearingDeg: look.yaw,
+            pitchDeg: look.pitch,
+            eyeHeightM,
+            panorama: null,
+            timelapse,
+          }
+        }
         return {
-          frameMode,
+          frameMode: kind,
           focalMm,
           orientation,
           sensorFormat,
-          frameRollDeg,
+          frameRollDeg: rollDeg,
           bearingDeg: look.yaw,
           pitchDeg: look.pitch,
           eyeHeightM,
-          panorama: frameMode === 'pano' ? panorama : null,
-          timelapse,
+          panorama: kind === 'pano' ? panorama : null,
+          timelapse: null,
         }
       },
       applySnapshot: (view) => {
-        applyFrameMode(view.frameMode)
+        if (timelapsePreviewLookLockedRef.current) {
+          endTimelapsePreviewRef.current()
+        }
+        if (view.frameMode === 'timelapse') {
+          // Keep sticky Timelapse — do not go through applyFrameMode('dslr')
+          // which would reset cadrageSaveMode back to Photo.
+          setFrameMode('dslr')
+          setCadrageSaveMode('timelapse')
+          setPanorama((plan) =>
+            plan.enabled ? { ...plan, enabled: false } : plan,
+          )
+          setTimelapse(
+            view.timelapse
+              ? normalizeTimelapsePlan(view.timelapse)
+              : { ...DEFAULT_TIMELAPSE_PLAN },
+          )
+          window.dispatchEvent(new Event(OPEN_TIMELAPSE_SETTINGS_EVENT))
+        } else {
+          applyFrameMode(view.frameMode)
+          if (view.panorama) setPanorama(view.panorama)
+          if (view.timelapse) setTimelapse(view.timelapse)
+        }
         setFocalMm(view.focalMm)
         setOrientation(view.orientation)
         setSensorFormat(view.sensorFormat)
-        setFrameRollDeg(clampFrameRollDeg(view.frameRollDeg))
-        if (view.panorama) setPanorama(view.panorama)
-        if (view.timelapse) setTimelapse(view.timelapse)
+        const rollDeg = clampFrameRollDeg(view.frameRollDeg)
+        compositionFrameRollRef.current = rollDeg
+        savedFrameRollRef.current = 0
+        setFrameRollDeg(rollDeg)
         if (view.eyeHeightM != null) setEyeHeightM(view.eyeHeightM)
         apiRef.current?.setLook(view.bearingDeg, view.pitchDeg)
       },
@@ -828,7 +906,6 @@ export function ImmersiveView({
     }
   }, [
     framingApiRef,
-    frameMode,
     focalMm,
     orientation,
     sensorFormat,
@@ -874,6 +951,9 @@ export function ImmersiveView({
   /** Whole preview session (play / pause / ended) — look stays locked. */
   const timelapsePreviewLookLockedRef = useRef(false)
   timelapsePreviewLookLockedRef.current = timelapsePreviewActive
+  if (!timelapsePreviewActive) {
+    compositionFrameRollRef.current = clampFrameRollDeg(frameRollDeg)
+  }
 
   useEffect(() => {
     onTimelapsePreviewPlayingChange?.(timelapsePreviewActive)
@@ -2229,7 +2309,8 @@ export function ImmersiveView({
         setTimelapse(next)
         if (frameMode !== 'dslr') applyFrameMode('dslr')
         setFramesLocked(false)
-        const fromSettings = clampFrameRollDeg(frameRollForPreviewRef.current)
+        const fromSettings = clampFrameRollDeg(compositionFrameRollRef.current)
+        compositionFrameRollRef.current = fromSettings
         savedFrameRollRef.current = fromSettings
         previewSceneRollRef.current = fromSettings
         setFrameRollDeg(0)
@@ -2652,6 +2733,7 @@ export function ImmersiveView({
             // Photo frame roll → same angle as camera roll so cadre + paysage
             // turn together (do NOT snap/level — keep the composed angle).
             const fromSettings = clampFrameRollDeg(frameRollDeg)
+            compositionFrameRollRef.current = fromSettings
             savedFrameRollRef.current = fromSettings
             previewSceneRollRef.current = fromSettings
             setFrameRollDeg(0)
@@ -2661,6 +2743,7 @@ export function ImmersiveView({
             timelapsePreview.start(timelapse)
           }}
           timelapsePreviewPlaying={timelapsePreviewActive}
+          onTimelapseSettingsOpenChange={onTimelapseSettingsOpenChange}
           selectedCelestial={selectedCelestial}
         />
       </div>

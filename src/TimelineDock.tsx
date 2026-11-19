@@ -199,6 +199,28 @@ export function TimelineDock({
           <div className="moon-timeline-dock__controls-left">
             <button
               type="button"
+              className={
+                advanced
+                  ? 'moon-timeline-dock__icon-btn is-active'
+                  : 'moon-timeline-dock__icon-btn'
+              }
+              aria-label={
+                advanced
+                  ? 'Masquer les courbes d’altitude'
+                  : 'Afficher les courbes d’altitude'
+              }
+              aria-pressed={advanced}
+              title={
+                advanced
+                  ? 'Mode simple'
+                  : 'Mode avancé — altitudes Soleil, Lune, Voie lactée'
+              }
+              onClick={() => setAdvanced((v) => !v)}
+            >
+              <AltitudeCurvesIcon />
+            </button>
+            <button
+              type="button"
               className="moon-timeline-dock__icon-btn"
               aria-label="Jour précédent"
               onClick={() => {
@@ -304,28 +326,6 @@ export function TimelineDock({
               }}
             >
               ››
-            </button>
-            <button
-              type="button"
-              className={
-                advanced
-                  ? 'moon-timeline-dock__icon-btn is-active'
-                  : 'moon-timeline-dock__icon-btn'
-              }
-              aria-label={
-                advanced
-                  ? 'Masquer les courbes d’altitude'
-                  : 'Afficher les courbes d’altitude'
-              }
-              aria-pressed={advanced}
-              title={
-                advanced
-                  ? 'Mode simple'
-                  : 'Mode avancé — altitudes Soleil, Lune, Voie lactée'
-              }
-              onClick={() => setAdvanced((v) => !v)}
-            >
-              <AltitudeCurvesIcon />
             </button>
             <button
               ref={calendarBtnRef}

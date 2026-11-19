@@ -1153,12 +1153,13 @@ export async function refineTerrainEdges(
   srcIdx: number[],
   sampleY: (east: number, north: number) => number,
   cancelled: () => boolean = () => false,
+  maxExtraVertices = MAX_TERRAIN_EXTRA_VERTS,
 ): Promise<RefinedTerrain | null> {
   const srcVerts = srcPos.length / 3
-  const vertCap = srcVerts + MAX_TERRAIN_EXTRA_VERTS
-  // A triangle checks `room` once, then may add up to 3 midpoints.
-  const pos = new Float64Array((vertCap + 3) * 3)
-  const uv = new Float64Array((vertCap + 3) * 2)
+  const vertCap = srcVerts + maxExtraVertices
+  // The shared-edge cache remains readable after the vertex budget is spent.
+  const pos = new Float64Array(vertCap * 3)
+  const uv = new Float64Array(vertCap * 2)
   pos.set(srcPos)
   uv.set(srcUv)
   let nVerts = srcVerts
@@ -1216,6 +1217,7 @@ export async function refineTerrainEdges(
         const key = i < j ? i * keyStride + j : j * keyStride + i
         const found = mid.get(key)
         if (found != null) return found
+        if (nVerts >= vertCap) return -1
         const ax = pos[i * 3]!
         const ay = pos[i * 3 + 1]! - TRIPOD_HEIGHT_M
         const az = pos[i * 3 + 2]!
@@ -1268,10 +1270,9 @@ export async function refineTerrainEdges(
         const a = indices[t]!
         const b = indices[t + 1]!
         const c = indices[t + 2]!
-        const room = nVerts < vertCap
-        const ab = room && wide(a, b) ? midpoint(a, b) : -1
-        const bc = room && wide(b, c) ? midpoint(b, c) : -1
-        const ca = room && wide(c, a) ? midpoint(c, a) : -1
+        const ab = wide(a, b) ? midpoint(a, b) : -1
+        const bc = wide(b, c) ? midpoint(b, c) : -1
+        const ca = wide(c, a) ? midpoint(c, a) : -1
         const mask = (ab >= 0 ? 1 : 0) | (bc >= 0 ? 2 : 0) | (ca >= 0 ? 4 : 0)
         if (mask === 0) {
           next.push(a, b, c)
@@ -1308,7 +1309,7 @@ const ADAPT_CELL_M = 64
  * Keep splitting edges that become wide once the camera leaves the spot.
  * The static mesh is refined around the origin only.
  */
-function createAdaptiveRefine(
+export function createAdaptiveRefine(
   geometry: THREE.BufferGeometry,
   radiusM: number,
   sampleY: (east: number, north: number) => number,
@@ -1363,6 +1364,13 @@ function createAdaptiveRefine(
 
   const clampCell = (v: number) => (v < 0 ? 0 : v >= gridN ? gridN - 1 : v)
 
+  const edgeBucket = (a: number, b: number) => {
+    const x = (posBuf[a * 3]! + posBuf[b * 3]!) * 0.5
+    const z = (posBuf[a * 3 + 2]! + posBuf[b * 3 + 2]!) * 0.5
+    return clampCell(Math.floor((z - gridOrigin) / ADAPT_CELL_M)) * gridN
+      + clampCell(Math.floor((x - gridOrigin) / ADAPT_CELL_M))
+  }
+
   const measure = (id: number) => {
     const o = id * 3
     const ia = indexBuf[o]! * 3
@@ -1394,6 +1402,12 @@ function createAdaptiveRefine(
     let i1 = clampCell(Math.floor((maxX - gridOrigin) / ADAPT_CELL_M))
     let j0 = clampCell(Math.floor((minZ - gridOrigin) / ADAPT_CELL_M))
     let j1 = clampCell(Math.floor((maxZ - gridOrigin) / ADAPT_CELL_M))
+    // Cropped search bounds must still include all three edge midpoints.
+    if (i1 - i0 > 5 || j1 - j0 > 5) {
+      buckets[edgeBucket(ia / 3, ib / 3)]!.push(id)
+      buckets[edgeBucket(ib / 3, ic / 3)]!.push(id)
+      buckets[edgeBucket(ic / 3, ia / 3)]!.push(id)
+    }
     if (i1 - i0 > 5) {
       const mid = (i0 + i1) >> 1
       i0 = Math.max(0, mid - 2)
@@ -1599,15 +1613,11 @@ function createAdaptiveRefine(
     const order = candIds.map((_, index) => index)
     order.sort((p, q) => candCos[p]! - candCos[q]!)
     const budget = Math.min(2200, maxVerts - vertCount, maxTris - triCount)
-    const mid = new Map<string, number>()
     const dirty: number[] = []
     const failed = new Set<number>()
     let added = 0
 
     const midpoint = (i: number, j: number): number => {
-      const key = i < j ? `${i},${j}` : `${j},${i}`
-      const found = mid.get(key)
-      if (found != null) return found
       const [ax, ay, az] = rel(i, ex, ey, ez)
       const [bx, by, bz] = rel(j, ex, ey, ez)
       const t = bisectT(ax, ay, az, bx, by, bz)
@@ -1643,7 +1653,6 @@ function createAdaptiveRefine(
       norBuf[n * 3] = (norBuf[i * 3]! + norBuf[j * 3]!) * 0.5
       norBuf[n * 3 + 1] = (norBuf[i * 3 + 1]! + norBuf[j * 3 + 1]!) * 0.5
       norBuf[n * 3 + 2] = (norBuf[i * 3 + 2]! + norBuf[j * 3 + 2]!) * 0.5
-      mid.set(key, n)
       added += 1
       return n
     }
@@ -1675,49 +1684,46 @@ function createAdaptiveRefine(
       const a = indexBuf[o]!
       const b = indexBuf[o + 1]!
       const c = indexBuf[o + 2]!
-      const room = vertCount < maxVerts - 4 && triCount < maxTris - 6
-      const wide = (p: number, q: number) => {
-        if (!room || edgeLen2(p, q) < 0.42) return false
-        if (!segNear(p, q, ex, ey, ez, reach2)) return false
-        const [ax, ay, az] = rel(p, ex, ey, ez)
-        const [bx, by, bz] = rel(q, ex, ey, ez)
-        return edgeCos(ax, ay, az, bx, by, bz) < ADAPT_COS
+      if (vertCount >= maxVerts || triCount + 4 > maxTris) break
+      let first = -1
+      let second = -1
+      let opposite = -1
+      let worst = ADAPT_COS
+      const consider = (p: number, q: number, other: number) => {
+        if (edgeLen2(p, q) < 0.42 || !segNear(p, q, ex, ey, ez, reach2)) return
+        const cosine = edgeCos(...rel(p, ex, ey, ez), ...rel(q, ex, ey, ez))
+        if (cosine < worst) {
+          first = p
+          second = q
+          opposite = other
+          worst = cosine
+        }
       }
-      const ab = wide(a, b) ? midpoint(a, b) : -1
-      const bc = wide(b, c) ? midpoint(b, c) : -1
-      const ca = wide(c, a) ? midpoint(c, a) : -1
-      const mask = (ab >= 0 ? 1 : 0) | (bc >= 0 ? 2 : 0) | (ca >= 0 ? 4 : 0)
-      if (mask === 0) {
+      consider(a, b, c)
+      consider(b, c, a)
+      consider(c, a, b)
+      if (first < 0) {
         failed.add(id)
         continue
       }
-      if (mask === 7) {
-        emit(a, ab, ca)
-        emit(b, bc, ab)
-        emit(c, ca, bc)
-        emit(ab, bc, ca)
-      } else if (mask === 1) {
-        emit(a, ab, c)
-        emit(ab, b, c)
-      } else if (mask === 2) {
-        emit(a, b, bc)
-        emit(a, bc, c)
-      } else if (mask === 4) {
-        emit(a, b, ca)
-        emit(ca, b, c)
-      } else if (mask === 3) {
-        emit(a, ab, c)
-        emit(ab, b, bc)
-        emit(ab, bc, c)
-      } else if (mask === 5) {
-        emit(a, ab, ca)
-        emit(ab, b, c)
-        emit(ab, c, ca)
-      } else {
-        emit(a, b, bc)
-        emit(a, bc, ca)
-        emit(bc, c, ca)
+      // Commit both sides of the edge within the same frame and budget.
+      const m = midpoint(first, second)
+      for (const other of buckets[edgeBucket(first, second)]!) {
+        if (other === id || !alive[other]) continue
+        const offset = other * 3
+        let third = -1
+        for (let k = 0; k < 3; k++) {
+          if (indexBuf[offset + k] === second && indexBuf[offset + (k + 1) % 3] === first)
+            third = indexBuf[offset + (k + 2) % 3]!
+        }
+        if (third < 0) continue
+        kill(other)
+        emit(second, m, third)
+        emit(m, first, third)
+        break
       }
+      emit(first, m, opposite)
+      emit(m, second, opposite)
       kill(id)
     }
 
@@ -1822,6 +1828,7 @@ async function buildTerrainLodRing(input: {
   baseElev: number
   cache: Map<string, DemTile | null>
   ring: TerrainLodRing
+  previewZoom?: number
   renderOrder: number
 }): Promise<{
   mesh: THREE.Mesh
@@ -1832,7 +1839,7 @@ async function buildTerrainLodRing(input: {
   const { ring, cache } = input
   const radiusM = ring.outerM
   const resolution = ring.resolution
-  const fallbackZooms = [10, 9, 8, 7]
+  const fallbackZooms = input.previewZoom ? [] : [10, 9, 8, 7]
 
   const tileKeys = new Set<string>()
   const addKey = (east: number, north: number, forceZ?: number) => {
@@ -1840,7 +1847,7 @@ async function buildTerrainLodRing(input: {
     if (dist < ring.innerM * 0.8) return
     if (dist > ring.outerM * 1.02) return
     const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-    const z = forceZ ?? demZoomForDistance(dist)
+    const z = forceZ ?? input.previewZoom ?? demZoomForDistance(dist)
     addDemTileKeys(tileKeys, lat, lon, z)
   }
 
@@ -2909,6 +2916,7 @@ export async function createLocalTerrainMesh(input: {
     dispose: () => {
       if (disposed) return
       disposed = true
+      for (let i = 0; i < previews.length; i++) retirePreview(i)
       geometry.dispose()
       material.dispose()
       previewTexture?.dispose()
@@ -2921,6 +2929,26 @@ export async function createLocalTerrainMesh(input: {
       farDispose?.()
     },
   }
+  // Keep the complete horizon drawable while sharper imagery and DEMs load.
+  const previews = await Promise.all([
+    { innerM: Math.min(radiusM * 0.9, MID_DETAIL_INNER_M), outerM: MID_DETAIL_RADIUS_M, zoom: 10 },
+    { innerM: WIDE_DETAIL_INNER_M, outerM: WIDE_DETAIL_RADIUS_M, zoom: 9 },
+    { innerM: FAR_TERRAIN_INNER_M, outerM: FAR_TERRAIN_RADIUS_M, zoom: 7 },
+  ].map(({ innerM, outerM, zoom }) => buildTerrainLodRing({
+    lat: input.lat, lon: input.lon, baseElev, cache, previewZoom: zoom, renderOrder: -4,
+    ring: { name: 'preview-' + outerM, innerM, outerM, resolution: 160,
+      imageryZooms: [zoom], atlasSize: 512 },
+  })))
+  const activePreviews = new Set(previews)
+  for (const preview of previews) mesh.add(preview.mesh)
+  const retirePreview = (index: number) => {
+    const preview = previews[index]!
+    if (!activePreviews.delete(preview)) return
+    mesh.remove(preview.mesh)
+    preview.dispose()
+  }
+  const previewMaterials = () => Array.from(activePreviews, p => p.material)
+  handle.materials = [material, ...previewMaterials()]
   progressHandle = handle
   notifyProgress('preview', 0.32)
   input.onPreview?.(handle)
@@ -3008,6 +3036,7 @@ export async function createLocalTerrainMesh(input: {
   )
   geometry.setAttribute('uv', new THREE.BufferAttribute(refined.uvs, 2))
   geometry.setIndex(refined.indices)
+  geometry.deleteAttribute('normal')
   geometry.computeVertexNormals()
   adaptFn = createAdaptiveRefine(geometry, radiusM, sampleTerrainY)
 
@@ -3034,9 +3063,10 @@ export async function createLocalTerrainMesh(input: {
     })
     if (!disposed) {
       mesh.add(detailMid.mesh)
+      retirePreview(0)
       detailMaterials.push(detailMid.material)
       detailDisposers.push(detailMid.dispose)
-      handle.materials = [material, ...detailMaterials]
+      handle.materials = [material, ...detailMaterials, ...previewMaterials()]
       notifyProgress('detail', 0.72)
       input.onUpgrade?.(handle)
     } else {
@@ -3063,9 +3093,10 @@ export async function createLocalTerrainMesh(input: {
     })
     if (!disposed) {
       mesh.add(detailWide.mesh)
+      retirePreview(1)
       detailMaterials.push(detailWide.material)
       detailDisposers.push(detailWide.dispose)
-      handle.materials = [material, ...detailMaterials]
+      handle.materials = [material, ...detailMaterials, ...previewMaterials()]
       notifyProgress('detail', 0.8)
       input.onUpgrade?.(handle)
     } else {
@@ -3081,7 +3112,7 @@ export async function createLocalTerrainMesh(input: {
     return handle
   }
 
-  handle.materials = [material, ...detailMaterials]
+  handle.materials = [material, ...detailMaterials, ...previewMaterials()]
   handle.stats.tiles = [...cache.values()].filter(Boolean).length
   notifyProgress('far', 0.84)
   input.onUpgrade?.(handle)
@@ -3100,7 +3131,8 @@ export async function createLocalTerrainMesh(input: {
       }
       farMaterials = [...detailMaterials, ...far.materials]
       handle.farMesh = far.mesh
-      handle.materials = [material, ...farMaterials]
+      retirePreview(2)
+      handle.materials = [material, ...farMaterials, ...previewMaterials()]
       handle.stats.farRadiusM = FAR_TERRAIN_RADIUS_M
       handle.stats.tiles = [...cache.values()].filter(Boolean).length
       notifyProgress('ready', 1)

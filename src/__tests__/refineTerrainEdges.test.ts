@@ -1,5 +1,7 @@
+import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import {
+  createAdaptiveRefine,
   EDGE_PHASES_DEG,
   refineTerrainEdges,
   terrainEdgeNeedsSplit,
@@ -175,8 +177,8 @@ function syntheticDisc(cells: number, radiusM: number) {
 }
 
 describe('refineTerrainEdges', () => {
-  it('matches the reference implementation bit-for-bit', async () => {
-    const disc = syntheticDisc(48, 600)
+  it('matches the reference implementation bit-for-bit below the vertex cap', async () => {
+    const disc = syntheticDisc(24, 45)
     const t0 = performance.now()
     const ref = referenceRefine(
       disc.positions,
@@ -202,6 +204,14 @@ describe('refineTerrainEdges', () => {
     expect(out!.uvs).toEqual(ref.uvs)
   }, 120_000)
 
+  it('shares the last available midpoint across both sides of a diagonal', async () => {
+    const pos = Float32Array.of(-5, 0, -5, 5, 0, -5, -5, 0, 5, 5, 0, 5)
+    const mesh = await refineTerrainEdges(pos, new Float32Array(8),
+      [0, 3, 1, 3, 0, 2], () => 0, () => false, 1)
+    expect(mesh!.positions.length / 3).toBe(5)
+    expect(mesh!.indices).toEqual([0, 4, 1, 4, 3, 1, 3, 4, 2, 4, 0, 2])
+  })
+
   it('stops when cancelled during a yield', async () => {
     const disc = syntheticDisc(160, 2000)
     const out = await refineTerrainEdges(
@@ -220,4 +230,35 @@ describe('refineTerrainEdges', () => {
     )
     expect(out).toBeNull()
   })
+})
+
+it('keeps both triangles joined across each interior edge as the eye moves', () => {
+  const geometry = new THREE.PlaneGeometry(40, 40, 4, 4)
+  geometry.rotateX(-Math.PI / 2)
+  const refine = createAdaptiveRefine(geometry, 20, () => 0)
+  for (const x of [0, 5, -4]) {
+    refine(x, 2, 0)
+    const index = geometry.getIndex()!
+    const pos = geometry.getAttribute('position')
+    const edges = new Map<number, number>()
+    for (let i = 0; i < geometry.drawRange.count; i += 3) {
+      if (index.getX(i) === index.getX(i + 1)) continue // retired face
+      for (let j = 0; j < 3; j++) {
+        const a = index.getX(i + j)
+        const b = index.getX(i + (j + 1) % 3)
+        const key = Math.min(a, b) * pos.count + Math.max(a, b)
+        edges.set(key, (edges.get(key) ?? 0) + 1)
+      }
+    }
+    expect(edges.size).toBeGreaterThan(56)
+    for (const [key, count] of edges) {
+      const a = Math.floor(key / pos.count)
+      const b = key % pos.count
+      const onBoundary = [pos.getX.bind(pos), pos.getZ.bind(pos)].some(
+        coord => Math.abs(coord(a)) === 20 && coord(a) === coord(b),
+      )
+      expect(count).toBe(onBoundary ? 1 : 2)
+    }
+  }
+  geometry.dispose()
 })

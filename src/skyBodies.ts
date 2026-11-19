@@ -68,7 +68,7 @@ export type SkyBodiesHandle = {
   dispose: () => void
 }
 
-function createPath(color: THREE.ColorRepresentation): THREE.Line {
+function createPath(color: THREE.ColorRepresentation): THREE.LineSegments {
   const material = new THREE.LineBasicMaterial({
     color,
     transparent: true,
@@ -80,54 +80,59 @@ function createPath(color: THREE.ColorRepresentation): THREE.Line {
   })
   // Same stel warp as stars / az grid — otherwise stereo pan makes arcs swim.
   attachStelProjector(material)
-  const line = new THREE.Line(new THREE.BufferGeometry(), material)
+  const line = new THREE.LineSegments(new THREE.BufferGeometry(), material)
   line.frustumCulled = false
   line.visible = false
   line.renderOrder = 3
   return line
 }
 
+/** Independent segments prevent a chord between setting and rising arcs. */
+export function trajectorySegments(
+  samples: SkySample[],
+  body: 'sun' | 'moon',
+): THREE.Vector3[] {
+  const points: THREE.Vector3[] = []
+  const radius = CELESTIAL_SKY_DISTANCE_M * (body === 'sun' ? 1.02 : 1.08)
+  const cutoff = -1
+  let previous: THREE.Vector3 | null = null
+  let previousAlt = NaN
+  for (const sample of samples) {
+    const alt = body === 'sun' ? sample.sunAltitudeDeg : sample.altitudeApparentDeg
+    const az = body === 'sun' ? sample.sunAzimuthDeg : sample.azimuthDeg
+    if (!Number.isFinite(alt) || !Number.isFinite(az)) {
+      previous = null
+      continue
+    }
+    const current = sunDirectionFromAltAz(alt, az).multiplyScalar(radius)
+    if (previous && (previousAlt >= cutoff || alt >= cutoff)) {
+      if (previousAlt >= cutoff && alt >= cutoff) {
+        points.push(previous, current)
+      } else {
+        const fraction = (cutoff - previousAlt) / (alt - previousAlt)
+        const crossing = previous.clone().lerp(current, fraction).normalize().multiplyScalar(radius)
+        if (previousAlt >= cutoff) points.push(previous, crossing)
+        else points.push(crossing, current)
+      }
+    }
+    previous = current
+    previousAlt = alt
+  }
+  return points
+}
+
 function updatePaths(
-  sunPath: THREE.Line,
-  moonPath: THREE.Line,
+  sunPath: THREE.LineSegments,
+  moonPath: THREE.LineSegments,
   samples: SkySample[],
 ): void {
-  const set = (line: THREE.Line, positions: number[]) => {
+  for (const body of ['sun', 'moon'] as const) {
+    const line = body === 'sun' ? sunPath : moonPath
+    const points = trajectorySegments(samples, body)
     line.geometry.dispose()
-    if (positions.length < 6) {
-      line.geometry = new THREE.BufferGeometry()
-      line.visible = false
-      return
-    }
-    const pts: THREE.Vector3[] = []
-    for (let i = 0; i < positions.length; i += 3) {
-      pts.push(
-        new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]),
-      )
-    }
-    line.geometry = new THREE.BufferGeometry().setFromPoints(pts)
-    line.visible = true
+    line.geometry = new THREE.BufferGeometry().setFromPoints(points)
+    line.visible = points.length >= 2
   }
-  const sun: number[] = []
-  const moon: number[] = []
-  for (const sample of samples) {
-    if (sample.sunAltitudeDeg >= -1) {
-      const p = sunDirectionFromAltAz(
-        sample.sunAltitudeDeg,
-        sample.sunAzimuthDeg,
-      ).multiplyScalar(CELESTIAL_SKY_DISTANCE_M * 1.02)
-      sun.push(p.x, p.y, p.z)
-    }
-    if (sample.altitudeApparentDeg >= -1) {
-      const p = sunDirectionFromAltAz(
-        sample.altitudeApparentDeg,
-        sample.azimuthDeg,
-      ).multiplyScalar(CELESTIAL_SKY_DISTANCE_M * 1.08)
-      moon.push(p.x, p.y, p.z)
-    }
-  }
-  set(sunPath, sun)
-  set(moonPath, moon)
 }
 
 function pathKey(

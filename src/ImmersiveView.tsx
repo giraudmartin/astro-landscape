@@ -1917,6 +1917,7 @@ export function ImmersiveView({
               ? {
                   weather: cloudsForPass,
                   skyLight: latestSkyLight,
+                  sunDirection: latestSunDir,
                   deltaSec: cloudsForPass.animateClouds ? weatherDt : 0,
                   reference: localHaloSourceRef.current === 'reference',
                   skyLp: clampLightPollutionAmount(

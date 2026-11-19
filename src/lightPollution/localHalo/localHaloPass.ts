@@ -13,7 +13,7 @@
  */
 
 /** Bump when the composite shader changes so ImmersiveView remounts the pass. */
-export const LOCAL_HALO_PASS_REV = 46
+export const LOCAL_HALO_PASS_REV = 49
 import * as THREE from 'three'
 import { EARTH_RADIUS_M } from '../../globeConstants'
 import { stelModeUniform } from '../../stelProjector'
@@ -76,6 +76,7 @@ export type LocalHaloTerrainFrame = {
 export type LocalHaloCloudFrame = {
   weather: ViewfinderWeather
   /** Display-referred sky colour driving cloud ambient (daytime). */
+  sunDirection: THREE.Vector3
   skyLight: THREE.Color
   /** Seconds to advance cloud wind (0 when animation frozen). */
   deltaSec: number
@@ -143,7 +144,7 @@ uniform float uReference;
 uniform float uCloudOn;
 uniform float uCloudTime;
 
-uniform vec3 uSkyLight;
+uniform vec3 uSkyLight, uSunDir;
 uniform vec4 uLayers[3];
 uniform float uCloudSteps;
 /** Max ray length for full-sky cloud slabs (scene metres). */
@@ -222,7 +223,7 @@ float cloudLayer(vec3 p, int k) {
   if (k == 2) q *= vec3(0.35, 1.7, 3.2);
   vec2 wind = vec2(0.00009, 0.000045) * uCloudTime * (1.0 + float(k) * 0.6);
   q.xz += wind;
-  if (uReference < 0.5 && k > 0) {
+  if (uReference < 0.5) {
     vec2 xy = p.xz + wind / 0.023;
     // Broad variations break up the deck into groups with their own orientation.
     vec2 warp = vec2(texture(uNoise, vec3(xy * 0.0027, 0.27)).r,
@@ -230,22 +231,45 @@ float cloudLayer(vec3 p, int k) {
     vec2 local = vec2(dot(vec2(0.95, 0.31), xy), dot(vec2(-0.31, 0.95), xy));
     float envelope = texture(uNoise, vec3(xy * 0.006 + warp * 0.07, 0.38)).r;
     float threshold = mix(0.78, 0.18, layer.z);
-    if (k == 1) {
-      // Billows of different sizes within broad altocumulus banks.
-      vec3 cells = vec3((xy + warp * 3.0) * vec2(0.045, 0.056), p.y * 0.085);
-      float billow = noiseField(cells);
-      float mass = 0.65 * billow + 0.35 * envelope;
-      float top = 0.48 + 0.52 * billow;
-      float profile = smoothstep(0.0, 0.18, h) * (1.0 - smoothstep(top - 0.23, top, h));
-      return smoothstep(threshold - 0.035, threshold + 0.23, mass) * profile * layer.w;
+    if (k < 2) {
+      // Rounded updrafts share a condensation level, but reach different tops.
+      // The finer mid-level cells cluster inside the same broad weather envelope.
+      float frequency = k == 0 ? 0.14 : 0.29;
+      vec3 cellPos = vec3((xy + warp * 2.2) * frequency, h * 0.14 + float(k) * 0.37);
+      float turret = texture(uNoise, cellPos).g;
+      float smallLobes = texture(uNoise, cellPos * 2.13 + vec3(0.19, 0.33, 0.51)).g;
+      float billows = 0.72 * turret + 0.28 * smallLobes;
+      float mass = 0.50 * envelope + 0.50 * billows;
+      float cloudTop = clamp(0.20 + 0.90 * billows + 0.22 * (envelope - 0.5), 0.22, 1.0);
+      float base = 0.05 + 0.06 * (1.0 - smallLobes);
+      float profile = smoothstep(base, base + 0.12, h)
+        * (1.0 - smoothstep(cloudTop - 0.19, cloudTop, h));
+      float erosion = texture(uNoise, cellPos * 1.7 + vec3(0.27)).r;
+      return smoothstep(threshold - 0.09, threshold + 0.14, mass - 0.09 * erosion)
+        * profile * layer.w;
     }
-    // Thin ice trails shear across the layer; a broad envelope tapers each tuft.
-    local.y += warp.x * 5.0 + warp.y * 2.4 + (h - 0.5) * 1.5;
-    vec3 fibres = vec3(local * vec2(0.012, 0.104), p.y * 0.036);
-    float strands = noiseField(fibres);
-    float plume = smoothstep(threshold - 0.14, threshold + 0.23, envelope);
-    float profile = smoothstep(0.0, 0.30, h) * (1.0 - smoothstep(0.51, 1.0, h));
-    return plume * smoothstep(0.26, 0.78, strands) * profile * layer.w * 0.65;
+    // A continuous moisture field creates cloud families and clear gaps.
+    // Backtrace the falling ice through shear: a compact source aloft can
+    // spread into several fine streaks lower down, all in world coordinates.
+    float fall = (1.0 - h) * (1.0 - h);
+    vec2 flow = local + warp * vec2(5.7, 4.4);
+    flow -= fall * vec2(3.6 + 5.3 * envelope, 2.8 * warp.y);
+    vec2 oblique = vec2(0.83 * flow.x + 0.56 * flow.y,
+                        -0.56 * flow.x + 0.83 * flow.y);
+    float bank = noiseField(vec3(oblique * vec2(0.0026, 0.0053), 0.38));
+    float moisture = 0.70 * bank + 0.30 * envelope;
+    float family = smoothstep(threshold - 0.11, threshold + 0.13, moisture);
+    float source = noiseField(vec3(flow * vec2(0.011, 0.024), 0.57));
+    float heads = smoothstep(0.52, 0.76, source);
+    float curl = texture(uNoise, vec3(oblique * 0.014, 0.72)).r - 0.5;
+    vec2 fibrePos = vec2(flow.x, flow.y + 1.7 * curl + fall * warp.x);
+    float coarse = noiseField(vec3(fibrePos * vec2(0.0057, 0.047), 0.21));
+    float fine = texture(uNoise, vec3(fibrePos * vec2(0.012, 0.12), 0.46)).r;
+    float wisps = smoothstep(0.37, 0.72, coarse * 0.73 + fine * 0.27);
+    float veil = smoothstep(0.26, 0.62, source);
+    float profile = smoothstep(0.0, 0.23, h) * (1.0 - smoothstep(0.66, 1.0, h));
+    return family * (heads * smoothstep(0.25, 0.72, h) + veil * wisps * 1.4)
+      * profile * layer.w;
   }
   float n = noiseField(q);
   float threshold = mix(0.78, 0.18, layer.z);
@@ -437,7 +461,18 @@ void main() {
           float tintLuma = dot(uTint, vec3(0.2126, 0.7152, 0.0722));
           cityTint = mix(uTint, vec3(tintLuma), 0.85 * lowFraction * (1.0 - uDayFactor));
           vec3 nightGrey = luminance * vec3(0.95, 1.00, 1.04);
-          ambient = mix(nightGrey, ambient, smoothstep(0.0, 0.65, uDayFactor));
+          vec3 daylight = ambient * 0.55;
+          if (uDayFactor > 0.001) {
+            // Two sunward samples distinguish a lit rim from a shaded interior.
+            float tau = cloudDensity(p + uSunDir * 0.22) * 0.65
+                      + cloudDensity(p + uSunDir * 0.85) * 1.35;
+            float silver = pow(max(dot(rd, uSunDir), 0.0), 8.0);
+            float sun = smoothstep(-0.06, 0.12, uSunDir.y);
+            vec3 sunColor = mix(vec3(1.0, 0.53, 0.28), vec3(1.0, 0.97, 0.90),
+                                smoothstep(0.0, 0.32, uSunDir.y));
+            daylight += sunColor * sun * exp(-tau) * (0.50 + 0.55 * silver) * mix(0.28, 1.0, occ.x);
+          }
+          ambient = mix(nightGrey, daylight, smoothstep(0.0, 0.65, uDayFactor));
         }
         float under = exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3));
         float cloudIll = ill;
@@ -506,14 +541,39 @@ export type LocalHaloPass = {
 
 function makeNoise3D(): THREE.Data3DTexture {
   const size = 32
-  const bytes = new Uint8Array(size ** 3)
+  const bytes = new Uint8Array(size ** 3 * 2)
   let seed = 7823
-  for (let i = 0; i < bytes.length; i++) {
+  for (let i = 0; i < size ** 3; i++) {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-    bytes[i] = seed >>> 24
+    bytes[i * 2] = seed >>> 24
+  }
+  // Periodic Worley noise in green. Red retains the original reference noise.
+  const cells = 4
+  const centers = new Float32Array(cells ** 3 * 3)
+  for (let i = 0; i < centers.length; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    centers[i] = 0.15 + 0.7 * (seed / 4294967296)
+  }
+  for (let i = 0; i < size ** 3; i++) {
+    const x = (i % size + 0.5) * cells / size
+    const y = (Math.floor(i / size) % size + 0.5) * cells / size
+    const z = (Math.floor(i / (size * size)) + 0.5) * cells / size
+    let nearest = 1
+    for (let k = Math.floor(z) - 1; k <= Math.floor(z) + 1; k++) {
+      for (let j = Math.floor(y) - 1; j <= Math.floor(y) + 1; j++) {
+        for (let h = Math.floor(x) - 1; h <= Math.floor(x) + 1; h++) {
+          const index = ((k & 3) * 16 + (j & 3) * 4 + (h & 3)) * 3
+          const dx = h + centers[index]! - x
+          const dy = j + centers[index + 1]! - y
+          const dz = k + centers[index + 2]! - z
+          nearest = Math.min(nearest, dx * dx + dy * dy + dz * dz)
+        }
+      }
+    }
+    bytes[i * 2 + 1] = Math.round(255 * (1 - Math.sqrt(nearest)))
   }
   const tex = new THREE.Data3DTexture(bytes, size, size, size)
-  tex.format = THREE.RedFormat
+  tex.format = THREE.RGFormat
   tex.type = THREE.UnsignedByteType
   tex.minFilter = THREE.LinearFilter
   tex.magFilter = THREE.LinearFilter
@@ -602,6 +662,7 @@ export function createLocalHaloPass(): LocalHaloPass {
     uReference: { value: 0 },
     uCloudOn: { value: 0 },
     uCloudTime: { value: 0 },
+    uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uSkyLight: { value: new THREE.Color(0.4, 0.55, 0.75) },
     uLayers: {
       value: [
@@ -813,6 +874,7 @@ export function createLocalHaloPass(): LocalHaloPass {
     if (clouds) {
       cloudTimeSec += Math.max(0, Math.min(0.1, clouds.deltaSec)) * clouds.weather.wind
       uniforms.uCloudTime.value = cloudTimeSec
+      uniforms.uSunDir.value.copy(clouds.sunDirection)
       uniforms.uSkyLight.value.copy(clouds.skyLight)
       const skyLp = clouds.reference ? 0 : Math.max(0, clouds.skyLp) * night01
       uniforms.uSkyLp.value = skyLp

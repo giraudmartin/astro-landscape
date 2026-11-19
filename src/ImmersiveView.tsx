@@ -514,7 +514,8 @@ export function ImmersiveView({
     heightKm: savedImmersive.localHaloHeightKm,
     haze: savedImmersive.localHaloHaze,
     tempK: savedImmersive.localHaloTempK,
-    viirsGround: savedImmersive.localHaloViirsGround,
+    // Diagnostic VIIRS-au-sol UI removed — keep off even if an old setting was saved.
+    viirsGround: false,
     viirsOpacity: savedImmersive.localHaloViirsOpacity,
   }))
   const localHaloRef = useRef(localHalo)
@@ -677,7 +678,7 @@ export function ImmersiveView({
         localHaloHeightKm: localHalo.heightKm,
         localHaloHaze: localHalo.haze,
         localHaloTempK: localHalo.tempK,
-        localHaloViirsGround: localHalo.viirsGround,
+        localHaloViirsGround: false,
         localHaloViirsOpacity: localHalo.viirsOpacity,
         showConstellations,
         showCelestialGrid,
@@ -2845,40 +2846,42 @@ export function ImmersiveView({
             >
               −
             </button>
-            <input
-              className="eye-height__input"
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              spellCheck={false}
-              value={
-                eyeHeightDraft ?? formatEyeHeightDisplay(eyeHeightM)
-              }
-              aria-label="Élévation de l'objectif au-dessus du sol, en mètres"
-              onChange={(event) => {
-                setEyeHeightDraft(event.target.value)
-              }}
-              onBlur={() => {
-                if (eyeHeightDraft == null) return
-                const parsed = Number(
-                  eyeHeightDraft.trim().replace(',', '.'),
-                )
-                setEyeHeightDraft(null)
-                if (!Number.isFinite(parsed)) return
-                setEyeHeightM(clampEyeHeightM(parsed))
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.currentTarget.blur()
-                } else if (event.key === 'Escape') {
-                  setEyeHeightDraft(null)
-                  event.currentTarget.blur()
+            <div className="eye-height__field">
+              <input
+                className="eye-height__input"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                spellCheck={false}
+                value={
+                  eyeHeightDraft ?? formatEyeHeightDisplay(eyeHeightM)
                 }
-              }}
-            />
-            <span className="eye-height__unit" aria-hidden="true">
-              m
-            </span>
+                aria-label="Élévation de l'objectif au-dessus du sol, en mètres"
+                onChange={(event) => {
+                  setEyeHeightDraft(event.target.value)
+                }}
+                onBlur={() => {
+                  if (eyeHeightDraft == null) return
+                  const parsed = Number(
+                    eyeHeightDraft.trim().replace(',', '.'),
+                  )
+                  setEyeHeightDraft(null)
+                  if (!Number.isFinite(parsed)) return
+                  setEyeHeightM(clampEyeHeightM(parsed))
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.currentTarget.blur()
+                  } else if (event.key === 'Escape') {
+                    setEyeHeightDraft(null)
+                    event.currentTarget.blur()
+                  }
+                }}
+              />
+              <span className="eye-height__unit" aria-hidden="true">
+                m
+              </span>
+            </div>
             <button
               type="button"
               className="eye-height__btn"

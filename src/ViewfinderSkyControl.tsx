@@ -46,7 +46,6 @@ import {
   clampLocalHaloHeightKm,
   clampLocalHaloIntensity,
   clampLocalHaloTempK,
-  clampLocalHaloViirsOpacity,
   LOCAL_HALO_HAZE_MAX,
   LOCAL_HALO_HAZE_MIN,
   LOCAL_HALO_HEIGHT_KM_MAX,
@@ -55,8 +54,6 @@ import {
   LOCAL_HALO_INTENSITY_MIN,
   LOCAL_HALO_TEMP_K_MAX,
   LOCAL_HALO_TEMP_K_MIN,
-  LOCAL_HALO_VIIRS_OPACITY_MAX,
-  LOCAL_HALO_VIIRS_OPACITY_MIN,
 } from './lightPollution/localHalo/localHaloSettings'
 
 export type LocalHaloControls = {
@@ -618,63 +615,6 @@ function SkyPanelBody({
             }
           />
         </label>
-      </SkySection>
-
-      <SkySection title="Diagnostic">
-        <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
-          <span className="vf-landscape-menu__label">
-            <span>VIIRS au sol</span>
-          </span>
-          <input
-            type="checkbox"
-            checked={localHalo.viirsGround}
-            title="Pixels VIIRS natifs sur le relief (diagnostic) — survol : radiance en nW/cm²/sr."
-            onChange={(event) =>
-              onLocalHaloChange({ viirsGround: event.target.checked })
-            }
-          />
-        </label>
-        {localHalo.viirsGround ? (
-          <>
-            <label className="vf-landscape-menu__field">
-              <span className="vf-landscape-menu__label">
-                <span>Opacité VIIRS</span>
-                <span className="vf-landscape-menu__value">
-                  {Math.round(localHalo.viirsOpacity * 100)} %
-                </span>
-              </span>
-              <input
-                type="range"
-                className="vf-landscape-menu__range"
-                min={LOCAL_HALO_VIIRS_OPACITY_MIN}
-                max={LOCAL_HALO_VIIRS_OPACITY_MAX}
-                step={0.01}
-                value={localHalo.viirsOpacity}
-                style={rangeProgressStyle(
-                  localHalo.viirsOpacity,
-                  LOCAL_HALO_VIIRS_OPACITY_MIN,
-                  LOCAL_HALO_VIIRS_OPACITY_MAX,
-                )}
-                aria-label="Opacité de la couche VIIRS au sol"
-                onChange={(event) =>
-                  onLocalHaloChange({
-                    viirsOpacity: clampLocalHaloViirsOpacity(
-                      Number(event.target.value),
-                    ),
-                  })
-                }
-              />
-            </label>
-            <div className="vf-landscape-menu__legend">
-              <div className="vf-landscape-menu__legend-ramp" />
-              <p className="vf-landscape-menu__legend-note">
-                0,5 → 1 → 5 → 10 → 35 nW/cm²/sr · échelle log · pixels natifs
-                <br />
-                Gris sombre : zéro · gris clair : sans données
-              </p>
-            </div>
-          </>
-        ) : null}
       </SkySection>
 
     </>

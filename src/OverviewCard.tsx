@@ -172,10 +172,7 @@ export function OverviewCard({
           setCalYear(year)
           setCalMonth(month)
         }}
-        onSelectDate={(next) => {
-          onDateChange(next)
-          setCalendarOpen(false)
-        }}
+        onSelectDate={onDateChange}
         onNow={() => {
           onPlayheadChange(Date.now())
           setCalendarOpen(false)

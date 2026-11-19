@@ -1,4 +1,4 @@
-﻿/* Ported from Photo Sightline — timeline + calendar */
+/* Ported from Photo Sightline — timeline + calendar */
 .moon-cal {
   margin-top: 4px;
   flex: 1 1 auto;
@@ -71,7 +71,7 @@
   height: 48px;
   min-height: 48px;
   max-height: 48px;
-  padding: 4px 2px 3px;
+  padding: 1px 2px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
@@ -105,36 +105,12 @@
   letter-spacing: -0.02em;
 }
 
-.moon-cal__illum {
-  font-size: 0.58rem;
-  line-height: 1.1;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: rgba(210, 220, 230, 0.72);
-}
-
-.moon-cal__nightmoon {
-  font-size: 0.55rem;
-  line-height: 1.1;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: rgba(148, 163, 184, 0.78);
-}
-
-.moon-cal__nightmoon.is-long {
-  color: rgba(186, 230, 253, 0.92);
-}
-
-.moon-cal__nightmoon.is-short {
-  color: rgba(148, 163, 184, 0.45);
-}
-
 .moon-cal__readout {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 0;
+  flex-direction: column;
+  gap: 3px;
   margin: 10px 0 0;
   padding: 7px 10px;
   border-radius: 10px;
@@ -150,11 +126,6 @@
   color: rgba(226, 232, 240, 0.95);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
-}
-
-.moon-cal__readout-sep {
-  margin: 0 0.4em;
-  color: rgba(148, 163, 184, 0.55);
 }
 
 .moon-timeline-dock {
@@ -237,8 +208,8 @@
 .moon-timeline-dock__time-main {
   padding: 3px 9px;
   border-radius: 999px;
-  border: 1px solid rgba(var(--ui-accent-rgb), );
-  background: rgba(var(--ui-accent-rgb), );
+  border: 1px solid var(--ui-action-primary-border);
+  background: var(--ui-action-primary-bg);
   color: var(--ui-action-primary-text);
   font: inherit;
   font-weight: 650;
@@ -250,7 +221,7 @@
   width: 7.5rem;
   min-height: 1.9rem;
   padding: 2px 7px;
-  border: 1px solid rgba(var(--ui-accent-rgb), );
+  border: 1px solid var(--ui-action-primary-border);
   border-radius: 999px;
   outline: none;
   background: rgba(16, 29, 23, 0.94);
@@ -287,9 +258,9 @@
 }
 
 .moon-timeline-dock__icon-btn:hover:not(:disabled) {
-  border-color: rgba(var(--ui-accent-rgb), );
+  border-color: var(--ui-action-primary-border);
   color: var(--ui-action-primary-text);
-  background: rgba(var(--ui-accent-rgb), );
+  background: var(--ui-action-primary-bg);
 }
 
 .moon-timeline-dock__icon-btn:focus-visible {
@@ -302,8 +273,8 @@
 }
 
 .moon-timeline-dock__icon-btn.is-active {
-  border-color: rgba(var(--ui-accent-rgb), );
-  background: rgba(var(--ui-accent-rgb), );
+  border-color: var(--ui-action-primary-border);
+  background: var(--ui-action-primary-bg);
   color: var(--ui-action-primary-text);
 }
 
@@ -357,15 +328,15 @@
   z-index: 90;
   width: min(340px, calc(100% - 24px));
   /* Fixed footprint: 6-week grid + chrome, no month-to-month jump. */
-  height: 470px;
+  height: 465px;
   max-height: calc(100vh - 24px);
-  overflow: hidden;
+  overflow-y: auto;
   padding: 14px 14px 12px;
   display: flex;
   flex-direction: column;
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 20px;
-  background: rgba(16, 16, 20, 0.62);
+  background: rgba(16, 16, 20, 0.72);
   color: #f5f5f7;
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.4),
@@ -476,7 +447,7 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
-.moon-calendar-popover .moon-cal__cell {
+.moon-calendar-popover .moon-cal__cell:not(.moon-cal__cell--empty) {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.035);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -486,9 +457,9 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-.moon-calendar-popover .moon-cal__cell--selected {
-  border-color: rgba(var(--ui-accent-rgb), );
-  background: rgba(var(--ui-accent-rgb), );
+.moon-calendar-popover .moon-cal__cell.moon-cal__cell--selected {
+  border-color: var(--ui-action-primary-border);
+  background: var(--ui-action-primary-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -526,8 +497,8 @@
 
 .moon-preview-timeline--compact .moon-preview-timeline__chevron:hover,
 .moon-preview-timeline--compact .moon-preview-timeline__zoom-btn:hover:not(:disabled) {
-  border-color: rgba(var(--ui-accent-rgb), );
-  background: rgba(var(--ui-accent-rgb), );
+  border-color: var(--ui-action-primary-border);
+  background: var(--ui-action-primary-bg);
   color: var(--ui-action-primary-text);
 }
 

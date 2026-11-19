@@ -4,6 +4,7 @@ import {
   Equator,
   Horizon,
   Illumination,
+  MoonPhase,
   Observer,
   SearchRiseSet,
 } from 'astronomy-engine'
@@ -54,6 +55,8 @@ function ensureGalacticCenterStar(): void {
 }
 
 export type CalendarDay = {
+  waxing: boolean
+  phaseLabel: string
   date: string
   /** Lit fraction of the Moon at civil noon (0–100). */
   illuminationPercent: number
@@ -134,14 +137,10 @@ function isMorningCivil(utcMs: number, lon: number): boolean {
 
 export function phaseLabelFromFraction(frac: number, waxing: boolean): string {
   if (frac < 0.03) return 'Nouvelle lune'
-  if (frac < 0.22) return waxing ? 'Croissant' : 'Dernier croissant'
-  if (frac < 0.28) return waxing ? 'Premier quartier' : 'Dernier quartier'
-  if (frac < 0.47) return waxing ? 'Gibbeuse croissante' : 'Gibbeuse décroissante'
-  if (frac < 0.53) return 'Pleine lune'
-  if (frac < 0.72) return waxing ? 'Gibbeuse croissante' : 'Gibbeuse décroissante'
-  if (frac < 0.78) return waxing ? 'Premier quartier' : 'Dernier quartier'
-  if (frac < 0.97) return waxing ? 'Croissant' : 'Dernier croissant'
-  return 'Nouvelle lune'
+  if (frac < 0.47) return waxing ? 'Premier croissant' : 'Dernier croissant'
+  if (frac <= 0.53) return waxing ? 'Premier quartier' : 'Dernier quartier'
+  if (frac < 0.97) return waxing ? 'Gibbeuse croissante' : 'Gibbeuse décroissante'
+  return 'Pleine lune'
 }
 
 function lightingAt(
@@ -210,9 +209,7 @@ export function buildDayInfo(
   const noonUtc = dayStart + 12 * 3600_000
   const illum = Illumination(Body.Moon, new Date(noonUtc))
   const frac = illum.phase_fraction
-  // phase_angle decreases while waxing roughly — use elongation proxy via next day
-  const illumLater = Illumination(Body.Moon, new Date(noonUtc + 86400_000))
-  const waxing = illumLater.phase_fraction >= frac || frac < 0.05
+  const waxing = MoonPhase(new Date(noonUtc)) < 180
 
   const moonriseLighting =
     moonriseDate != null
@@ -400,6 +397,8 @@ export function buildMonthCalendar(
     )
     days.push({
       date: info.date,
+      waxing: info.waxing,
+      phaseLabel: info.phaseLabel,
       illuminationPercent: info.illuminationPercent,
       nightMinutes: night.nightMinutes,
       moonInNightMinutes: night.moonInNightMinutes,

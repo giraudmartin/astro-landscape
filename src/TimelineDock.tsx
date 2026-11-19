@@ -356,10 +356,7 @@ export function TimelineDock({
           setCalYear(y)
           setCalMonth(m)
         }}
-        onSelectDate={(nextDate) => {
-          onDateChange(nextDate)
-          setCalendarOpen(false)
-        }}
+        onSelectDate={onDateChange}
         onNow={() => {
           onPlayheadChange(Date.now())
           setCalendarOpen(false)

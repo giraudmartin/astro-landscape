@@ -6,9 +6,9 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react'
+import { MoonPhaseDisc } from './moonVisuals'
 import { createPortal } from 'react-dom'
 import {
-  formatDurationMinutes,
   monthCalendarCells,
   shiftMonth,
   type CalendarDay,
@@ -35,14 +35,14 @@ type PopoverPos = {
   left: number
 }
 
-function placeAboveAnchor(anchor: DOMRect): PopoverPos {
+function placeAboveAnchor(anchor: DOMRect, panelTop: number): PopoverPos {
   const width = Math.min(340, window.innerWidth - 24)
   const gap = 10
-  let left = Math.min(
+  const left = Math.min(
     window.innerWidth - width - 12,
     Math.max(12, anchor.right - width),
   )
-  const bottom = Math.max(12, window.innerHeight - anchor.top + gap)
+  const bottom = Math.max(12, window.innerHeight - panelTop + gap)
   return { bottom, left }
 }
 
@@ -57,9 +57,13 @@ function placeBelowAnchor(anchor: DOMRect): PopoverPos {
   return { top, left }
 }
 
-function moonNightFraction(day: CalendarDay): number {
-  if (day.nightMinutes <= 0) return 0
-  return Math.min(1, day.moonInNightMinutes / day.nightMinutes)
+function nightDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60)
+  const remainder = Math.round(minutes % 60)
+  return [
+    hours ? `${hours} h` : '',
+    remainder ? `${remainder} min` : '',
+  ].filter(Boolean).join(' ')
 }
 
 export function CalendarPopover({
@@ -95,6 +99,7 @@ export function CalendarPopover({
       setPos(null)
       return
     }
+    const dock = placement === 'above' ? anchorRef.current?.closest('.moon-timeline-dock') : null
     const update = () => {
       const el = anchorRef.current
       if (!el) return
@@ -102,13 +107,16 @@ export function CalendarPopover({
       setPos(
         placement === 'below'
           ? placeBelowAnchor(rect)
-          : placeAboveAnchor(rect),
+          : placeAboveAnchor(rect, dock?.getBoundingClientRect().top ?? rect.top),
       )
     }
     update()
+    const observer = new ResizeObserver(update)
+    if (dock) observer.observe(dock)
     window.addEventListener('resize', update)
     window.addEventListener('scroll', update, true)
     return () => {
+      observer.disconnect()
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
     }
@@ -140,7 +148,7 @@ export function CalendarPopover({
   const style: CSSProperties = {
     left: pos.left,
     ...(pos.bottom != null
-      ? { bottom: pos.bottom, top: 'auto' }
+      ? { bottom: pos.bottom, top: 'auto', maxHeight: Math.max(0, window.innerHeight - pos.bottom - 12) }
       : { top: pos.top }),
   }
 
@@ -154,7 +162,7 @@ export function CalendarPopover({
       style={style}
     >
       <div className="moon-calendar-popover__header">
-        <p className="moon-calendar-popover__title">Calendrier</p>
+        <p className="moon-calendar-popover__title">Calendrier lunaire</p>
         <div className="moon-calendar-popover__header-actions">
           <button
             type="button"
@@ -214,21 +222,13 @@ export function CalendarPopover({
             const selected = cellDate === selectedDate
             const dayNum = Number(cellDate.slice(8, 10))
             const illum = day?.illuminationPercent ?? 0
-            const nightFrac = day ? moonNightFraction(day) : 0
-            const moonNight = day
-              ? formatDurationMinutes(day.moonInNightMinutes)
-              : '—'
             return (
               <button
                 key={cellDate}
                 type="button"
                 role="gridcell"
                 aria-selected={selected}
-                title={
-                  day
-                    ? `Lune ${illum}% · ${moonNight} dans la nuit`
-                    : undefined
-                }
+                title={day?.phaseLabel}
                 className={
                   selected
                     ? 'moon-cal__cell moon-cal__cell--selected'
@@ -237,18 +237,7 @@ export function CalendarPopover({
                 onClick={() => onSelectDate(cellDate)}
               >
                 <span className="moon-cal__daynum">{dayNum}</span>
-                <span className="moon-cal__illum">{illum}%</span>
-                <span
-                  className={
-                    nightFrac >= 0.55
-                      ? 'moon-cal__nightmoon is-long'
-                      : nightFrac <= 0.15
-                        ? 'moon-cal__nightmoon is-short'
-                        : 'moon-cal__nightmoon'
-                  }
-                >
-                  {moonNight}
-                </span>
+                {day && <MoonPhaseDisc illuminationFraction={illum / 100} waxing={day.waxing} label={day.phaseLabel} size={15} />}
               </button>
             )
           })}
@@ -257,12 +246,12 @@ export function CalendarPopover({
         {selectedDay ? (
           <p className="moon-cal__readout" aria-live="polite">
             <span className="moon-cal__readout-illum">
-              {selectedDay.illuminationPercent}%
+              {selectedDay.phaseLabel} · {selectedDay.illuminationPercent} %
             </span>
-            <span className="moon-cal__readout-sep">·</span>
             <span>
-              {formatDurationMinutes(selectedDay.moonInNightMinutes)} de lune
-              dans la nuit
+              {selectedDay.moonInNightMinutes > 0
+                ? `Au-dessus de l’horizon pendant ${nightDuration(selectedDay.moonInNightMinutes)} cette nuit.`
+                : 'Sous l’horizon toute la nuit.'}
             </span>
           </p>
         ) : null}

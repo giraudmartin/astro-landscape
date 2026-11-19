@@ -483,13 +483,23 @@ function createConstellationLines(
   const positions: number[] = []
   const dirA = new THREE.Vector3()
   const dirB = new THREE.Vector3()
+  const previous = new THREE.Vector3()
+  const current = new THREE.Vector3()
   for (const figure of figures) {
     for (let i = 0; i < figure.points.length - 1; i += 1) {
       const a = figure.points[i]!
       const b = figure.points[i + 1]!
       dirA.copy(j2000ToNasaMapDirection(a.raHours, a.decDeg)).multiplyScalar(radius)
       dirB.copy(j2000ToNasaMapDirection(b.raHours, b.decDeg)).multiplyScalar(radius)
-      positions.push(dirA.x, dirA.y, dirA.z, dirB.x, dirB.y, dirB.z)
+      // Sample inside the projector's rear exclusion cap (~3.6°) even
+      // when both stars lie outside it on opposite sides of the antipode.
+      const steps = Math.max(1, Math.ceil(THREE.MathUtils.radToDeg(dirA.angleTo(dirB))))
+      previous.copy(dirA)
+      for (let step = 1; step <= steps; step += 1) {
+        current.lerpVectors(dirA, dirB, step / steps).setLength(radius)
+        positions.push(previous.x, previous.y, previous.z, current.x, current.y, current.z)
+        previous.copy(current)
+      }
     }
   }
   const geometry = new THREE.BufferGeometry()

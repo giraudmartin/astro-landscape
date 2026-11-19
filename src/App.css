@@ -1,4 +1,4 @@
-﻿/* Design tokens shared with Photo Sightline */
+/* Design tokens shared with Photo Sightline */
 :root {
   --ui-bg: #07080c;
   --ui-text: #f4f6fb;
@@ -265,7 +265,7 @@ html.is-rail-resizing .my-events-rail {
   z-index: 1;
   left: 0.9rem;
   /* Sit above the bottom-left settings + bug FABs (PS layout). */
-  bottom: calc(36px + var(--map-fab-stack-height) + 12px);
+  bottom: calc(56px + var(--map-fab-stack-height) + 12px);
   margin: 0;
   font-size: 0.7rem;
   line-height: 1.35;
@@ -423,7 +423,7 @@ html.is-rail-resizing .my-events-rail {
   z-index: 2;
   left: 0.9rem;
   /* Sit above the bottom-left settings + bug FABs (PS layout). */
-  bottom: calc(36px + var(--map-fab-stack-height) + 12px);
+  bottom: calc(56px + var(--map-fab-stack-height) + 12px);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -8301,12 +8301,17 @@ button.ov-capsule:hover {
 
   .settings-anchor {
     left: 12px;
-    bottom: 100px;
+    bottom: 120px;
+  }
+
+  .app-brand-mark {
+    left: 12px;
+    bottom: 72px;
   }
 
   .spot-bortle-card,
   .spot-readout {
-    bottom: calc(100px + var(--map-fab-stack-height) + 12px);
+    bottom: calc(120px + var(--map-fab-stack-height) + 12px);
   }
 
   .map-card {
@@ -8683,12 +8688,17 @@ button.ov-capsule:hover {
 
   .settings-anchor {
     left: 10px;
-    bottom: 112px;
+    bottom: 132px;
+  }
+
+  .app-brand-mark {
+    left: 10px;
+    bottom: 84px;
   }
 
   .spot-bortle-card,
   .spot-readout {
-    bottom: calc(112px + var(--map-fab-stack-height) + 12px);
+    bottom: calc(132px + var(--map-fab-stack-height) + 12px);
   }
 
   .map-card {
@@ -9141,14 +9151,19 @@ button.ov-capsule:hover {
 
   .settings-anchor {
     left: max(14px, env(safe-area-inset-left, 0px));
-    bottom: max(118px, calc(110px + env(safe-area-inset-bottom, 0px)));
+    bottom: max(138px, calc(130px + env(safe-area-inset-bottom, 0px)));
     z-index: 30;
+  }
+
+  .app-brand-mark {
+    left: max(14px, env(safe-area-inset-left, 0px));
+    bottom: max(90px, calc(82px + env(safe-area-inset-bottom, 0px)));
   }
 
   .spot-bortle-card,
   .spot-readout {
     bottom: calc(
-      max(118px, calc(110px + env(safe-area-inset-bottom, 0px))) +
+      max(138px, calc(130px + env(safe-area-inset-bottom, 0px))) +
         var(--map-fab-stack-height) + 12px
     );
   }
@@ -9197,6 +9212,7 @@ button.ov-capsule:hover {
   html.info-drawer-open .map-controls-stack .my-events-control,
   html.info-drawer-open .map-controls-stack .framings-control,
   html.info-drawer-open .settings-anchor,
+  html.info-drawer-open .app-brand-mark,
   html.info-drawer-open .moon-timeline-dock,
   html.info-drawer-open .moon-timeline-dock__collapsed {
     opacity: 0;
@@ -9213,12 +9229,33 @@ button.ov-capsule:hover {
   }
 }
 
+/* —— App brand / version (bottom-left, Photo Sightline) —— */
+.app-brand-mark {
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(17, 19, 26, 0.78);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* —— Settings FAB (bottom-left, Photo Sightline) —— */
 .settings-anchor {
   position: absolute;
   z-index: 4;
   left: 16px;
-  bottom: 36px;
+  bottom: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;

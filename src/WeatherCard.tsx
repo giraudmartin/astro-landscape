@@ -1,5 +1,6 @@
 /** Ported from Photo Sightline WeatherCard — French copy, same chrome. */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDownIcon } from './psIcons'
 import {
   fetchWeatherForecast,
   isUsableWeatherHour,
@@ -300,11 +301,7 @@ export function WeatherCard({
           onClick={() => setCollapsed((value) => !value)}
         >
           <span className="weather-card__title">{LABELS.title}</span>
-          <span className="weather-card__collapse" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="m6 15 6-6 6 6" />
-            </svg>
-          </span>
+          <ChevronDownIcon className="weather-card__collapse" size={14} />
         </button>
       )}
       <div

@@ -260,21 +260,6 @@ html.is-rail-resizing .my-events-rail {
   height: 100%;
 }
 
-.spot-readout {
-  position: absolute;
-  z-index: 1;
-  left: 0.9rem;
-  /* Sit above the bottom-left settings + bug FABs (PS layout). */
-  bottom: calc(56px + var(--map-fab-stack-height) + 12px);
-  margin: 0;
-  font-size: 0.7rem;
-  line-height: 1.35;
-  color: rgba(244, 246, 251, 0.7);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-  pointer-events: none;
-  font-variant-numeric: tabular-nums;
-}
-
 .pl-map-legend {
   position: absolute;
   z-index: 2;
@@ -419,17 +404,13 @@ html.is-rail-resizing .my-events-rail {
 }
 
 .spot-bortle-card {
-  position: absolute;
-  z-index: 2;
-  left: 0.9rem;
-  /* Sit above the bottom-left settings + bug FABs (PS layout). */
-  bottom: calc(56px + var(--map-fab-stack-height) + 12px);
+  /* Flows under Overview + Weather in .ov-anchor / .map-ui. */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
   box-sizing: border-box;
-  width: min(17.5rem, calc(100% - 1.8rem));
-  max-width: calc(100% - 1.8rem);
+  width: 100%;
   overflow: hidden;
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--r-lg);
@@ -464,10 +445,6 @@ html.is-rail-resizing .my-events-rail {
 
 .spot-bortle-card__summary::-webkit-details-marker {
   display: none;
-}
-
-.spot-bortle-card__summary:hover {
-  background: var(--surface-highlight);
 }
 
 .spot-bortle-card__summary:focus-visible {
@@ -622,12 +599,6 @@ html.is-rail-resizing .my-events-rail {
 }
 
 @media (max-width: 420px) {
-  .spot-bortle-card {
-    left: 0.65rem;
-    width: min(16.5rem, calc(100% - 1.3rem));
-    max-width: calc(100% - 1.3rem);
-  }
-
   .spot-bortle-card__summary {
     padding: 0.7rem 0.72rem;
     gap: 0.62rem;
@@ -7504,11 +7475,6 @@ html[data-qa-hide-chrome='1'] .render-diag {
   text-align: left;
 }
 
-.map-card__collapse-btn:hover .map-card__title,
-.map-card__collapse-btn:hover .map-card__toggle-icon {
-  color: var(--ui-primary-muted);
-}
-
 .map-card__collapse-btn:focus-visible {
   outline: 2px solid var(--ui-focus-ring);
   outline-offset: var(--ui-focus-ring-offset);
@@ -7516,28 +7482,13 @@ html[data-qa-hide-chrome='1'] .render-diag {
 }
 
 .map-card__toggle-icon {
-  display: grid;
   flex: 0 0 auto;
-  width: 12px;
-  height: 12px;
-  place-items: center;
-  color: var(--ui-muted);
-  line-height: 1;
-}
-
-.map-card__toggle-icon svg {
-  display: block;
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  color: var(--ui-text-faint);
   transition: transform 0.2s ease;
 }
 
-.map-card--collapsed .map-card__toggle-icon svg {
+/* Same as Bortle: down when collapsed, up when expanded. */
+.map-card:not(.map-card--collapsed) .map-card__toggle-icon {
   transform: rotate(180deg);
 }
 
@@ -7606,11 +7557,6 @@ html[data-qa-hide-chrome='1'] .render-diag {
 
 .map-card--overview .map-card__toggle-icon {
   color: rgba(255, 255, 255, 0.4);
-}
-
-.map-card--overview .map-card__collapse-btn:hover .map-card__title,
-.map-card--overview .map-card__collapse-btn:hover .map-card__toggle-icon {
-  color: #fff;
 }
 
 .ov {
@@ -7842,6 +7788,12 @@ button.ov-capsule:hover {
   cursor: pointer;
 }
 
+.weather-card__header:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-ring-offset);
+  border-radius: 6px;
+}
+
 .weather-card__title {
   font-size: 13px;
   font-weight: 600;
@@ -7858,20 +7810,12 @@ button.ov-capsule:hover {
 }
 
 .weather-card__collapse {
-  display: grid;
-  width: 12px;
-  height: 12px;
-  place-items: center;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.weather-card__collapse svg {
-  width: 12px;
-  height: 12px;
+  flex: 0 0 auto;
+  color: var(--ui-text-faint);
   transition: transform 0.2s ease;
 }
 
-.weather-card--collapsed .weather-card__collapse svg {
+.weather-card:not(.weather-card--collapsed) .weather-card__collapse {
   transform: rotate(180deg);
 }
 
@@ -8554,11 +8498,6 @@ button.ov-capsule:hover {
     bottom: 72px;
   }
 
-  .spot-bortle-card,
-  .spot-readout {
-    bottom: calc(120px + var(--map-fab-stack-height) + 12px);
-  }
-
   .map-card {
     padding: 10px 11px 9px;
     border-radius: 14px;
@@ -8581,13 +8520,6 @@ button.ov-capsule:hover {
     font-size: 0.65rem;
   }
 
-  .map-card__toggle-icon,
-  .map-card__toggle-icon svg,
-  .weather-card__collapse,
-  .weather-card__collapse svg {
-    width: 11px;
-    height: 11px;
-  }
 
   .ov {
     gap: 8px;
@@ -8941,11 +8873,6 @@ button.ov-capsule:hover {
     bottom: 84px;
   }
 
-  .spot-bortle-card,
-  .spot-readout {
-    bottom: calc(132px + var(--map-fab-stack-height) + 12px);
-  }
-
   .map-card {
     padding: 10px 11px 9px;
     border-radius: 14px;
@@ -9140,12 +9067,6 @@ button.ov-capsule:hover {
 
   .weather-card__header {
     min-height: 44px;
-  }
-
-  .weather-card__collapse {
-    width: 44px;
-    height: 44px;
-    place-items: center;
   }
 }
 
@@ -9403,14 +9324,6 @@ button.ov-capsule:hover {
   .app-brand-mark {
     left: max(14px, env(safe-area-inset-left, 0px));
     bottom: max(90px, calc(82px + env(safe-area-inset-bottom, 0px)));
-  }
-
-  .spot-bortle-card,
-  .spot-readout {
-    bottom: calc(
-      max(138px, calc(130px + env(safe-area-inset-bottom, 0px))) +
-        var(--map-fab-stack-height) + 12px
-    );
   }
 
   /* Full-bleed bottom sheet over the map (PS phone rails). */

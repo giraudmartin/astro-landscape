@@ -22,6 +22,9 @@ type OverviewCardProps = {
   onPlayheadChange: (utcMs: number) => void
   /** Phone info drawer: bare body without the MapCard chrome. */
   embedded?: boolean
+  /** Controlled MapCard collapse (e.g. auto-fold when a spot is picked). */
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
 }
 
 function formatOverviewDate(isoDate: string): string {
@@ -47,6 +50,8 @@ export function OverviewCard({
   onDateChange,
   onPlayheadChange,
   embedded = false,
+  collapsed,
+  onCollapsedChange,
 }: OverviewCardProps) {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const dateBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -154,6 +159,8 @@ export function OverviewCard({
           className="map-card--overview"
           collapsible
           glow
+          collapsed={collapsed}
+          onCollapsedChange={onCollapsedChange}
           collapsedSummary={dateCapsule}
         >
           {body}

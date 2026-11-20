@@ -1,5 +1,6 @@
 /** Ported from Photo Sightline MapCard — keep chrome identical. */
 import { useState, type ReactNode } from 'react'
+import { ChevronDownIcon } from './psIcons'
 
 type MapCardProps = {
   title: string
@@ -9,6 +10,9 @@ type MapCardProps = {
   glow?: boolean
   collapsible?: boolean
   defaultCollapsed?: boolean
+  /** Controlled collapse — when set, overrides internal state. */
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
   collapsedSummary?: ReactNode
 }
 
@@ -20,9 +24,17 @@ export function MapCard({
   glow,
   collapsible,
   defaultCollapsed = false,
+  collapsed: collapsedProp,
+  onCollapsedChange,
   collapsedSummary,
 }: MapCardProps) {
-  const [collapsed, setCollapsed] = useState(defaultCollapsed)
+  const [collapsedState, setCollapsedState] = useState(defaultCollapsed)
+  const controlled = collapsedProp !== undefined
+  const collapsed = controlled ? collapsedProp : collapsedState
+  const setCollapsed = (next: boolean) => {
+    if (!controlled) setCollapsedState(next)
+    onCollapsedChange?.(next)
+  }
   const isCollapsed = Boolean(collapsible && collapsed)
   const showCollapsedSummary = Boolean(isCollapsed && collapsedSummary)
   const classes = [
@@ -45,14 +57,10 @@ export function MapCard({
             className="map-card__collapse-btn"
             aria-expanded={!collapsed}
             aria-label={collapsed ? `Développer ${title}` : `Réduire ${title}`}
-            onClick={() => setCollapsed((value) => !value)}
+            onClick={() => setCollapsed(!collapsed)}
           >
             <h2 className="map-card__title">{title}</h2>
-            <span className="map-card__toggle-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="m6 15 6-6 6 6" />
-              </svg>
-            </span>
+            <ChevronDownIcon className="map-card__toggle-icon" size={14} />
           </button>
         ) : (
           <h2 className="map-card__title">{title}</h2>

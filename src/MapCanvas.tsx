@@ -71,12 +71,6 @@ import {
   lightPollutionOpacityExpression,
 } from './lightPollution/tiles'
 import {
-  sampleLightPollution,
-  type LightPollutionSample,
-} from './lightPollution/sampleLightPollution'
-import { SpotBortleCard } from './SpotBortleCard'
-import { SkyBrightnessPanel } from './SkyBrightnessPanel'
-import {
   createSpotActionMarkerElement,
   type SpotActionMarkerController,
 } from './spotActionMarker'
@@ -177,12 +171,6 @@ type MapCanvasProps = {
 
 const THREE_D_PITCH = 55
 const FLAT_PITCH = 0
-
-function formatCoord(lat: number, lon: number) {
-  const ns = lat >= 0 ? 'N' : 'S'
-  const ew = lon >= 0 ? 'E' : 'W'
-  return `${Math.abs(lat).toFixed(4)}°${ns}  ${Math.abs(lon).toFixed(4)}°${ew}`
-}
 
 function demSource(): maplibregl.RasterDEMSourceSpecification {
   return {
@@ -1264,30 +1252,6 @@ export function MapCanvas({
     }
   }, [mode, skyUtcMs, spot?.lat, spot?.lon, spot?.heightM])
 
-  const [bortleSample, setBortleSample] = useState<LightPollutionSample | null>(
-    null,
-  )
-  const [skyBrightnessOpen, setSkyBrightnessOpen] = useState(false)
-
-  useEffect(() => {
-    if (!spot) {
-      setBortleSample(null)
-      setSkyBrightnessOpen(false)
-      return
-    }
-    let cancelled = false
-    const { lat, lon, heightM } = spot
-    void sampleLightPollution(lat, lon, { observerElevM: heightM }).then(
-      (sample) => {
-        if (cancelled) return
-        setBortleSample(sample)
-      },
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [spot])
-
   return (
     <div className="globe-shell">
       <div ref={containerRef} className="globe-canvas" />
@@ -1323,38 +1287,6 @@ export function MapCanvas({
         <span>{APP_COPYRIGHT}</span>
       </p>
       {plHeatmapEnabled ? <PlMapOverlayLegend /> : null}
-      {spot && bortleSample ? (
-        <SpotBortleCard
-          bortle={bortleSample.bortle}
-          label={bortleSample.bortleLabel}
-          lat={spot.lat}
-          lon={spot.lon}
-          elevM={spot.heightM}
-          skyBrightnessMag={bortleSample.skyBrightnessMag}
-          sourceHint={
-            bortleSample.source === 'viirs-cog'
-              ? bortleSample.terrainApplied
-                ? 'VIIRS · First Rig · DEM · estimé'
-                : 'VIIRS · First Rig · estimé'
-              : 'Black Marble · First Rig · estimé'
-          }
-          onOpenSkyBrightness={() => setSkyBrightnessOpen(true)}
-        />
-      ) : spot ? (
-        <p className="spot-readout">
-          {formatCoord(spot.lat, spot.lon)} · {Math.round(spot.heightM)} m
-        </p>
-      ) : null}
-      {spot && bortleSample ? (
-        <SkyBrightnessPanel
-          open={skyBrightnessOpen}
-          onClose={() => setSkyBrightnessOpen(false)}
-          lat={spot.lat}
-          lon={spot.lon}
-          elevM={spot.heightM}
-          sample={bortleSample}
-        />
-      ) : null}
     </div>
   )
 }

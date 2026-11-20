@@ -14,6 +14,12 @@ import {
 } from './FramingsPanel'
 import { MySpotsRail } from './MySpotsCard'
 import { OverviewCard } from './OverviewCard'
+import {
+  sampleLightPollution,
+  type LightPollutionSample,
+} from './lightPollution/sampleLightPollution'
+import { SpotBortleCard } from './SpotBortleCard'
+import { SkyBrightnessPanel } from './SkyBrightnessPanel'
 import { SpotSaveCard } from './SpotSaveCard'
 import { TimelineDock } from './TimelineDock'
 import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
@@ -101,6 +107,12 @@ export default function App() {
   )
   const [addressSearchOpen, setAddressSearchOpen] = useState(false)
   const [spot, setSpot] = useState<SpotState | null>(null)
+  const [bortleSample, setBortleSample] = useState<LightPollutionSample | null>(
+    null,
+  )
+  const [skyBrightnessOpen, setSkyBrightnessOpen] = useState(false)
+  /** Fold Overview when a spot is picked so Weather + Bortle stay visible. */
+  const [overviewCollapsed, setOverviewCollapsed] = useState(false)
   const [infoDrawerOpen, setInfoDrawerOpen] = useState(false)
 
   const [mySpotsOpen, setMySpotsOpen] = useState(false)
@@ -175,6 +187,54 @@ export default function App() {
       elevationM: 0,
     }
   }, [spot])
+
+  useEffect(() => {
+    if (!spot) {
+      setBortleSample(null)
+      setSkyBrightnessOpen(false)
+      return
+    }
+    let cancelled = false
+    const { lat, lon, heightM } = spot
+    void sampleLightPollution(lat, lon, { observerElevM: heightM }).then(
+      (sample) => {
+        if (cancelled) return
+        setBortleSample(sample)
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [spot])
+
+  // Collapse Overview on spot place/select (lat/lon), not on DEM height-only updates.
+  const spotPickKey = spot
+    ? `${spot.lat.toFixed(5)},${spot.lon.toFixed(5)}`
+    : null
+  useEffect(() => {
+    if (spotPickKey) setOverviewCollapsed(true)
+    else setOverviewCollapsed(false)
+  }, [spotPickKey])
+
+  const bortleCard =
+    spot && bortleSample ? (
+      <SpotBortleCard
+        bortle={bortleSample.bortle}
+        label={bortleSample.bortleLabel}
+        lat={spot.lat}
+        lon={spot.lon}
+        elevM={spot.heightM}
+        skyBrightnessMag={bortleSample.skyBrightnessMag}
+        sourceHint={
+          bortleSample.source === 'viirs-cog'
+            ? bortleSample.terrainApplied
+              ? 'VIIRS · First Rig · DEM · estimé'
+              : 'VIIRS · First Rig · estimé'
+            : 'Black Marble · First Rig · estimé'
+        }
+        onOpenSkyBrightness={() => setSkyBrightnessOpen(true)}
+      />
+    ) : null
 
   /** No spot → UTC clock; with spot → civil clock at that lon (same UTC instant). */
   const timelineLon = spot ? spot.lon : 0
@@ -1162,6 +1222,12 @@ export default function App() {
               onHourSelect={(utcMs) => onPlayheadChange(utcMs)}
             />
           </section>
+          {bortleCard ? (
+            <section className="mobile-top-drawer__section">
+              <h3 className="mobile-top-drawer__section-title">Bortle</h3>
+              {bortleCard}
+            </section>
+          ) : null}
         </MobileTopDrawer>
       ) : null}
 
@@ -1176,6 +1242,8 @@ export default function App() {
               playheadUtcMs={playheadUtcMs}
               onDateChange={onDateChange}
               onPlayheadChange={onPlayheadChange}
+              collapsed={overviewCollapsed}
+              onCollapsedChange={setOverviewCollapsed}
             />
             <WeatherCard
               date={date}
@@ -1183,8 +1251,20 @@ export default function App() {
               location={weatherLocation}
               onHourSelect={(utcMs) => onPlayheadChange(utcMs)}
             />
+            {bortleCard}
           </div>
         </div>
+      ) : null}
+
+      {!immersive && spot && bortleSample ? (
+        <SkyBrightnessPanel
+          open={skyBrightnessOpen}
+          onClose={() => setSkyBrightnessOpen(false)}
+          lat={spot.lat}
+          lon={spot.lon}
+          elevM={spot.heightM}
+          sample={bortleSample}
+        />
       ) : null}
 
       {!immersive ? (

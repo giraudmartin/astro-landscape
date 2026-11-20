@@ -2449,6 +2449,13 @@ html.is-rail-resizing .rail-resize-handle::after {
   gap: 10px;
 }
 
+.framings-panel__save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .framings-panel__scroll {
   flex: 1 1 auto;
   min-height: 0;

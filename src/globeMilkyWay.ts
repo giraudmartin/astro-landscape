@@ -30,20 +30,26 @@ type GlobeMilkyWayLayer = CustomLayerInterface
 
 let activeLayer: GlobeMilkyWayLayer | null = null
 
-/** Brightest N HYG stars in the NASA map frame (aligned with the VL bake). */
+/** Catalog stars plus a stable, decorative field of fainter stars. */
 function buildStarGeometry(count: number): THREE.BufferGeometry {
-  const n = Math.min(
+  const catalogCount = Math.min(
     Math.max(1, Math.round(count)),
     GLOBE_SPACE_STAR_MAX,
     HYG_BRIGHT_STARS.length,
   )
+  const n = catalogCount * 2
   const positions = new Float32Array(n * 3)
   const sizes = new Float32Array(n)
   const brightness = new Float32Array(n)
   const halos = new Float32Array(n)
   const colors = new Float32Array(n * 3)
   const dir = new THREE.Vector3()
-  for (let i = 0; i < n; i++) {
+  let seed = 81731
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    return seed / 4294967296
+  }
+  for (let i = 0; i < catalogCount; i++) {
     const star = HYG_BRIGHT_STARS[i]!
     dir.copy(j2000ToNasaMapDirection(star.raHours, star.decDeg))
     const i3 = i * 3
@@ -57,6 +63,17 @@ function buildStarGeometry(count: number): THREE.BufferGeometry {
     colors[i3] = r
     colors[i3 + 1] = g
     colors[i3 + 2] = b
+  }
+  for (let i = catalogCount; i < n; i++) {
+    const y = 2 * random() - 1
+    const azimuth = random() * Math.PI * 2
+    const radius = Math.sqrt(1 - y * y)
+    positions.set([radius * Math.cos(azimuth), y, radius * Math.sin(azimuth)], i * 3)
+    const intensity = random()
+    sizes[i] = 2.3 + intensity * 1.5
+    brightness[i] = 0.24 + intensity * 0.24
+    halos[i] = 0.1 + intensity * 0.12
+    colors.set(starDisplayColorFromBv(random() * 1.4 - 0.2), i * 3)
   }
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
@@ -225,7 +242,7 @@ export function createGlobeMilkyWayLayer(
             clipPos.z = clipPos.w * 0.99999;
             gl_Position = clipPos;
             // Fixed CSS-px sizing (MapLibre w is useless for skybox attenuation).
-            float r = aSize * uSize * uPixelRatio;
+            float r = aSize * uSize * uPixelRatio * (1.15 + aHalo * 0.65) * 1.35;
             gl_PointSize = clamp(max(r, 2.8), 2.8, uMaxPointSize);
           }
         `,
@@ -240,11 +257,12 @@ export function createGlobeMilkyWayLayer(
             vec2 p = gl_PointCoord * 2.0 - 1.0;
             float r2 = dot(p, p);
             if (r2 > 1.0) discard;
-            // Same soft PSF as immersive HYG stars: core + bloom if vHalo.
-            float core = exp(-r2 * 11.0);
-            float halo = exp(-r2 * mix(3.2, 1.15, vHalo)) * (vHalo * 0.55);
+            float core = exp(-r2 * (20.0 + 25.0 * vHalo) * 1.35 * 1.35);
+            float halo = exp(-r2 * 3.8) * (0.32 + 0.76 * vHalo)
+                       * (1.0 - smoothstep(0.7, 1.0, r2));
             float energy = (core + halo) * vBrightness * uBrightness;
-            gl_FragColor = vec4(vColor * energy, energy);
+            // Additive blending weights RGB by alpha once, including faint stars.
+            gl_FragColor = vec4(vColor, min(energy, 1.0));
           }
         `,
         transparent: true,

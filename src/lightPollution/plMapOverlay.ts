@@ -67,6 +67,29 @@ function movePlOverlayBelowLabels(map: MapLibreMap): void {
 }
 
 /**
+ * Paint-only opacity update for live slider drag — no layout/moveLayer/sky.
+ * Returns false if the layer is not ready (caller should fall back to full apply).
+ */
+export function setPlMapOverlayOpacity(
+  map: MapLibreMap,
+  opacity: number,
+): boolean {
+  if (!map.isStyleLoaded() || !map.getLayer(PL_MAP_OVERLAY_LAYER_ID)) {
+    return false
+  }
+  try {
+    map.setPaintProperty(
+      PL_MAP_OVERLAY_LAYER_ID,
+      'raster-opacity',
+      clampPlHeatmapOpacity(opacity),
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Show/hide the coloured PL heatmap on top of the current basemap.
  * When on, Black Marble sparks stay off (heatmap replaces them).
  */

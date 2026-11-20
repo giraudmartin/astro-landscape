@@ -1,10 +1,20 @@
-import { useCallback, useRef, type KeyboardEvent, type PointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react'
 
 type PlHeatmapControlProps = {
   enabled: boolean
   opacity: number
   onEnabledChange: (next: boolean) => void
+  /** Live drag updates (may be coalesced upstream). */
   onOpacityChange: (next: number) => void
+  /** Pointer/keyboard commit — flush persisted state. */
+  onOpacityCommit?: (next: number) => void
 }
 
 const OP_MIN = 0.15
@@ -39,25 +49,55 @@ export function PlHeatmapControl({
   opacity,
   onEnabledChange,
   onOpacityChange,
+  onOpacityCommit,
 }: PlHeatmapControlProps) {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const draggingRef = useRef(false)
-  const pct = Math.round(opacity * 100)
-  const t = (clampOpacity(opacity) - OP_MIN) / (OP_MAX - OP_MIN)
+  // Local value so the thumb tracks the pointer without waiting on App re-render.
+  const [liveOpacity, setLiveOpacity] = useState(() => clampOpacity(opacity))
+  const liveOpacityRef = useRef(liveOpacity)
+
+  useEffect(() => {
+    if (draggingRef.current) return
+    const next = clampOpacity(opacity)
+    liveOpacityRef.current = next
+    setLiveOpacity(next)
+  }, [opacity])
+
+  const commitLive = useCallback(
+    (next: number) => {
+      const opacityNext = clampOpacity(next)
+      liveOpacityRef.current = opacityNext
+      setLiveOpacity(opacityNext)
+      onOpacityChange(opacityNext)
+    },
+    [onOpacityChange],
+  )
+
+  const finishDrag = useCallback(() => {
+    draggingRef.current = false
+    ;(onOpacityCommit ?? onOpacityChange)(liveOpacityRef.current)
+  }, [onOpacityChange, onOpacityCommit])
+
+  const pct = Math.round(liveOpacity * 100)
+  const t = (clampOpacity(liveOpacity) - OP_MIN) / (OP_MAX - OP_MIN)
 
   const setFromClientY = useCallback(
     (clientY: number) => {
       const track = trackRef.current
       if (!track) return
       const rect = track.getBoundingClientRect()
-      onOpacityChange(opacityFromTrackClientY(clientY, rect.top, rect.height))
+      // During open animation the track can be clipped — don't map on a dead height.
+      if (rect.height < 24) return
+      commitLive(opacityFromTrackClientY(clientY, rect.top, rect.height))
     },
-    [onOpacityChange],
+    [commitLive],
   )
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!enabled) return
     event.preventDefault()
+    event.stopPropagation()
     draggingRef.current = true
     event.currentTarget.setPointerCapture(event.pointerId)
     setFromClientY(event.clientY)
@@ -69,10 +109,10 @@ export function PlHeatmapControl({
   }
 
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    draggingRef.current = false
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
+    if (draggingRef.current) finishDrag()
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -80,16 +120,30 @@ export function PlHeatmapControl({
     const step = event.shiftKey ? 0.1 : 0.05
     if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
       event.preventDefault()
-      onOpacityChange(clampOpacity(opacity + step))
+      commitLive(liveOpacityRef.current + step)
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
       event.preventDefault()
-      onOpacityChange(clampOpacity(opacity - step))
+      commitLive(liveOpacityRef.current - step)
     } else if (event.key === 'Home') {
       event.preventDefault()
-      onOpacityChange(OP_MAX)
+      commitLive(OP_MAX)
     } else if (event.key === 'End') {
       event.preventDefault()
-      onOpacityChange(OP_MIN)
+      commitLive(OP_MIN)
+    }
+  }
+
+  const onKeyUp = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!enabled) return
+    if (
+      event.key === 'ArrowUp' ||
+      event.key === 'ArrowRight' ||
+      event.key === 'ArrowDown' ||
+      event.key === 'ArrowLeft' ||
+      event.key === 'Home' ||
+      event.key === 'End'
+    ) {
+      ;(onOpacityCommit ?? onOpacityChange)(liveOpacityRef.current)
     }
   }
 
@@ -128,10 +182,7 @@ export function PlHeatmapControl({
         </svg>
       </button>
 
-      <div
-        className="pl-heatmap-control__slider"
-        aria-hidden={!enabled}
-      >
+      <div className="pl-heatmap-control__slider" aria-hidden={!enabled}>
         <div className="pl-heatmap-control__slider-inner">
           <div
             ref={trackRef}
@@ -151,6 +202,7 @@ export function PlHeatmapControl({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
             onKeyDown={onKeyDown}
+            onKeyUp={onKeyUp}
           >
             <div className="pl-heatmap-control__groove" aria-hidden="true">
               <div className="pl-heatmap-control__fill" />

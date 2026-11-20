@@ -24,6 +24,7 @@ type MapControlsStackProps = {
   plHeatmapOpacity: number
   onPlHeatmapEnabledChange: (next: boolean) => void
   onPlHeatmapOpacityChange: (next: number) => void
+  onPlHeatmapOpacityCommit?: (next: number) => void
   addressSearchOpen: boolean
   onAddressSearchOpenChange: (open: boolean) => void
   onAddressSelect: (result: AddressSearchResult) => void
@@ -45,6 +46,7 @@ export function MapControlsStack({
   plHeatmapOpacity,
   onPlHeatmapEnabledChange,
   onPlHeatmapOpacityChange,
+  onPlHeatmapOpacityCommit,
   addressSearchOpen,
   onAddressSearchOpenChange,
   onAddressSelect,
@@ -189,6 +191,7 @@ export function MapControlsStack({
         opacity={plHeatmapOpacity}
         onEnabledChange={onPlHeatmapEnabledChange}
         onOpacityChange={onPlHeatmapOpacityChange}
+        onOpacityCommit={onPlHeatmapOpacityCommit}
       />
 
       <MySpotsToggle open={mySpotsOpen} onOpenChange={onMySpotsOpenChange} />

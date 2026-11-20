@@ -29,6 +29,7 @@ import { ensureLightPollutionProtocol } from './lightPollution/lightPollutionPro
 import { ensurePlMapOverlayProtocol } from './lightPollution/plMapOverlayProtocol'
 import {
   applyPlMapOverlay,
+  getPlHeatmapEnabledForMap,
   PL_HEATMAP_ENABLE_ZOOM,
   PL_HEATMAP_MIN_ZOOM,
   PL_MAP_OVERLAY_ATTRIBUTION,
@@ -38,6 +39,7 @@ import {
   PL_MAP_OVERLAY_OPACITY_DEFAULT,
   PL_MAP_OVERLAY_SOURCE_ID,
   PL_MAP_OVERLAY_TILE_URL,
+  setPlMapOverlayOpacity,
 } from './lightPollution/plMapOverlay'
 import { PlMapOverlayLegend } from './PlMapOverlayLegend'
 import {
@@ -625,8 +627,26 @@ export function MapCanvas({
     }
 
     const setPlHeatmap = (enabled: boolean, opacity: number) => {
+      // Opacity-only when the overlay is truly showing. Never skip full apply if
+      // layout visibility was wiped (basemap reload) while WeakMap still says on.
+      if (enabled && getPlHeatmapEnabledForMap(map) === true && map.isStyleLoaded()) {
+        try {
+          if (
+            map.getLayoutProperty(PL_MAP_OVERLAY_LAYER_ID, 'visibility') ===
+              'visible' &&
+            setPlMapOverlayOpacity(map, opacity)
+          ) {
+            return
+          }
+        } catch {
+          // fall through to full apply
+        }
+      }
       void waitForStyleLoaded(map).then(() => {
-        applyPlMapOverlay(map, { enabled, opacity })
+        applyPlMapOverlay(map, {
+          enabled: plHeatmapEnabledRef.current,
+          opacity: plHeatmapOpacityRef.current,
+        })
         applyPlayheadSkyRef.current()
       })
     }
@@ -1028,6 +1048,67 @@ export function MapCanvas({
     apiRef.current?.setPlHeatmap(plHeatmapEnabled, plHeatmapOpacity)
   }, [plHeatmapEnabled, plHeatmapOpacity])
 
+  const opacityRafRef = useRef<number | null>(null)
+  const pendingOpacityRef = useRef(plHeatmapOpacity)
+
+  useEffect(() => {
+    return () => {
+      if (opacityRafRef.current != null) {
+        cancelAnimationFrame(opacityRafRef.current)
+        opacityRafRef.current = null
+      }
+    }
+  }, [])
+
+  /**
+   * Paint map opacity immediately. Coalesce React/localStorage to one update
+   * per frame; use commit to flush the final value on pointer release.
+   */
+  const paintPlHeatmapOpacity = useCallback((next: number) => {
+    const map = mapRef.current
+    if (!map || !plHeatmapEnabledRef.current) return
+    try {
+      const visible =
+        map.getLayoutProperty(PL_MAP_OVERLAY_LAYER_ID, 'visibility') ===
+        'visible'
+      if (visible && setPlMapOverlayOpacity(map, next)) return
+    } catch {
+      // style mid-reload
+    }
+    // Layer missing/hidden (e.g. after basemap swap) — full apply restores it.
+    if (map.isStyleLoaded()) {
+      applyPlMapOverlay(map, { enabled: true, opacity: next })
+    }
+  }, [])
+
+  const requestPlHeatmapOpacity = useCallback(
+    (next: number) => {
+      plHeatmapOpacityRef.current = next
+      pendingOpacityRef.current = next
+      paintPlHeatmapOpacity(next)
+      if (opacityRafRef.current != null) return
+      opacityRafRef.current = requestAnimationFrame(() => {
+        opacityRafRef.current = null
+        onPlHeatmapOpacityChange(pendingOpacityRef.current)
+      })
+    },
+    [onPlHeatmapOpacityChange, paintPlHeatmapOpacity],
+  )
+
+  const commitPlHeatmapOpacity = useCallback(
+    (next: number) => {
+      plHeatmapOpacityRef.current = next
+      pendingOpacityRef.current = next
+      paintPlHeatmapOpacity(next)
+      if (opacityRafRef.current != null) {
+        cancelAnimationFrame(opacityRafRef.current)
+        opacityRafRef.current = null
+      }
+      onPlHeatmapOpacityChange(next)
+    },
+    [onPlHeatmapOpacityChange, paintPlHeatmapOpacity],
+  )
+
   /**
    * Enable PL from globe: ease into a useful zoom. Zooming back out past the
    * floor closes the control (opacity bar animates shut via CSS).
@@ -1220,7 +1301,8 @@ export function MapCanvas({
         plHeatmapEnabled={plHeatmapEnabled}
         plHeatmapOpacity={plHeatmapOpacity}
         onPlHeatmapEnabledChange={requestPlHeatmapEnabled}
-        onPlHeatmapOpacityChange={onPlHeatmapOpacityChange}
+        onPlHeatmapOpacityChange={requestPlHeatmapOpacity}
+        onPlHeatmapOpacityCommit={commitPlHeatmapOpacity}
         addressSearchOpen={addressSearchOpen}
         onAddressSearchOpenChange={onAddressSearchOpenChange}
         onAddressSelect={(result) => apiRef.current?.flyToAddress(result)}

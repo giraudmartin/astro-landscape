@@ -605,9 +605,6 @@ export function SkyBrightnessPanel({
           <span className="sky-brightness-panel__source">
             {sourceLabel(sample)}
           </span>
-          <span className="sky-brightness-panel__note">
-            Pas Falchi / lightpollutionmap.info
-          </span>
         </footer>
       </div>
     </div>,

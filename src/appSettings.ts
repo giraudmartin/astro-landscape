@@ -71,7 +71,6 @@ import {
   clampLocalHaloIntensity,
   clampLocalHaloTempK,
   clampLocalHaloViirsOpacity,
-  LOCAL_HALO_BLOCKING_DEFAULT,
   LOCAL_HALO_ENABLED_DEFAULT,
   LOCAL_HALO_HAZE_DEFAULT,
   LOCAL_HALO_HEIGHT_KM_DEFAULT,
@@ -154,8 +153,6 @@ export type ImmersiveSettings = {
   lightPollutionAmount: number
   /** Local volumetric halo above VIIRS emitters (24 × 24 km zone). */
   localHaloEnabled: boolean
-  /** Relief screens the emitters from the air behind ridges. */
-  localHaloBlocking: boolean
   /** Halo intensity 0…2.5 (slider %/100). */
   localHaloIntensity: number
   /** Halo scale height (km). */
@@ -242,7 +239,6 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   zodiacalAmount: ZODIACAL_AMOUNT_DEFAULT,
   lightPollutionAmount: LIGHT_POLLUTION_AMOUNT_DEFAULT,
   localHaloEnabled: LOCAL_HALO_ENABLED_DEFAULT,
-  localHaloBlocking: LOCAL_HALO_BLOCKING_DEFAULT,
   localHaloIntensity: LOCAL_HALO_INTENSITY_DEFAULT,
   localHaloHeightKm: LOCAL_HALO_HEIGHT_KM_DEFAULT,
   localHaloHaze: LOCAL_HALO_HAZE_DEFAULT,
@@ -470,10 +466,6 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
     localHaloEnabled: readBoolean(
       row.localHaloEnabled,
       DEFAULT_IMMERSIVE_SETTINGS.localHaloEnabled,
-    ),
-    localHaloBlocking: readBoolean(
-      row.localHaloBlocking,
-      DEFAULT_IMMERSIVE_SETTINGS.localHaloBlocking,
     ),
     localHaloIntensity: clampLocalHaloIntensity(
       Number(

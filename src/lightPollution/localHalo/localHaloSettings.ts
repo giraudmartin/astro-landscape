@@ -4,7 +4,6 @@
  */
 
 export const LOCAL_HALO_ENABLED_DEFAULT = true
-export const LOCAL_HALO_BLOCKING_DEFAULT = true
 
 export const LOCAL_HALO_INTENSITY_MIN = 0
 export const LOCAL_HALO_INTENSITY_MAX = 2.5

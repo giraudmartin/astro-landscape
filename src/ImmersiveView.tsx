@@ -524,7 +524,6 @@ export function ImmersiveView({
   )
   const [localHalo, setLocalHalo] = useState<LocalHaloControls>(() => ({
     enabled: savedImmersive.localHaloEnabled,
-    blocking: savedImmersive.localHaloBlocking,
     intensity: savedImmersive.localHaloIntensity,
     heightKm: savedImmersive.localHaloHeightKm,
     haze: savedImmersive.localHaloHaze,
@@ -691,7 +690,6 @@ export function ImmersiveView({
         zodiacalAmount,
         lightPollutionAmount,
         localHaloEnabled: localHalo.enabled,
-        localHaloBlocking: localHalo.blocking,
         localHaloIntensity: localHalo.intensity,
         localHaloHeightKm: localHalo.heightKm,
         localHaloHaze: localHalo.haze,
@@ -1226,7 +1224,6 @@ export function ImmersiveView({
       const c = localHaloRef.current
       return {
         enabled: c.enabled,
-        blocking: c.blocking,
         intensity: c.intensity,
         heightKm: c.heightKm,
         haze: c.haze,

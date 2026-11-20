@@ -41,7 +41,6 @@ export function viirsDiagnosticT(radiance: number): number {
 
 export type LocalHaloTuning = {
   enabled: boolean
-  blocking: boolean
   /** 0…2.5 (prototype slider / 100). */
   intensity: number
   heightKm: number
@@ -886,7 +885,8 @@ export function createLocalHaloPass(): LocalHaloPass {
     uniforms.uHaloAir.value = haloOn && t.intensity > 0 ? night01 : 0
     uniforms.uVertical.value = t.heightKm
     uniforms.uHaze.value = t.haze
-    uniforms.uBlocking.value = t.blocking ? 1 : 0
+    // Relief screening always on (R channel of the precomputed field).
+    uniforms.uBlocking.value = 1
     const tint = localHaloTint(t.tempK)
     uniforms.uTint.value.set(tint[0], tint[1], tint[2])
     uniforms.uReference.value = clouds?.reference ? 1 : 0

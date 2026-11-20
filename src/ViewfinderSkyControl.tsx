@@ -58,7 +58,6 @@ import {
 
 export type LocalHaloControls = {
   enabled: boolean
-  blocking: boolean
   intensity: number
   heightKm: number
   haze: number
@@ -375,19 +374,6 @@ function SkyPanelBody({
 
         {showHaloDetails ? (
           <>
-            <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
-              <span className="vf-landscape-menu__label">
-                <span>Le relief fait écran</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={localHalo.blocking}
-                title="Les crêtes cachent les émissions à l’air situé derrière elles."
-                onChange={(event) =>
-                  onLocalHaloChange({ blocking: event.target.checked })
-                }
-              />
-            </label>
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
                 <span>Intensité halo</span>

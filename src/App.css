@@ -2185,7 +2185,11 @@ html.is-rail-resizing .rail-resize-handle::after {
   gap: 10px;
 }
 
-.my-spots-panel__add,
+.my-spots-panel {
+  container-type: inline-size;
+  container-name: my-spots-panel;
+}
+
 .my-events-panel__add {
   width: 100%;
   margin: 0;
@@ -2201,7 +2205,6 @@ html.is-rail-resizing .rail-resize-handle::after {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.my-spots-panel__add:hover,
 .my-events-panel__add:hover:not(:disabled) {
   border-color: rgba(var(--ui-accent-rgb), 0.35);
   background: rgba(var(--ui-accent-rgb), 0.1);
@@ -2213,16 +2216,95 @@ html.is-rail-resizing .rail-resize-handle::after {
   cursor: not-allowed;
 }
 
-.my-spots-panel__add--active {
-  border-color: rgba(var(--ui-accent-rgb), 0.45);
-  background: rgba(var(--ui-accent-rgb), 0.16);
-  color: var(--ui-action-primary-text);
+.my-spots-panel__toolbar {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
 }
 
-.my-spots-panel__search,
-.my-events-panel__search {
+.my-spots-panel__actions {
   display: grid;
-  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  min-width: 0;
+}
+
+.my-spots-panel__actions:has(> :only-child) {
+  grid-template-columns: 1fr;
+}
+
+/* Same chrome as Cadrages Liste / Calendrier pills. */
+.my-spots-panel__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ov-stroke-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.my-spots-panel__tool svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.my-spots-panel__tool:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.my-spots-panel__tool:focus-visible {
+  outline: 2px solid rgba(var(--ui-accent-rgb), 0.45);
+  outline-offset: 1px;
+}
+
+.my-spots-panel__tool--block {
+  width: 100%;
+  justify-content: center;
+}
+
+.my-spots-panel__tool-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-spots-panel__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--ov-stroke-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.my-spots-panel__search:focus-within {
+  border-color: rgba(var(--ui-accent-rgb), 0.4);
+  outline: none;
+}
+
+.my-spots-panel__search > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 .my-spots-panel__search-label,
@@ -2238,7 +2320,24 @@ html.is-rail-resizing .rail-resize-handle::after {
   border: 0;
 }
 
-.my-spots-panel__search input,
+.my-spots-panel__search input {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f5f5f7;
+  font: inherit;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.my-events-panel__search {
+  display: grid;
+  gap: 4px;
+}
+
 .my-events-panel__search input {
   width: 100%;
   box-sizing: border-box;
@@ -2259,9 +2358,34 @@ html.is-rail-resizing .rail-resize-handle::after {
   color: rgba(255, 255, 255, 0.35);
 }
 
-.my-spots-panel__search input:focus,
 .my-events-panel__search input:focus {
   border-color: rgba(var(--ui-accent-rgb), 0.4);
+}
+
+/* Narrow rail: keep both action buttons side-by-side as icons above search. */
+@container my-spots-panel (max-width: 300px) {
+  .my-spots-panel__tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .my-spots-panel__actions {
+    grid-template-columns: auto auto;
+    justify-content: start;
+  }
+
+  .my-spots-panel__actions .my-spots-panel__tool {
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
 }
 
 .my-events-event-list {
@@ -2579,6 +2703,12 @@ html.is-rail-resizing .rail-resize-handle::after {
   cursor: pointer;
 }
 
+.framings-panel__display-btn:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
 .framings-panel__sort {
   display: inline-flex;
   flex: 0 0 auto;
@@ -2607,6 +2737,12 @@ html.is-rail-resizing .rail-resize-handle::after {
 
 /* Same language as Libre/Photo/Pano capsule — fill + accent text, no green box. */
 .framings-panel__display-btn.is-active {
+  border-color: transparent;
+  background: var(--ui-accent-active-fill);
+  color: var(--ui-accent);
+}
+
+.framings-panel__display-btn.is-active:hover {
   border-color: transparent;
   background: var(--ui-accent-active-fill);
   color: var(--ui-accent);
@@ -2987,7 +3123,7 @@ html.is-rail-resizing .rail-resize-handle::after {
 
 .my-spots-tree {
   display: grid;
-  gap: 10px;
+  gap: 16px;
 }
 
 .my-spots-list {
@@ -2995,72 +3131,89 @@ html.is-rail-resizing .rail-resize-handle::after {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 6px;
-}
-
-.my-spots-list--nested {
-  margin-top: 6px;
-  padding-left: 8px;
+  gap: 10px;
 }
 
 .my-spots-folder {
+  display: grid;
+  gap: 5px;
   margin: 0;
-  padding: 6px;
+  padding: 0;
   border: 1px dashed transparent;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.02);
   transition:
     background 120ms ease,
     border-color 120ms ease;
 }
 
 .my-spots-folder--drop {
-  border-color: rgba(125, 222, 168, 0.45);
-  background: rgba(125, 222, 168, 0.1);
+  border-color: rgba(var(--ui-accent-rgb), 0.45);
+  background: rgba(var(--ui-accent-rgb), 0.1);
 }
 
 .my-spots-folder--hidden {
-  opacity: 0.72;
+  opacity: 0.78;
 }
 
 .my-spots-folder__row {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: space-between;
+  gap: 6px;
   min-width: 0;
+  min-height: 44px;
+  padding: 0 2px 0 0;
+}
+
+.my-spots-folder__title {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 620;
 }
 
 .my-spots-folder__toggle {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+  min-height: 44px;
   margin: 0;
-  padding: 4px 6px;
+  padding: 0 4px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
   font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
-.my-spots-folder__toggle:hover {
+.my-spots-folder__toggle:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.05);
+}
+
+.my-spots-folder__toggle:disabled {
+  cursor: default;
+  opacity: 0.92;
 }
 
 .my-spots-folder__chevron {
   width: 14px;
   height: 14px;
+  flex: 0 0 auto;
   color: rgba(255, 255, 255, 0.45);
+  transform: rotate(-90deg);
   transition: transform 120ms ease;
 }
 
 .my-spots-folder__chevron--open {
-  transform: rotate(90deg);
+  transform: none;
 }
 
 .my-spots-folder__icon {
@@ -3068,6 +3221,7 @@ html.is-rail-resizing .rail-resize-handle::after {
   place-items: center;
   width: 18px;
   height: 18px;
+  flex: 0 0 auto;
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -3076,48 +3230,41 @@ html.is-rail-resizing .rail-resize-handle::after {
   height: 16px;
 }
 
-.my-spots-folder__label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
 .my-spots-folder__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.82rem;
-  font-weight: 650;
-  color: rgba(255, 255, 255, 0.9);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .my-spots-folder__count {
   flex-shrink: 0;
-  min-width: 1.4rem;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.78rem;
+  font-weight: 450;
   font-variant-numeric: tabular-nums;
-  text-align: center;
+  white-space: nowrap;
+}
+
+.my-spots-folder__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .my-spots-folder__empty {
-  margin: 6px 0 2px;
-  padding: 8px 10px;
+  margin: 0;
+  padding: 10px 12px;
   border: 1px dashed rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  border-radius: 12px;
   color: rgba(255, 255, 255, 0.38);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
 }
 
 .my-spots-root {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   margin: 0;
-  padding: 4px;
+  padding: 0;
   border: 1px dashed transparent;
   border-radius: 14px;
   transition:
@@ -3126,36 +3273,40 @@ html.is-rail-resizing .rail-resize-handle::after {
 }
 
 .my-spots-root--drop {
-  border-color: rgba(125, 222, 168, 0.4);
-  background: rgba(125, 222, 168, 0.08);
+  border-color: rgba(var(--ui-accent-rgb), 0.4);
+  background: rgba(var(--ui-accent-rgb), 0.08);
+}
+
+.my-spots-root__header {
+  min-height: 36px;
 }
 
 .my-spots-root__label {
-  margin: 0;
-  padding: 0 6px;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 4px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.84rem;
+  font-weight: 620;
 }
 
+/* Card shell aligned with Cadrages / prototype. */
 .my-spots-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px;
   margin: 0;
-  padding: 4px 4px 4px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  padding-right: 7px;
+  border: 1px solid var(--ov-stroke);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
   color: inherit;
   cursor: grab;
   transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    opacity 120ms ease;
+    background 150ms ease,
+    border-color 150ms ease;
 }
 
 .my-spots-row:active {
@@ -3164,25 +3315,24 @@ html.is-rail-resizing .rail-resize-handle::after {
 
 .my-spots-row:hover {
   background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .my-spots-row--selected {
-  border-color: rgba(var(--ui-accent-rgb), 0.32);
-  background: rgba(var(--ui-accent-rgb), 0.1);
-}
-
-.my-spots-row--hidden {
-  opacity: 0.55;
+  border-color: rgba(var(--ui-accent-rgb), 0.42);
+  background: color-mix(in srgb, var(--ui-accent) 10%, #12141a);
 }
 
 .my-spots-row__select {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
   min-width: 0;
+  min-height: 76px;
   margin: 0;
-  padding: 6px 4px 6px 0;
+  padding: 11px 8px 11px 13px;
   border: 0;
+  border-radius: 15px;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -3190,85 +3340,173 @@ html.is-rail-resizing .rail-resize-handle::after {
   font: inherit;
 }
 
-.my-spots-row__name {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.84rem;
-  font-weight: 650;
-  color: #fff;
+.my-spots-row__select:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: -3px;
 }
 
-.my-spots-row--selected .my-spots-row__name {
+.my-spots-row__pin {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.my-spots-row__pin svg {
+  width: 18px;
+  height: 18px;
+}
+
+.my-spots-row--selected .my-spots-row__pin {
+  background: rgba(var(--ui-accent-rgb), 0.16);
   color: var(--ui-accent);
 }
 
+.my-spots-row__info {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.my-spots-row__name {
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+  line-height: 1.24;
+  font-weight: 630;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
 .my-spots-row__meta {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
   font-size: 0.72rem;
+  line-height: 1.3;
   font-variant-numeric: tabular-nums;
   color: rgba(255, 255, 255, 0.45);
+}
+
+.my-spots-row__alt {
+  color: rgba(212, 217, 224, 0.92);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.my-spots-row__alt::before {
+  content: '·';
+  color: rgba(255, 255, 255, 0.45);
+  margin-right: 8px;
 }
 
 .my-spots-row__actions {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 0;
 }
 
 .my-spots-row__edit {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   margin: 0;
   padding: 0;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
   color: rgba(255, 255, 255, 0.45);
-  opacity: 1;
   cursor: pointer;
   transition:
     color 120ms ease,
-    background 120ms ease;
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .my-spots-row__edit--off {
   color: rgba(255, 255, 255, 0.62);
 }
 
+.my-spots-row__edit[aria-pressed='true'] {
+  color: var(--ui-accent);
+}
+
 .my-spots-row__edit svg {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
 }
 
 .my-spots-row__edit:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
 
 .my-spots-row__edit--danger:hover {
   background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.28);
   color: #fecaca;
 }
 
 .my-spots-row--selected .my-spots-row__edit:hover {
-  background: rgba(var(--ui-accent-rgb), 0.16);
+  background: rgba(var(--ui-accent-rgb), 0.14);
+  border-color: rgba(var(--ui-accent-rgb), 0.28);
   color: var(--ui-accent);
 }
 
 .my-spots-row--selected .my-spots-row__edit--danger:hover {
   background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.28);
   color: #fecaca;
 }
 
 .my-spots-row__edit:focus-visible {
   outline: 2px solid rgba(var(--ui-accent-rgb), 0.55);
   outline-offset: 1px;
+}
+
+@container my-spots-panel (max-width: 300px) {
+  .my-spots-row {
+    padding-right: 3px;
+  }
+
+  .my-spots-row__select {
+    gap: 9px;
+    padding: 11px 2px 11px 10px;
+  }
+
+  .my-spots-row__pin {
+    width: 34px;
+    height: 34px;
+  }
+
+  .my-spots-row__name {
+    font-size: 0.84rem;
+  }
+
+  .my-spots-row__edit {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@container my-spots-panel (max-width: 240px) {
+  .my-spots-row__pin {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .my-spots-row,
+  .my-spots-folder__chevron {
+    transition: none;
+  }
 }
 
 .personal-spot-marker {

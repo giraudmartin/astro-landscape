@@ -146,7 +146,6 @@ export default function App() {
   const [flyToPersonalSpotId, setFlyToPersonalSpotId] = useState<string | null>(
     null,
   )
-  const [showAllPersonalSpotsToken, setShowAllPersonalSpotsToken] = useState(0)
   const [markerMenuOpen, setMarkerMenuOpen] = useState(false)
 
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null)
@@ -1062,7 +1061,7 @@ export default function App() {
           onActivateWorkingPin={activateWorkingPin}
           flyToPersonalSpotId={flyToPersonalSpotId}
           onFlyToPersonalSpotHandled={onFlyToPersonalSpotHandled}
-          showAllPersonalSpotsToken={showAllPersonalSpotsToken}
+          showAllPersonalSpotsToken={0}
           onRequestSaveSpot={onRequestSaveSpot}
           onRequestEditSpot={onRequestEditSpot}
           markerMenuOpen={markerMenuOpen}
@@ -1205,9 +1204,6 @@ export default function App() {
           onRenameFolder={onRenameFolder}
           onToggleFolderVisible={onToggleFolderVisible}
           onMoveSpotToFolder={onMoveSpotToFolder}
-          onShowAll={() =>
-            setShowAllPersonalSpotsToken((token) => token + 1)
-          }
           onViewFramings={openFramingsForSpot}
           railWidthPx={mapRailWidthPx}
           onRailWidthChange={onMapRailWidthChange}

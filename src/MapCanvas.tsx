@@ -209,7 +209,9 @@ function buildStyle(): StyleSpecification {
         type: 'raster',
         tiles: [PL_MAP_OVERLAY_TILE_URL],
         tileSize: 256,
-        minzoom: PL_MAP_OVERLAY_MIN_ZOOM,
+        // The layer gates visibility at camera zoom 6. At a steep pitch its
+        // uniform coverage can still need a coarser overview tile.
+        minzoom: 0,
         maxzoom: PL_MAP_OVERLAY_MAX_ZOOM,
         attribution: PL_MAP_OVERLAY_ATTRIBUTION,
       },
@@ -774,6 +776,10 @@ export function MapCanvas({
     const onMapReady = () => {
       if (mapReadyDone) return
       mapReadyDone = true
+      // A single raster level avoids a visible boundary between the overview
+      // and detailed light maps when the camera looks towards the horizon.
+      map.setSourceTileLodParams(1, 3, PL_MAP_OVERLAY_SOURCE_ID)
+      map.setSourceTileLodParams(1, 3, 'imagery')
       map.setTerrain({
         source: 'terrain',
         exaggeration: TERRAIN_EXAGGERATION,

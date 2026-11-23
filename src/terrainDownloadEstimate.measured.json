@@ -1,0 +1,106 @@
+{
+  "generatedAt": "2026-11-23T22:38:47.488Z",
+  "spots": [
+    "Chamonix",
+    "Atacama",
+    "Namib",
+    "Tibet",
+    "Alaska",
+    "Patagonia",
+    "Alps-S",
+    "Hawaii"
+  ],
+  "byteAvgs": {
+    "demBytes": 126791,
+    "esriBytesWithStubOverhead": 20019,
+    "note": "Esri floored to alpine land (~17 KiB) × 1.15 stub-parent overhead"
+  },
+  "summary": {
+    "high": {
+      "medianMb": 220,
+      "meanMb": 261,
+      "minMb": 187,
+      "maxMb": 740,
+      "demAvgBytes": 126791,
+      "esriAvgBytes": 20019,
+      "avgDemTiles": 1106,
+      "avgEsriTiles": 9807,
+      "perSpotMb": {
+        "Chamonix": 327,
+        "Atacama": 195,
+        "Namib": 200,
+        "Tibet": 220,
+        "Alaska": 740,
+        "Patagonia": 369,
+        "Alps-S": 329,
+        "Hawaii": 187
+      }
+    },
+    "standard": {
+      "medianMb": 112,
+      "meanMb": 132,
+      "minMb": 97,
+      "maxMb": 360,
+      "demAvgBytes": 126791,
+      "esriAvgBytes": 20019,
+      "avgDemTiles": 1106,
+      "avgEsriTiles": 1418,
+      "perSpotMb": {
+        "Chamonix": 164,
+        "Atacama": 100,
+        "Namib": 104,
+        "Tibet": 112,
+        "Alaska": 360,
+        "Patagonia": 184,
+        "Alps-S": 165,
+        "Hawaii": 97
+      }
+    },
+    "medium": {
+      "medianMb": 41,
+      "meanMb": 49,
+      "minMb": 36,
+      "maxMb": 125,
+      "demAvgBytes": 126791,
+      "esriAvgBytes": 20019,
+      "avgDemTiles": 337,
+      "avgEsriTiles": 915,
+      "perSpotMb": {
+        "Chamonix": 60,
+        "Atacama": 37,
+        "Namib": 39,
+        "Tibet": 41,
+        "Alaska": 125,
+        "Patagonia": 67,
+        "Alps-S": 60,
+        "Hawaii": 36
+      }
+    },
+    "low": {
+      "medianMb": 12,
+      "meanMb": 14,
+      "minMb": 10,
+      "maxMb": 31,
+      "demAvgBytes": 126791,
+      "esriAvgBytes": 20019,
+      "avgDemTiles": 120,
+      "avgEsriTiles": 66,
+      "perSpotMb": {
+        "Chamonix": 15,
+        "Atacama": 10,
+        "Namib": 12,
+        "Tibet": 12,
+        "Alaska": 31,
+        "Patagonia": 19,
+        "Alps-S": 17,
+        "Hawaii": 11
+      }
+    }
+  },
+  "recommendedDefaults": {
+    "high": 220,
+    "standard": 112,
+    "medium": 41,
+    "low": 12
+  }
+}

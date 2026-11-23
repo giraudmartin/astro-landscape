@@ -44,6 +44,15 @@ import {
   type TerrainLoadPhase,
 } from './localTerrainMesh'
 import {
+  clearLegacyTerrainDownloadEstimates,
+  getApproxTerrainDownloadMb,
+} from './terrainDownloadEstimate'
+import {
+  DEFAULT_TERRAIN_QUALITY,
+  emitTerrainQualityChange,
+  type TerrainQuality,
+} from './terrainQuality'
+import {
   createRenderDiagLive,
   type RenderDiagLive,
 } from './renderDiagnostic'
@@ -264,6 +273,8 @@ type ImmersiveViewProps = {
    * Skip DEM/ortho — mount a flat disc instantly for sky / night testing.
    */
   flatTerrain?: boolean
+  /** DEM / ortho download budget (from Settings / slow-link picker). */
+  terrainQuality?: TerrainQuality
   framingsOpen?: boolean
   onFramingsOpenChange?: (open: boolean) => void
   onFramingCanSaveChange?: (canSave: boolean) => void
@@ -306,6 +317,7 @@ export function ImmersiveView({
   onTimelapsePreviewPlayingChange,
   active = true,
   flatTerrain = false,
+  terrainQuality = DEFAULT_TERRAIN_QUALITY,
   framingsOpen = false,
   onFramingsOpenChange,
   onFramingCanSaveChange,
@@ -423,9 +435,14 @@ export function ImmersiveView({
   const loaderTipDeckRef = useRef<string[]>([])
   const loaderTipRef = useRef('')
   const [netBytes, setNetBytes] = useState(0)
+  const netBytesBaseRef = useRef(getNetworkBytesTotal())
   useEffect(() => {
-    const base = getNetworkBytesTotal()
-    return subscribeNetworkBytes((total) => setNetBytes(total - base))
+    clearLegacyTerrainDownloadEstimates()
+  }, [])
+  useEffect(() => {
+    return subscribeNetworkBytes((total) => {
+      setNetBytes(Math.max(0, total - netBytesBaseRef.current))
+    })
   }, [])
   const [projection, setProjection] = useState<StageProjection>(
     savedImmersive.projection,
@@ -1594,7 +1611,7 @@ export function ImmersiveView({
       // Flat discs are disposable stubs — never park them as DEM cache.
       // Same spot quit→relaunch: keep GPU mesh. Incomplete builds still die.
       if (parkOnRelease && terrain.ready && !isFlatTerrainHandle(terrain)) {
-        parkLocalTerrain(lat, lon, sceneGroundElevM, terrain)
+        parkLocalTerrain(lat, lon, sceneGroundElevM, terrain, terrainQuality)
       } else {
         terrain.dispose()
       }
@@ -1706,7 +1723,12 @@ export function ImmersiveView({
       setTerrainLabel({ key: 'immersive.terrain.label.flat' })
       mountTerrain(flat)
     } else {
-      const parked = takeParkedLocalTerrain(lat, lon, sceneGroundElevM)
+      const parked = takeParkedLocalTerrain(
+        lat,
+        lon,
+        sceneGroundElevM,
+        terrainQuality,
+      )
       if (parked) {
         reviveLocalTerrainTextures(parked)
         setTerrainDemFromCache(true)
@@ -1729,13 +1751,15 @@ export function ImmersiveView({
         terrainUnlockedRef.current = false
         setTerrainUnlocked(false)
         setLoaderVisible(true)
+        // Restart the loader Mo counter for this quality rebuild.
+        netBytesBaseRef.current = getNetworkBytesTotal()
+        setNetBytes(0)
         void createLocalTerrainMesh({
           lat,
           lon,
           centerElevationM: sceneGroundElevM,
           radiusM: NEAR_TERRAIN_RADIUS_M,
-          // 1600 + triple 4096 atlas bake OOMed the GPU (Context Lost). Stay ≤1400.
-          resolution: 1200,
+          quality: terrainQuality,
           onPreview: (terrain) => mountTerrain(terrain),
           onUpgrade: (terrain) => mountTerrain(terrain),
           onProgress: ({ phase, progress, cacheHitRatio }) => {
@@ -2209,11 +2233,11 @@ export function ImmersiveView({
       renderer.dispose()
       renderer.domElement.remove()
     }
-    // lat/lon (+ flatTerrain) only — groundElevationM updates from the map DEM
-    // must NOT remount (that was reloading the whole terrain on every
+    // lat/lon (+ flatTerrain / quality) only — groundElevationM updates from the
+    // map DEM must NOT remount (that was reloading the whole terrain on every
     // quit→relaunch). bearingDeg must NOT remount either — that dropped back
     // to muddy preview. flatTerrain toggles a DEM-free sky test stub.
-  }, [lat, lon, flatTerrain, LOCAL_HALO_PASS_REV])
+  }, [lat, lon, flatTerrain, terrainQuality, LOCAL_HALO_PASS_REV])
 
   useLayoutEffect(() => {
     apiRef.current?.setSkyUtc(skyUtcMs)
@@ -2542,6 +2566,11 @@ export function ImmersiveView({
                 <div className="immersive__loader-heading">
                   <p className="immersive__loader-eyebrow">
                     {t('immersive.terrain.eyebrow')}
+                    {' · '}
+                    {t('immersive.terrain.qualityLine', {
+                      quality: t(`terrainQuality.level.${terrainQuality}`),
+                      mb: String(getApproxTerrainDownloadMb(terrainQuality)),
+                    })}
                   </p>
                   <p className="immersive__loader-phase">
                     {terrainReady
@@ -2843,6 +2872,8 @@ export function ImmersiveView({
           timelapse={timelapse}
           opticalHFovDeg={optical.h}
           opticalVFovDeg={optical.v}
+          framingYawDeg={framesLocked ? lockLook.yaw : yawDeg}
+          framingPitchDeg={framesLocked ? lockLook.pitch : pitchDeg}
           onFocalMmChange={setFocalMm}
           onOrientationChange={setOrientation}
           onFrameRollChange={(deg) => setFrameRollDeg(clampFrameRollDeg(deg))}
@@ -3158,6 +3189,19 @@ export function ImmersiveView({
           aria-label={t('immersive.toolCapsuleAria')}
         >
           <ViewfinderSceneSettingsControl
+            flatTerrain={flatTerrain}
+            quality={{
+              value: terrainQuality,
+              onChange: (next) => {
+                patchAppSettings({
+                  immersive: {
+                    terrainQuality: next,
+                    terrainQualityChosen: true,
+                  },
+                })
+                emitTerrainQualityChange(next)
+              },
+            }}
             landscape={{
               brightness: groundNightBrightness,
               contrast: groundNightContrast,

@@ -92,6 +92,11 @@ import {
   normalizeCompositionGuideMode,
   type CompositionGuideMode,
 } from './compositionGuides'
+import {
+  DEFAULT_TERRAIN_QUALITY,
+  normalizeTerrainQuality,
+  type TerrainQuality,
+} from './terrainQuality'
 
 export const APP_SETTINGS_STORAGE_KEY = 'astro-landscape.settings.v1'
 
@@ -136,6 +141,8 @@ export type ImmersiveSettings = {
   starGlow: number
   showMilkyWay: boolean
   showHalpha: boolean
+  /** Sun + Moon day-arc guides in the immersive sky. */
+  showTrajectories: boolean
   /** Rayleigh sky amount 0…1 (replaces the old on/off Atmo toggle). */
   atmosphereAmount: number
   /** Additive OI airglow amount 0…1 (on top of atmosphere, night only). */
@@ -181,6 +188,10 @@ export type ImmersiveSettings = {
   weatherLow: WeatherCloudLayer
   weatherMid: WeatherCloudLayer
   weatherHigh: WeatherCloudLayer
+  /** DEM / ortho download budget for immersive terrain. */
+  terrainQuality: TerrainQuality
+  /** True once the user picked a quality (popup or Settings). */
+  terrainQualityChosen: boolean
 }
 
 export type MapSettings = {
@@ -234,6 +245,7 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   starGlow: STAR_GLOW_DEFAULT,
   showMilkyWay: true,
   showHalpha: false,
+  showTrajectories: true,
   atmosphereAmount: ATMOSPHERE_AMOUNT_DEFAULT,
   moonlightEnabled: true,
   airglowAmount: AIRGLOW_AMOUNT_DEFAULT,
@@ -262,6 +274,8 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   weatherLow: { ...WEATHER_LAYER_DEFAULTS.low },
   weatherMid: { ...WEATHER_LAYER_DEFAULTS.mid },
   weatherHigh: { ...WEATHER_LAYER_DEFAULTS.high },
+  terrainQuality: DEFAULT_TERRAIN_QUALITY,
+  terrainQualityChosen: false,
 }
 
 export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = {
@@ -440,6 +454,10 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
       row.showHalpha,
       DEFAULT_IMMERSIVE_SETTINGS.showHalpha,
     ),
+    showTrajectories: readBoolean(
+      row.showTrajectories,
+      DEFAULT_IMMERSIVE_SETTINGS.showTrajectories,
+    ),
     atmosphereAmount: clampAtmosphereAmount(
       Number(
         row.atmosphereAmount ??
@@ -564,6 +582,12 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
         ),
       ),
     }),
+    terrainQuality: normalizeTerrainQuality(row.terrainQuality),
+    terrainQualityChosen: readBoolean(
+      row.terrainQualityChosen,
+      // Legacy: a stored quality implies the user already chose.
+      row.terrainQuality != null,
+    ),
   }
 }
 

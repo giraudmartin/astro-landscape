@@ -7,6 +7,12 @@ import {
 import { TRIPOD_HEIGHT_M } from './presets'
 import { t } from './i18n'
 import { attachStelProjector } from './stelProjector'
+import {
+  DEFAULT_TERRAIN_QUALITY,
+  getTerrainQualityPreset,
+  type TerrainQuality,
+  type TerrainQualityPreset,
+} from './terrainQuality'
 
 const MAPTERHORN = 'https://tiles.mapterhorn.com'
 const ESRI =
@@ -17,11 +23,55 @@ const VERTICAL_EXAGGERATION = 1.1
 // Linear RGB shared by the sea underlay and the offshore ortho repair.
 export const OFFSHORE_ALBEDO = new THREE.Color(0.022, 0.045, 0.066)
 
-/** Parallel Esri/DEM fetches â MapLibre streams; we batch hard for first paint. */
-const FETCH_CONCURRENCY = 28
+/** Parallel Esri/DEM fetches — MapLibre streams; we batch hard for first paint. */
+const DEFAULT_FETCH_CONCURRENCY = 28
+let activeFetchConcurrency = DEFAULT_FETCH_CONCURRENCY
+let activeDemZoomOffset = 0
+let activeImageryZoomOffset = 0
+let activeImageryMaxZoom = IMAGERY_MAX_ZOOM
+let activeQualityId: TerrainQuality = DEFAULT_TERRAIN_QUALITY
+/** Bumps on each createLocalTerrainMesh — stale builds must not reset a newer preset. */
+let activeQualityGen = 0
+
+function applyTerrainQualityPreset(preset: TerrainQualityPreset): number {
+  const gen = ++activeQualityGen
+  activeQualityId = preset.id
+  activeDemZoomOffset = preset.demZoomOffset
+  activeImageryZoomOffset = preset.imageryZoomOffset
+  activeImageryMaxZoom = preset.imageryMaxZoom
+  activeFetchConcurrency = preset.fetchConcurrency
+  return gen
+}
+
+function releaseTerrainQualityPreset(gen: number): void {
+  // Only the latest in-flight build may clear globals (quality-switch race).
+  if (gen !== activeQualityGen) return
+  activeQualityId = DEFAULT_TERRAIN_QUALITY
+  activeDemZoomOffset = 0
+  activeImageryZoomOffset = 0
+  activeImageryMaxZoom = IMAGERY_MAX_ZOOM
+  activeFetchConcurrency = DEFAULT_FETCH_CONCURRENCY
+}
+
+/** DEM zoom for the in-flight quality preset (export stays pure). */
+function demZoomActive(distM: number): number {
+  return Math.max(
+    DEM_MIN_FALLBACK_Z,
+    demZoomForDistance(distM) - activeDemZoomOffset,
+  )
+}
+
+function shiftImageryZooms(zooms: readonly number[]): number[] {
+  return zooms.map((z) =>
+    Math.max(
+      DEM_MIN_FALLBACK_Z,
+      Math.min(activeImageryMaxZoom, z - activeImageryZoomOffset),
+    ),
+  )
+}
 
 /**
- * High-detail core. 6 km @ 4096 Ë 3 m/px â summit FOV ridges stay readable.
+ * High-detail core. 6 km @ 4096 ~ 3 m/px — summit FOV ridges stay readable.
  * (12 km @ 4096 was ~6 m/px and read as muddy when filling the frame.)
  */
 export const NEAR_TERRAIN_RADIUS_M = 6_000
@@ -280,18 +330,25 @@ type ParkedTerrain = {
   lat: number
   lon: number
   centerElevationM: number
+  quality: TerrainQuality
   handle: LocalTerrainHandle
 }
 
-/** ~0.1 m â same click / same personal spot. */
+/** ~0.1 m — same click / same personal spot. */
 const PARKED_SPOT_EPS_DEG = 1e-6
 
 let parkedTerrain: ParkedTerrain | null = null
 
-function sameParkedSpot(lat: number, lon: number, slot: ParkedTerrain): boolean {
-  // Match lat/lon only â DEM height often jumps >1 m when the map remounts,
+function sameParkedSpot(
+  lat: number,
+  lon: number,
+  quality: TerrainQuality,
+  slot: ParkedTerrain,
+): boolean {
+  // Match lat/lon + quality — DEM height often jumps >1 m when the map remounts,
   // and that must NOT miss the parked GPU mesh.
   return (
+    slot.quality === quality &&
     Math.abs(slot.lat - lat) <= PARKED_SPOT_EPS_DEG &&
     Math.abs(slot.lon - lon) <= PARKED_SPOT_EPS_DEG
   )
@@ -308,6 +365,7 @@ export function parkLocalTerrain(
   lon: number,
   centerElevationM: number,
   handle: LocalTerrainHandle,
+  quality: TerrainQuality = DEFAULT_TERRAIN_QUALITY,
 ): void {
   if (!handle.ready) {
     handle.dispose()
@@ -317,7 +375,7 @@ export function parkLocalTerrain(
   if (parkedTerrain && parkedTerrain.handle !== handle) {
     parkedTerrain.handle.dispose()
   }
-  parkedTerrain = { lat, lon, centerElevationM, handle }
+  parkedTerrain = { lat, lon, centerElevationM, quality, handle }
 }
 
 /** Re-upload CanvasTextures after the previous WebGLRenderer was disposed. */
@@ -366,9 +424,10 @@ export function takeParkedLocalTerrain(
   lat: number,
   lon: number,
   _centerElevationM?: number,
+  quality: TerrainQuality = DEFAULT_TERRAIN_QUALITY,
 ): LocalTerrainHandle | null {
   const slot = parkedTerrain
-  if (!slot || !sameParkedSpot(lat, lon, slot)) return null
+  if (!slot || !sameParkedSpot(lat, lon, quality, slot)) return null
   parkedTerrain = null
   reviveLocalTerrainTextures(slot.handle)
   return slot.handle
@@ -530,7 +589,7 @@ export async function sampleDemGridMslM(input: {
     }
   }
   const tiles = new Map<string, DemTile | null>()
-  await mapPool([...keys], FETCH_CONCURRENCY, async (key) => {
+  await mapPool([...keys], activeFetchConcurrency, async (key) => {
     const [tz, tx, ty] = key.split('/').map(Number) as [number, number, number]
     tiles.set(key, await resolveDemTile(tz, tx, ty))
   })
@@ -575,7 +634,7 @@ function elevationFromCache(
   cache: Map<string, DemTile | null>,
   fallback: number,
 ): number {
-  const z = demZoomForDistance(distM)
+  const z = demZoomActive(distM)
   const { x, y } = latLonToTile(lat, lon, z)
   const tx = Math.floor(x)
   const ty = Math.floor(y)
@@ -740,7 +799,7 @@ async function paintImageryLayer(
     }
   }
 
-  await mapPool(jobs, FETCH_CONCURRENCY, async ({ tx, ty }) => {
+  await mapPool(jobs, activeFetchConcurrency, async ({ tx, ty }) => {
     try {
       const bmp = await resolveEsriBitmap(zoom, tx, ty)
       if (!bmp) return
@@ -839,8 +898,9 @@ async function buildImageryTexture(
   radiusM: number,
 ): Promise<THREE.CanvasTexture | null> {
   try {
-    // Prefer 4096 for =16 km cores (~3â8 m/px). Fall back to 2048 if alloc fails.
-    let size = radiusM <= 16_000 ? 4096 : 2048
+    // Prefer 4096 for ≤16 km cores (~3–8 m/px). Fall back to 2048 if alloc fails.
+    const prefer4096 = radiusM <= 16_000 && activeImageryMaxZoom >= 16
+    let size = prefer4096 ? 4096 : 2048
     const canvas = document.createElement('canvas')
     canvas.width = size
     canvas.height = size
@@ -857,32 +917,31 @@ async function buildImageryTexture(
     ctx.fillRect(0, 0, size, size)
 
     // Coarse base first so empty atlas never stays solid fill brown.
-    await paintImageryLayer(ctx, size, lat0, lon0, radiusM, 12, radiusM)
-    await paintImageryLayer(ctx, size, lat0, lon0, radiusM, 13, radiusM)
-    await paintImageryLayer(ctx, size, lat0, lon0, radiusM, 14, radiusM)
-    await paintImageryLayer(ctx, size, lat0, lon0, radiusM, 15, radiusM)
-    await paintImageryLayer(
-      ctx,
-      size,
-      lat0,
-      lon0,
-      radiusM,
-      16,
-      Math.min(radiusM, 4_000),
-    )
-    await paintImageryLayer(
-      ctx,
-      size,
-      lat0,
-      lon0,
-      radiusM,
-      17,
-      Math.min(radiusM, 2_000),
-    )
+    const maxZ = activeImageryMaxZoom
+    const layers: Array<{ z: number; clipM: number }> = [
+      { z: 12, clipM: radiusM },
+      { z: 13, clipM: radiusM },
+      { z: 14, clipM: radiusM },
+      { z: 15, clipM: radiusM },
+      { z: 16, clipM: Math.min(radiusM, 4_000) },
+      { z: 17, clipM: Math.min(radiusM, 2_000) },
+    ]
+    for (const layer of layers) {
+      if (layer.z > maxZ) continue
+      await paintImageryLayer(
+        ctx,
+        size,
+        lat0,
+        lon0,
+        radiusM,
+        layer.z,
+        layer.clipM,
+      )
+    }
     enhanceOceanPixels(ctx, size)
     liftImageryExposure(ctx, size, 0.12)
-    // No mips on the core atlas â cliff UVs were picking blurry levels.
-    // (DEM hillshade bake on 4096Â² killed the WebGL context â do NOT restore.)
+    // No mips on the core atlas — cliff UVs were picking blurry levels.
+    // (DEM hillshade bake on 4096² killed the WebGL context — do NOT restore.)
     return canvasToTerrainTexture(canvas, { anisotropy: 16, mipmaps: false })
   } catch {
     return null
@@ -1016,18 +1075,14 @@ async function buildForegroundImageryTexture(
     if (!ctx) return null
     ctx.fillStyle = '#6b5a42'
     ctx.fillRect(0, 0, size, size)
-    await paintImageryLayer(ctx, size, lat0, lon0, radiusM, 13, radiusM)
-    await paintImageryLayer(ctx, size, lat0, lon0, radiusM, 15, radiusM)
-    await paintImageryLayer(ctx, size, lat0, lon0, radiusM, 16, radiusM)
-    await paintImageryLayer(
-      ctx,
-      size,
-      lat0,
-      lon0,
-      radiusM,
-      IMAGERY_MAX_ZOOM,
-      radiusM,
-    )
+    const maxZ = activeImageryMaxZoom
+    const layers = [13, 15, 16, IMAGERY_MAX_ZOOM]
+      .map((z) => Math.min(z, maxZ))
+      .filter((z, i, arr) => z >= 10 && arr.indexOf(z) === i)
+      .sort((a, b) => a - b)
+    for (const z of layers) {
+      await paintImageryLayer(ctx, size, lat0, lon0, radiusM, z, radiusM)
+    }
     // No mipmaps â grazing cliff UVs were sampling blurry mips.
     return canvasToTerrainTexture(canvas, {
       anisotropy: 16,
@@ -1850,7 +1905,7 @@ async function buildTerrainLodRing(input: {
     if (dist < ring.innerM * 0.8) return
     if (dist > ring.outerM * 1.02) return
     const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-    const z = forceZ ?? input.previewZoom ?? demZoomForDistance(dist)
+    const z = forceZ ?? input.previewZoom ?? demZoomActive(dist)
     addDemTileKeys(tileKeys, lat, lon, z)
   }
 
@@ -1871,7 +1926,7 @@ async function buildTerrainLodRing(input: {
   }
 
   const missing = [...tileKeys].filter((key) => !cache.has(key))
-  await mapPool(missing, FETCH_CONCURRENCY, async (key) => {
+  await mapPool(missing, activeFetchConcurrency, async (key) => {
     const parts = key.split('/')
     const tile = await resolveDemTile(
       Number(parts[0]),
@@ -1945,14 +2000,14 @@ async function buildTerrainLodRing(input: {
     input.lat,
     input.lon,
     radiusM,
-    ring.imageryZooms,
+    shiftImageryZooms(ring.imageryZooms),
     ring.atlasSize,
   )
   // Exact same material recipe as the near disc (only DEM/ortho resolution differs).
   const material = new THREE.MeshBasicMaterial({
     color: texture ? 0xffffff : 0xc4a574,
     map: texture ?? null,
-    // FrontSide â DoubleSide on overlapping LOD/detail layers = glass shards.
+    // FrontSide — DoubleSide on overlapping LOD/detail layers = glass shards.
     side: THREE.FrontSide,
     polygonOffset: true,
     polygonOffsetFactor: 2,
@@ -2018,11 +2073,11 @@ async function buildDetailTerrainDisc(input: {
       const dist = Math.hypot(east, north)
       if (dist > radiusM * 1.02 || dist < innerM * 0.85) continue
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-      addDemTileKeys(tileKeys, lat, lon, demZoomForDistance(dist))
+      addDemTileKeys(tileKeys, lat, lon, demZoomActive(dist))
     }
   }
   const missing = [...tileKeys].filter((key) => !cache.has(key))
-  await mapPool(missing, FETCH_CONCURRENCY, async (key) => {
+  await mapPool(missing, activeFetchConcurrency, async (key) => {
     const parts = key.split('/')
     const tile = await resolveDemTile(
       Number(parts[0]),
@@ -2098,7 +2153,7 @@ async function buildDetailTerrainDisc(input: {
       input.lat,
       input.lon,
       radiusM,
-      input.imageryZooms,
+      shiftImageryZooms(input.imageryZooms),
       input.atlasSize,
     ))
   const material = new THREE.MeshBasicMaterial({
@@ -2268,8 +2323,22 @@ async function buildFarTerrainMesh(input: {
   })
   group.add(sea.mesh)
 
+  const farMode = getTerrainQualityPreset(activeQualityId).farRings
+  const rings =
+    farMode === 'full'
+      ? TERRAIN_LOD_RINGS
+      : farMode === 'reduced'
+        ? TERRAIN_LOD_RINGS.filter((ring) => ring.name !== 'second')
+        : TERRAIN_LOD_RINGS.filter(
+            (ring) => ring.name === 'far' || ring.name === 'horizon',
+          ).map((ring) => ({
+            ...ring,
+            resolution: Math.min(ring.resolution, 200),
+            atlasSize: Math.min(ring.atlasSize ?? 1536, 1024),
+            imageryZooms: ring.imageryZooms.map((z) => Math.max(7, z - 1)),
+          }))
   const builtRings = await Promise.all(
-    TERRAIN_LOD_RINGS.map((ring, i) =>
+    rings.map((ring, i) =>
       buildTerrainLodRing({
         ...input,
         ring,
@@ -2533,6 +2602,8 @@ export async function createLocalTerrainMesh(input: {
   centerElevationM: number
   radiusM?: number
   resolution?: number
+  /** DEM / ortho download budget (default = full quality). */
+  quality?: TerrainQuality
   /** Fires as soon as a coarse mesh+ortho is drawable (progressive load). */
   onPreview?: (handle: LocalTerrainHandle) => void
   /** Fires again when sharp core / detail / far layers attach. */
@@ -2541,12 +2612,16 @@ export async function createLocalTerrainMesh(input: {
   onProgress?: (info: {
     phase: TerrainLoadPhase
     progress: number
-    /** 0â1 DEM byte/decoded reuse from the previous spot working set. */
+    /** 0–1 DEM byte/decoded reuse from the previous spot working set. */
     cacheHitRatio?: number
   }) => void
 }): Promise<LocalTerrainHandle> {
+  const qualityPreset = getTerrainQualityPreset(
+    input.quality ?? DEFAULT_TERRAIN_QUALITY,
+  )
+  const qualityGen = applyTerrainQualityPreset(qualityPreset)
   const radiusM = input.radiusM ?? NEAR_TERRAIN_RADIUS_M
-  const resolution = input.resolution ?? 416
+  const resolution = input.resolution ?? qualityPreset.nearResolution
   const cache = new Map<string, DemTile | null>()
   const sessionGen = beginTerrainTileSession()
 
@@ -2559,7 +2634,7 @@ export async function createLocalTerrainMesh(input: {
       const north = -radiusM + v * radiusM * 2
       const dist = Math.hypot(east, north)
       const { lat, lon } = enuToLatLon(east, north, input.lat, input.lon)
-      addDemTileKeys(tileKeys, lat, lon, demZoomForDistance(dist))
+      addDemTileKeys(tileKeys, lat, lon, demZoomActive(dist))
     }
   }
 
@@ -2598,7 +2673,7 @@ export async function createLocalTerrainMesh(input: {
   }
   notifyProgress('dem', 0.08)
 
-  await mapPool([...tileKeys], FETCH_CONCURRENCY, async (key) => {
+  await mapPool([...tileKeys], activeFetchConcurrency, async (key) => {
     const parts = key.split('/')
     const tile = await resolveDemTile(
       Number(parts[0]),
@@ -2973,6 +3048,7 @@ export async function createLocalTerrainMesh(input: {
   if (disposed) {
     fullMap?.dispose()
     commitTerrainTileSession(sessionGen)
+    releaseTerrainQualityPreset(qualityGen)
     return handle
   }
   if (fullMap) {
@@ -2986,22 +3062,28 @@ export async function createLocalTerrainMesh(input: {
   notifyProgress('ortho', 0.48)
   input.onUpgrade?.(handle)
 
-  const nearMap = await buildNearImageryTexture(input.lat, input.lon)
-  if (disposed) {
-    nearMap?.dispose()
-    commitTerrainTileSession(sessionGen)
-    return handle
+  if (qualityPreset.loadNearAtlas) {
+    const nearMap = await buildNearImageryTexture(input.lat, input.lon)
+    if (disposed) {
+      nearMap?.dispose()
+      commitTerrainTileSession(sessionGen)
+      releaseTerrainQualityPreset(qualityGen)
+      return handle
+    }
+    enableAtlas('near', nearMap)
+    notifyProgress('ortho', 0.53)
   }
-  enableAtlas('near', nearMap)
-  notifyProgress('ortho', 0.53)
 
-  const ultraMap = await buildUltraNearImageryTexture(input.lat, input.lon)
-  if (disposed) {
-    ultraMap?.dispose()
-    commitTerrainTileSession(sessionGen)
-    return handle
+  if (qualityPreset.loadUltraNear) {
+    const ultraMap = await buildUltraNearImageryTexture(input.lat, input.lon)
+    if (disposed) {
+      ultraMap?.dispose()
+      commitTerrainTileSession(sessionGen)
+      releaseTerrainQualityPreset(qualityGen)
+      return handle
+    }
+    enableAtlas('ultra', ultraMap)
   }
-  enableAtlas('ultra', ultraMap)
   handle.stats.tiles = [...cache.values()].filter(Boolean).length
   notifyProgress('ortho', 0.58)
   input.onUpgrade?.(handle)
@@ -3015,6 +3097,7 @@ export async function createLocalTerrainMesh(input: {
   )
   if (!refined || disposed) {
     commitTerrainTileSession(sessionGen)
+    releaseTerrainQualityPreset(qualityGen)
     return handle
   }
   geometry.setAttribute(
@@ -3030,72 +3113,85 @@ export async function createLocalTerrainMesh(input: {
   const detailDisposers: Array<() => void> = []
   const detailMaterials: THREE.MeshBasicMaterial[] = []
 
-  // Detail discs next (second plan), then far rings ? sequential so a slow
+  // Detail discs next (second plan), then far rings — sequential so a slow
   // ring never starves the sharp core.
   notifyProgress('detail', 0.62)
-  try {
-    const detailMid = await buildDetailTerrainDisc({
-      lat: input.lat,
-      lon: input.lon,
-      baseElev,
-      cache,
-      radiusM: MID_DETAIL_RADIUS_M,
-      innerRadiusM: MID_DETAIL_INNER_M,
-      resolution: 960,
-      imageryZooms: [13, 14, 15, 16],
-      atlasSize: 4096,
-      name: 'mid',
-      renderOrder: 2,
-      buildTexture: buildMidDetailImageryTexture,
-    })
-    if (!disposed) {
-      mesh.add(detailMid.mesh)
-      retirePreview(0)
-      detailMaterials.push(detailMid.material)
-      detailDisposers.push(detailMid.dispose)
-      handle.materials = [material, ...detailMaterials, ...previewMaterials()]
-      notifyProgress('detail', 0.72)
-      input.onUpgrade?.(handle)
-    } else {
-      detailMid.dispose()
+  if (qualityPreset.loadDetailMid) {
+    try {
+      const detailMid = await buildDetailTerrainDisc({
+        lat: input.lat,
+        lon: input.lon,
+        baseElev,
+        cache,
+        radiusM: MID_DETAIL_RADIUS_M,
+        innerRadiusM: MID_DETAIL_INNER_M,
+        resolution: qualityPreset.detailMid.resolution,
+        imageryZooms: qualityPreset.detailMid.imageryZooms,
+        atlasSize: qualityPreset.detailMid.atlasSize,
+        name: 'mid',
+        renderOrder: 2,
+        buildTexture: qualityPreset.useHighDetailBake
+          ? buildMidDetailImageryTexture
+          : undefined,
+      })
+      if (!disposed) {
+        mesh.add(detailMid.mesh)
+        retirePreview(0)
+        detailMaterials.push(detailMid.material)
+        detailDisposers.push(detailMid.dispose)
+        handle.materials = [material, ...detailMaterials, ...previewMaterials()]
+        notifyProgress('detail', 0.72)
+        input.onUpgrade?.(handle)
+      } else {
+        detailMid.dispose()
+      }
+    } catch (err) {
+      console.error('[terrain:detail-mid]', err)
     }
-  } catch (err) {
-    console.error('[terrain:detail-mid]', err)
+  } else {
+    retirePreview(0)
   }
 
-  try {
-    const detailWide = await buildDetailTerrainDisc({
-      lat: input.lat,
-      lon: input.lon,
-      baseElev,
-      cache,
-      radiusM: WIDE_DETAIL_RADIUS_M,
-      innerRadiusM: WIDE_DETAIL_INNER_M,
-      resolution: 900,
-      imageryZooms: [12, 13, 14],
-      atlasSize: 4096,
-      name: 'wide',
-      renderOrder: 1,
-      buildTexture: buildWideDetailImageryTexture,
-    })
-    if (!disposed) {
-      mesh.add(detailWide.mesh)
-      retirePreview(1)
-      detailMaterials.push(detailWide.material)
-      detailDisposers.push(detailWide.dispose)
-      handle.materials = [material, ...detailMaterials, ...previewMaterials()]
-      notifyProgress('detail', 0.8)
-      input.onUpgrade?.(handle)
-    } else {
-      detailWide.dispose()
+  if (qualityPreset.loadDetailWide) {
+    try {
+      const detailWide = await buildDetailTerrainDisc({
+        lat: input.lat,
+        lon: input.lon,
+        baseElev,
+        cache,
+        radiusM: WIDE_DETAIL_RADIUS_M,
+        innerRadiusM: WIDE_DETAIL_INNER_M,
+        resolution: qualityPreset.detailWide.resolution,
+        imageryZooms: qualityPreset.detailWide.imageryZooms,
+        atlasSize: qualityPreset.detailWide.atlasSize,
+        name: 'wide',
+        renderOrder: 1,
+        buildTexture: qualityPreset.useHighDetailBake
+          ? buildWideDetailImageryTexture
+          : undefined,
+      })
+      if (!disposed) {
+        mesh.add(detailWide.mesh)
+        retirePreview(1)
+        detailMaterials.push(detailWide.material)
+        detailDisposers.push(detailWide.dispose)
+        handle.materials = [material, ...detailMaterials, ...previewMaterials()]
+        notifyProgress('detail', 0.8)
+        input.onUpgrade?.(handle)
+      } else {
+        detailWide.dispose()
+      }
+    } catch (err) {
+      console.error('[terrain:detail-wide]', err)
     }
-  } catch (err) {
-    console.error('[terrain:detail-wide]', err)
+  } else {
+    retirePreview(1)
   }
 
   if (disposed) {
     for (const d of detailDisposers) d()
     commitTerrainTileSession(sessionGen)
+    releaseTerrainQualityPreset(qualityGen)
     return handle
   }
 
@@ -3141,6 +3237,7 @@ export async function createLocalTerrainMesh(input: {
   handle.stats.progress = 1
   // Forget previous spot: keep only tiles touched by this build.
   commitTerrainTileSession(sessionGen)
+  releaseTerrainQualityPreset(qualityGen)
   return handle
 }
 

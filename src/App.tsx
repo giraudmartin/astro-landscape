@@ -30,6 +30,14 @@ import {
 } from './celestial'
 import type { BasemapMode } from './basemapMode'
 import { loadAppSettings, patchAppSettings } from './appSettings'
+import { TerrainQualityDialog } from './TerrainQualityDialog'
+import {
+  DEFAULT_TERRAIN_QUALITY,
+  emitTerrainQualityChange,
+  shouldPromptTerrainQuality,
+  TERRAIN_QUALITY_CHANGE_EVENT,
+  type TerrainQuality,
+} from './terrainQuality'
 import {
   loadMapRailWidthPx,
   saveMapRailWidthPx,
@@ -91,10 +99,71 @@ type PendingSave = {
 export default function App() {
   const t = useT()
   const savedMap = useMemo(() => loadAppSettings().map, [])
+  const savedImmersive = useMemo(() => loadAppSettings().immersive, [])
   const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const [mode, setMode] = useState<CameraMode>('orbit')
   /** Immersive without DEM — flat disc for fast sky testing. */
   const [flatTerrain, setFlatTerrain] = useState(false)
+  const [terrainQuality, setTerrainQuality] = useState<TerrainQuality>(
+    savedImmersive.terrainQuality ?? DEFAULT_TERRAIN_QUALITY,
+  )
+  const [terrainQualityPromptOpen, setTerrainQualityPromptOpen] =
+    useState(false)
+  const pendingImmersiveEnterRef = useRef<(() => void) | null>(null)
+
+  const gateImmersiveEnter = useCallback(
+    (enter: () => void, opts?: { flatTerrain?: boolean }) => {
+      const chosen = loadAppSettings().immersive.terrainQualityChosen
+      if (
+        shouldPromptTerrainQuality({
+          chosen,
+          flatTerrain: opts?.flatTerrain,
+        })
+      ) {
+        pendingImmersiveEnterRef.current = enter
+        setTerrainQualityPromptOpen(true)
+        return
+      }
+      enter()
+    },
+    [],
+  )
+
+  const onTerrainQualityChoose = useCallback((quality: TerrainQuality) => {
+    patchAppSettings({
+      immersive: { terrainQuality: quality, terrainQualityChosen: true },
+    })
+    setTerrainQuality(quality)
+    emitTerrainQualityChange(quality)
+    setTerrainQualityPromptOpen(false)
+    const enter = pendingImmersiveEnterRef.current
+    pendingImmersiveEnterRef.current = null
+    enter?.()
+  }, [])
+
+  useEffect(() => {
+    const onChange = (event: Event) => {
+      const detail = (event as CustomEvent<TerrainQuality>).detail
+      if (
+        detail === 'high' ||
+        detail === 'standard' ||
+        detail === 'medium' ||
+        detail === 'low'
+      ) {
+        setTerrainQuality(detail)
+        return
+      }
+      setTerrainQuality(loadAppSettings().immersive.terrainQuality)
+    }
+    window.addEventListener(TERRAIN_QUALITY_CHANGE_EVENT, onChange)
+    return () =>
+      window.removeEventListener(TERRAIN_QUALITY_CHANGE_EVENT, onChange)
+  }, [])
+
+  const onTerrainQualityCancel = useCallback(() => {
+    pendingImmersiveEnterRef.current = null
+    setTerrainQualityPromptOpen(false)
+  }, [])
   const [threeDimensional, setThreeDimensional] = useState(
     savedMap.threeDimensional,
   )
@@ -292,23 +361,28 @@ export default function App() {
     installThreeGameTestHooks()
     const api: QaAppApi = {
       enterImmersive: (opts) => {
-        setDate(opts.date)
-        setPlayheadUtcMs(
-          qaUtcForSite(opts.date, opts.lon, opts.localHour),
+        gateImmersiveEnter(
+          () => {
+            setDate(opts.date)
+            setPlayheadUtcMs(
+              qaUtcForSite(opts.date, opts.lon, opts.localHour),
+            )
+            setSpot({
+              lat: opts.lat,
+              lon: opts.lon,
+              heightM: opts.heightM,
+              bearingDeg: opts.bearingDeg,
+              pitchDeg: opts.pitchDeg,
+            })
+            setImmersiveLook({
+              bearingDeg: opts.bearingDeg,
+              pitchDeg: opts.pitchDeg,
+            })
+            setFlatTerrain(Boolean(opts.flatTerrain))
+            setMode('ground')
+          },
+          { flatTerrain: Boolean(opts.flatTerrain) },
         )
-        setSpot({
-          lat: opts.lat,
-          lon: opts.lon,
-          heightM: opts.heightM,
-          bearingDeg: opts.bearingDeg,
-          pitchDeg: opts.pitchDeg,
-        })
-        setImmersiveLook({
-          bearingDeg: opts.bearingDeg,
-          pitchDeg: opts.pitchDeg,
-        })
-        setFlatTerrain(Boolean(opts.flatTerrain))
-        setMode('ground')
       },
       setPlayheadUtcMs,
       setDate,
@@ -322,7 +396,7 @@ export default function App() {
     return () => {
       if (window.__astroQaApp === api) delete window.__astroQaApp
     }
-  }, [mode, spot])
+  }, [mode, spot, gateImmersiveEnter])
 
   useEffect(() => {
     patchAppSettings({
@@ -910,39 +984,41 @@ export default function App() {
         }
       }
 
-      pendingFramingRestoreRef.current = framing.view
-      setActiveFramingId(framing.id)
-      setFramingsEditor(null)
-      setFramingsOpen(false)
-      setMySpotsOpen(false)
-      setDate(framing.localDate)
-      const peakMs = Date.parse(framing.peakUtc)
-      if (Number.isFinite(peakMs)) setPlayheadUtcMs(peakMs)
-      setImmersiveLook({
-        bearingDeg: framing.view.bearingDeg,
-        pitchDeg: framing.view.pitchDeg,
-      })
-      if (linked) {
-        setSelectedPersonalSpotId(linked.id)
-        setSpot({
-          lat: linked.lat,
-          lon: linked.lon,
-          heightM: linked.heightM ?? framing.heightM ?? 0,
-          bearingDeg: framing.view.bearingDeg,
-          pitchDeg: linked.pitchDeg,
-        })
-      } else {
-        setSelectedPersonalSpotId(framing.spotId)
-        setSpot({
-          lat: framing.lat,
-          lon: framing.lon,
-          heightM: framing.heightM ?? 0,
+      gateImmersiveEnter(() => {
+        pendingFramingRestoreRef.current = framing.view
+        setActiveFramingId(framing.id)
+        setFramingsEditor(null)
+        setFramingsOpen(false)
+        setMySpotsOpen(false)
+        setDate(framing.localDate)
+        const peakMs = Date.parse(framing.peakUtc)
+        if (Number.isFinite(peakMs)) setPlayheadUtcMs(peakMs)
+        setImmersiveLook({
           bearingDeg: framing.view.bearingDeg,
           pitchDeg: framing.view.pitchDeg,
         })
-      }
-      setFlatTerrain(false)
-      setMode('ground')
+        if (linked) {
+          setSelectedPersonalSpotId(linked.id)
+          setSpot({
+            lat: linked.lat,
+            lon: linked.lon,
+            heightM: linked.heightM ?? framing.heightM ?? 0,
+            bearingDeg: framing.view.bearingDeg,
+            pitchDeg: linked.pitchDeg,
+          })
+        } else {
+          setSelectedPersonalSpotId(framing.spotId)
+          setSpot({
+            lat: framing.lat,
+            lon: framing.lon,
+            heightM: framing.heightM ?? 0,
+            bearingDeg: framing.view.bearingDeg,
+            pitchDeg: framing.view.pitchDeg,
+          })
+        }
+        setFlatTerrain(false)
+        setMode('ground')
+      })
     },
     [
       personalSpots,
@@ -954,6 +1030,7 @@ export default function App() {
       framingsCalendarMonth,
       framingsFilterSpotId,
       applyFramingInImmersive,
+      gateImmersiveEnter,
     ],
   )
 
@@ -1041,7 +1118,12 @@ export default function App() {
             // Only flip flatTerrain on enter — resetting it on exit remounts
             // the parked same-spot scene and starts a DEM load in the background.
             if (next === 'ground') {
-              setFlatTerrain(Boolean(opts?.flatTerrain))
+              const nextFlat = Boolean(opts?.flatTerrain)
+              gateImmersiveEnter(() => {
+                setFlatTerrain(nextFlat)
+                setMode('ground')
+              }, { flatTerrain: nextFlat })
+              return
             }
             setMode(next)
           }}
@@ -1153,6 +1235,7 @@ export default function App() {
             onTerrainReadyChange={setImmersiveTerrainReady}
             onTimelapsePreviewPlayingChange={setTimelapsePreviewPlaying}
             flatTerrain={flatTerrain}
+            terrainQuality={terrainQuality}
             framingsOpen={framingsOpen}
             onFramingsOpenChange={(open) => {
               setFramingsOpen(open)
@@ -1424,6 +1507,11 @@ export default function App() {
         />
       ) : null}
 
+      <TerrainQualityDialog
+        open={terrainQualityPromptOpen}
+        onChoose={onTerrainQualityChoose}
+        onCancel={onTerrainQualityCancel}
+      />
     </div>
   )
 }

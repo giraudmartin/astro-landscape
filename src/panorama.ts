@@ -304,3 +304,21 @@ export function panoramaHeadRangeDeg(input: {
     pitchEndDeg: clampPitch(input.centerPitchDeg - midR * stepPitch),
   }
 }
+
+/**
+ * Wall-clock capture length for a multi-shot panorama.
+ * Interval = seconds between successive exposure starts (same as Timelapse).
+ * Last shot still needs its full pose after the final trigger.
+ */
+export function panoramaCaptureDurationS(
+  shotCount: number,
+  poseS: number,
+  intervalS: number,
+): number {
+  const n = Math.max(0, Math.floor(shotCount))
+  if (n <= 0) return 0
+  const pose = Math.max(0, poseS)
+  const interval = Math.max(pose, intervalS)
+  if (n === 1) return pose
+  return (n - 1) * interval + pose
+}

@@ -24,16 +24,41 @@ export const en = {
     weekdaysMed: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   },
 
+  terrainQuality: {
+    approxMb: '~{mb} MB',
+    level: {
+      high: 'High',
+      highHint: 'Max relief and ortho — full-frame detail',
+      standard: 'Standard',
+      standardHint: 'Same coverage, one step coarser DEM / ortho',
+      medium: 'Medium',
+      mediumHint: 'Balanced quality / data use',
+      low: 'Data saver',
+      lowHint: 'Readable horizon, coarser textures',
+    },
+    dialog: {
+      title: 'Slow connection detected',
+      body: 'Immersive terrain downloads a lot of tiles. Pick a quality before launching the 3D view. Sizes are a multi-site average.',
+      suggested: 'Suggested',
+      footnote: 'You can change this later in Scene settings → Quality.',
+    },
+  },
+
   settings: {
     title: 'Settings',
     navAria: 'Settings sections',
     section: {
       about: 'About',
+      quality: 'Quality',
       attributions: 'Attributions',
       privacy: 'Privacy',
       language: 'Language',
     },
     bugReport: 'Report a bug',
+    quality: {
+      label: 'Immersive terrain quality',
+      hint: 'Applied on the next Three.js load. Average ~{mb} MB (varies by place: Alps often more, desert less).',
+    },
     language: {
       label: 'Interface language',
       fr: 'Français',
@@ -454,6 +479,7 @@ export const en = {
   immersive: {
     terrain: {
       eyebrow: 'Terrain',
+      qualityLine: '{quality} · ~{mb} MB',
       ready: 'View ready',
       cache: 'Terrain (cache)…',
       phase: {
@@ -627,6 +653,10 @@ export const en = {
       rangeAlt: 'Altitude',
       rangeHint:
         'Head angles from the first shot (top-left) to the last (bottom-right) — enter these on a motorized head (e.g. Benro Polaris).',
+      captureTime: 'Duration',
+      captureTimeTip:
+        'Estimated capture time (exposure + interval, shared with Timelapse).',
+      captureTimeBasis: 'exposure {pose} s · interval {interval} s',
       columns: 'Columns',
       rows: 'Rows',
       lessCols: 'Fewer columns',
@@ -696,12 +726,20 @@ export const en = {
     scene: {
       title: 'Scene settings',
       muted: 'Settings',
+      quality: 'Quality',
+      qualityHint: 'Terrain data · DEM / ortho',
       landscape: 'Landscape',
       landscapeHint: 'Brightness, contrast, temperature, tint',
       sky: 'Sky',
       skyHint: 'Atmosphere, stars, pollution',
       weather: 'Weather',
       weatherHint: 'Clouds and coverage',
+    },
+    quality: {
+      title: 'Quality',
+      settingsTitle: 'Terrain quality',
+      section: 'Terrain download',
+      hint: 'Reloads the relief. Sizes are a multi-site cold-load average. The Alps can exceed the average.',
     },
     landscape: {
       title: 'Landscape',
@@ -730,6 +768,8 @@ export const en = {
       },
       moonlight: 'Moonlight',
       moonlightTip: 'Lighting of the sky and clouds by the Moon',
+      trajectories: 'Moon / Sun trajectories',
+      trajectoriesTip: 'Civil-day arcs for the Moon and the Sun',
       atmosphere: 'Atmosphere',
       atmosphereAria: 'Amount of atmosphere',
       atmosphereTip: '0 = space / stars only; 1 = full Rayleigh sky',

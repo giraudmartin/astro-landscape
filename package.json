@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "lint": "oxlint",
     "preview": "vite preview",
-    "qa:stereo": "node scripts/qa-stereo-evidence.mjs"
+    "qa:stereo": "node scripts/qa-stereo-evidence.mjs",
+    "measure:terrain-download": "node scripts/measure-terrain-download.mjs"
   },
   "dependencies": {
     "@takram/three-clouds": "^0.7.6",

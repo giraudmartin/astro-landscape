@@ -26,16 +26,41 @@ export const fr = {
     weekdaysMed: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
   },
 
+  terrainQuality: {
+    approxMb: '~{mb} Mo',
+    level: {
+      high: 'Élevée',
+      highHint: 'Relief et ortho max — détail plein cadre',
+      standard: 'Standard',
+      standardHint: 'Même couverture, DEM / ortho un cran plus grossiers',
+      medium: 'Moyenne',
+      mediumHint: 'Bon compromis qualité / données',
+      low: 'Économique',
+      lowHint: 'Horizon lisible, textures plus grossières',
+    },
+    dialog: {
+      title: 'Connexion lente détectée',
+      body: 'Le terrain immersif télécharge beaucoup de tuiles. Choisis une qualité avant de lancer la vue 3D. Volumes = moyenne multi-sites.',
+      suggested: 'Recommandé',
+      footnote: 'Tu pourras changer ça plus tard dans Réglages scène → Qualité.',
+    },
+  },
+
   settings: {
     title: 'Paramètres',
     navAria: 'Sections des paramètres',
     section: {
       about: 'À propos',
+      quality: 'Qualité',
       attributions: 'Attributions',
       privacy: 'Confidentialité',
       language: 'Langue',
     },
     bugReport: 'Signaler un bug',
+    quality: {
+      label: 'Qualité du terrain immersif',
+      hint: 'Appliqué au prochain chargement Three.js. Moyenne ~{mb} Mo (varie selon le lieu : Alpes souvent plus, désert moins).',
+    },
     language: {
       label: 'Langue de l’interface',
       fr: 'Français',
@@ -461,6 +486,7 @@ export const fr = {
   immersive: {
     terrain: {
       eyebrow: 'Terrain',
+      qualityLine: '{quality} · ~{mb} Mo',
       ready: 'Vue prête',
       cache: 'Relief (cache)…',
       phase: {
@@ -635,6 +661,10 @@ export const fr = {
       rangeAlt: 'Hauteur',
       rangeHint:
         'Angles tête de la 1ʳᵉ vue (haut-gauche) à la dernière (bas-droite) — à saisir sur une tête motorisée (ex. Benro Polaris).',
+      captureTime: 'Durée',
+      captureTimeTip:
+        'Temps de prise de vue estimé (pose + intervalle, partagé avec Timelapse).',
+      captureTimeBasis: 'pose {pose} s · intervalle {interval} s',
       columns: 'Colonnes',
       rows: 'Lignes',
       lessCols: 'Moins de colonnes',
@@ -705,12 +735,20 @@ export const fr = {
     scene: {
       title: 'Réglages scène',
       muted: 'Réglages',
+      quality: 'Qualité',
+      qualityHint: 'Données terrain · DEM / ortho',
       landscape: 'Paysage',
       landscapeHint: 'Luminosité, contraste, température, teinte',
       sky: 'Ciel',
       skyHint: 'Atmosphère, étoiles, pollution',
       weather: 'Météo',
       weatherHint: 'Nuages et couverture',
+    },
+    quality: {
+      title: 'Qualité',
+      settingsTitle: 'Qualité du terrain',
+      section: 'Téléchargement terrain',
+      hint: 'Recharge le relief. Volumes = moyenne multi-sites (cold load). Les Alpes peuvent dépasser la moyenne.',
     },
     landscape: {
       title: 'Paysage',
@@ -740,6 +778,8 @@ export const fr = {
       },
       moonlight: 'Clair de lune',
       moonlightTip: 'Éclairage du ciel et des nuages par la Lune',
+      trajectories: 'Trajectoires Lune / Soleil',
+      trajectoriesTip: 'Arcs du jour civil pour la Lune et le Soleil',
       atmosphere: 'Atmosphère',
       atmosphereAria: 'Quantité d’atmosphère',
       atmosphereTip: '0 = espace / étoiles seules ; 1 = ciel Rayleigh complet',

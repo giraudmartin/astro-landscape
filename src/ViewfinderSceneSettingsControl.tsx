@@ -12,11 +12,19 @@ import {
   ViewfinderWeatherControl,
   type WeatherControls,
 } from './ViewfinderWeatherControl'
+import { ViewfinderQualityControl } from './ViewfinderQualityControl'
 import type { ViewfinderWeather } from './viewfinderWeather'
+import type { TerrainQuality } from './terrainQuality'
 
-type ScenePanelId = 'landscape' | 'sky' | 'weather'
+type ScenePanelId = 'landscape' | 'sky' | 'weather' | 'quality'
 
 type ViewfinderSceneSettingsControlProps = {
+  /** Sky-flat / sans DEM — Qualité, Paysage, and local-halo controls are hidden. */
+  flatTerrain?: boolean
+  quality: {
+    value: TerrainQuality
+    onChange: (quality: TerrainQuality) => void
+  }
   landscape: {
     brightness: number
     contrast: number
@@ -31,6 +39,8 @@ type ViewfinderSceneSettingsControlProps = {
     atmosphereAmount: number
     moonlightEnabled: boolean
     onMoonlightChange: (enabled: boolean) => void
+    showTrajectories: boolean
+    onShowTrajectoriesChange: (enabled: boolean) => void
     airglowAmount: number
     airglowHue: number
     airglowWaves: number
@@ -60,13 +70,20 @@ type ViewfinderSceneSettingsControlProps = {
   }
 }
 
-const PANEL_IDS: ReadonlyArray<ScenePanelId> = ['landscape', 'sky', 'weather']
+const PANEL_IDS: ReadonlyArray<ScenePanelId> = [
+  'quality',
+  'landscape',
+  'sky',
+  'weather',
+]
 
 /**
- * Single Réglages trigger → menu card with Paysage / Ciel / Météo, each
- * opening the existing floating settings panel.
+ * Single Réglages trigger → menu card with Qualité / Paysage / Ciel / Météo,
+ * each opening the existing floating settings panel.
  */
 export function ViewfinderSceneSettingsControl({
+  flatTerrain = false,
+  quality,
   landscape,
   sky,
   weather,
@@ -76,7 +93,19 @@ export function ViewfinderSceneSettingsControl({
   const [panel, setPanel] = useState<ScenePanelId | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const menuId = useId()
+  const visiblePanelIds = flatTerrain
+    ? PANEL_IDS.filter((id) => id !== 'landscape' && id !== 'quality')
+    : PANEL_IDS
   const anyPanelOpen = panel != null
+
+  useEffect(() => {
+    if (
+      flatTerrain &&
+      (panel === 'landscape' || panel === 'quality')
+    ) {
+      setPanel(null)
+    }
+  }, [flatTerrain, panel])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -136,7 +165,7 @@ export function ViewfinderSceneSettingsControl({
           role="menu"
           aria-label={t('viewfinder.scene.title')}
         >
-          {PANEL_IDS.map((id) => {
+          {visiblePanelIds.map((id) => {
             const selected = panel === id
             const label = t(`viewfinder.scene.${id}`)
             const hint = t(`viewfinder.scene.${id}Hint`)
@@ -163,15 +192,28 @@ export function ViewfinderSceneSettingsControl({
         </div>
       ) : null}
 
-      <ViewfinderLandscapeControl
-        {...landscape}
-        open={panel === 'landscape'}
-        onOpenChange={(next) => setPanel(next ? 'landscape' : null)}
-        showTrigger={false}
-        anchorRef={rootRef}
-      />
+      {!flatTerrain ? (
+        <ViewfinderQualityControl
+          quality={quality.value}
+          onQualityChange={quality.onChange}
+          open={panel === 'quality'}
+          onOpenChange={(next) => setPanel(next ? 'quality' : null)}
+          showTrigger={false}
+          anchorRef={rootRef}
+        />
+      ) : null}
+      {!flatTerrain ? (
+        <ViewfinderLandscapeControl
+          {...landscape}
+          open={panel === 'landscape'}
+          onOpenChange={(next) => setPanel(next ? 'landscape' : null)}
+          showTrigger={false}
+          anchorRef={rootRef}
+        />
+      ) : null}
       <ViewfinderSkyControl
         {...sky}
+        flatTerrain={flatTerrain}
         open={panel === 'sky'}
         onOpenChange={(next) => setPanel(next ? 'sky' : null)}
         showTrigger={false}

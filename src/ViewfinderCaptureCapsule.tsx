@@ -51,6 +51,9 @@ type ViewfinderCaptureCapsuleProps = {
   timelapse: TimelapsePlan
   opticalHFovDeg: number
   opticalVFovDeg: number
+  /** Framing centre for panorama start/end head angles. */
+  framingYawDeg?: number
+  framingPitchDeg?: number
   onFocalMmChange: (mm: number) => void
   onOrientationChange: (orientation: ViewfinderOrientation) => void
   onFrameRollChange: (deg: number) => void
@@ -79,6 +82,8 @@ export function ViewfinderCaptureCapsule({
   timelapse,
   opticalHFovDeg,
   opticalVFovDeg,
+  framingYawDeg,
+  framingPitchDeg,
   onFocalMmChange,
   onOrientationChange,
   onFrameRollChange,
@@ -106,8 +111,9 @@ export function ViewfinderCaptureCapsule({
 
   useEffect(() => {
     if (!settingsPanel) return
-    // Timelapse stays open while framing — dismiss via X, Escape, or mode switch.
-    if (settingsPanel === 'timelapse') return
+    // Pano + Timelapse stay open while framing the view (live az/alt, preview).
+    // Dismiss via X, Escape, or mode switch — not by dragging the stage.
+    if (settingsPanel === 'timelapse' || settingsPanel === 'pano') return
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null
       if (!target) return
@@ -292,6 +298,13 @@ export function ViewfinderCaptureCapsule({
         plan={panorama}
         opticalHFovDeg={opticalHFovDeg}
         opticalVFovDeg={opticalVFovDeg}
+        framingYawDeg={framingYawDeg}
+        framingPitchDeg={framingPitchDeg}
+        poseS={timelapse.poseS}
+        intervalS={timelapse.intervalS}
+        onCaptureTimingChange={({ poseS, intervalS }) =>
+          onTimelapseChange({ ...timelapse, poseS, intervalS })
+        }
         onChange={onPanoramaChange}
         focalMm={focalMm}
         orientation={orientation}

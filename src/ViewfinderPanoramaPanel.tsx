@@ -3,6 +3,7 @@ import {
   clampPanoramaCount,
   clampPanoramaOverlap,
   maxPanoramaCountForCoverage,
+  panoramaCaptureDurationS,
   panoramaCoverageDeg,
   panoramaHeadRangeDeg,
   panoramaShotCount,
@@ -15,6 +16,14 @@ import {
   type PanoramaPlan,
   type PanoramaProjectionMode,
 } from './panorama'
+import {
+  clampTimelapseIntervalS,
+  clampTimelapsePoseS,
+  formatTimelapseVideoSeconds,
+  TIMELAPSE_INTERVAL_MAX_S,
+  TIMELAPSE_POSE_MAX_S,
+  TIMELAPSE_POSE_MIN_S,
+} from './timelapse'
 import { useT } from './i18n'
 import type { ViewfinderOrientation } from './lensFov'
 import {
@@ -45,6 +54,12 @@ type ViewfinderPanoramaPanelProps = {
    */
   framingYawDeg?: number
   framingPitchDeg?: number
+  /** Exposure length (s) — shared with the Timelapse plan. */
+  poseS?: number
+  /** Seconds between successive exposure starts. */
+  intervalS?: number
+  /** Persist pose / interval (updates the shared Timelapse plan). */
+  onCaptureTimingChange?: (next: { poseS: number; intervalS: number }) => void
 }
 
 /**
@@ -64,6 +79,9 @@ export function ViewfinderPanoramaPanel({
   onEditCamera,
   framingYawDeg,
   framingPitchDeg,
+  poseS,
+  intervalS,
+  onCaptureTimingChange,
 }: ViewfinderPanoramaPanelProps) {
   const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -126,6 +144,41 @@ export function ViewfinderPanoramaPanel({
     const n = Math.round(deg)
     if (n > 0) return `+${n}°`
     return `${n}°`
+  }
+  const poseValue =
+    poseS != null && Number.isFinite(poseS) ? clampTimelapsePoseS(poseS) : null
+  const intervalValue =
+    poseValue != null && intervalS != null && Number.isFinite(intervalS)
+      ? clampTimelapseIntervalS(intervalS, poseValue)
+      : null
+  const captureTimingEditable =
+    poseValue != null &&
+    intervalValue != null &&
+    onCaptureTimingChange != null
+  const captureDurationS =
+    poseValue != null && intervalValue != null
+      ? panoramaCaptureDurationS(shots, poseValue, intervalValue)
+      : null
+  const captureDurationLabel =
+    captureDurationS != null
+      ? formatTimelapseVideoSeconds(captureDurationS)
+      : null
+
+  const patchCaptureTiming = (partial: {
+    poseS?: number
+    intervalS?: number
+  }) => {
+    if (!captureTimingEditable || poseValue == null || intervalValue == null) {
+      return
+    }
+    const nextPose = clampTimelapsePoseS(partial.poseS ?? poseValue)
+    onCaptureTimingChange({
+      poseS: nextPose,
+      intervalS: clampTimelapseIntervalS(
+        partial.intervalS ?? intervalValue,
+        nextPose,
+      ),
+    })
   }
 
   useEffect(() => {
@@ -266,9 +319,6 @@ export function ViewfinderPanoramaPanel({
               <b>{formatAlt(headRange.pitchEndDeg)}</b>
             </span>
           </div>
-          <p className="vf-pano-pop__extent-hint">
-            {t('viewfinder.pano.rangeHint')}
-          </p>
         </div>
       ) : null}
 
@@ -467,6 +517,90 @@ export function ViewfinderPanoramaPanel({
         </div>
       </div>
 
+      {captureTimingEditable && poseValue != null && intervalValue != null ? (
+        <div className="vf-pano-pop__capture">
+          <div className="vf-camera-pop__twocol">
+            <div className="vf-camera-pop__field">
+              <span className="vf-camera-pop__label">
+                {t('viewfinder.tlapse.pose')}
+              </span>
+              <div className="moon-preview-stepper">
+                <button
+                  type="button"
+                  aria-label={t('viewfinder.tlapse.stepDec', {
+                    label: t('viewfinder.tlapse.poseAria'),
+                  })}
+                  disabled={poseValue <= TIMELAPSE_POSE_MIN_S}
+                  onClick={() => patchCaptureTiming({ poseS: poseValue - 1 })}
+                >
+                  −
+                </button>
+                <output aria-label={t('viewfinder.tlapse.poseAria')}>
+                  {poseValue}
+                </output>
+                <button
+                  type="button"
+                  aria-label={t('viewfinder.tlapse.stepInc', {
+                    label: t('viewfinder.tlapse.poseAria'),
+                  })}
+                  disabled={poseValue >= TIMELAPSE_POSE_MAX_S}
+                  onClick={() => patchCaptureTiming({ poseS: poseValue + 1 })}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="vf-camera-pop__field">
+              <span className="vf-camera-pop__label">
+                {t('viewfinder.tlapse.interval')}
+              </span>
+              <div className="moon-preview-stepper">
+                <button
+                  type="button"
+                  aria-label={t('viewfinder.tlapse.stepDec', {
+                    label: t('viewfinder.tlapse.intervalAria'),
+                  })}
+                  disabled={intervalValue <= poseValue}
+                  onClick={() =>
+                    patchCaptureTiming({ intervalS: intervalValue - 1 })
+                  }
+                >
+                  −
+                </button>
+                <output aria-label={t('viewfinder.tlapse.intervalAria')}>
+                  {intervalValue}
+                </output>
+                <button
+                  type="button"
+                  aria-label={t('viewfinder.tlapse.stepInc', {
+                    label: t('viewfinder.tlapse.intervalAria'),
+                  })}
+                  disabled={intervalValue >= TIMELAPSE_INTERVAL_MAX_S}
+                  onClick={() =>
+                    patchCaptureTiming({ intervalS: intervalValue + 1 })
+                  }
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {captureDurationLabel ? (
+            <div
+              className="vf-pano-pop__capture-total"
+              title={t('viewfinder.pano.captureTimeTip')}
+            >
+              <span className="vf-camera-pop__label">
+                {t('viewfinder.pano.captureTime')}
+              </span>
+              <b>≈ {captureDurationLabel}</b>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {onEditCamera ? (
         <button
           type="button"
@@ -477,10 +611,6 @@ export function ViewfinderPanoramaPanel({
           {t('viewfinder.pano.editCamera')}
         </button>
       ) : null}
-
-      <p className="vf-camera-pop__hint">
-        {t('viewfinder.pano.hint')}
-      </p>
     </div>
   )
 

@@ -8,11 +8,23 @@ import {
 } from './aboutMe'
 import { APP_ATTRIBUTIONS } from './attributions'
 import { APP_COPYRIGHT, APP_NAME, APP_VERSION } from './appMeta'
+import { loadAppSettings, patchAppSettings } from './appSettings'
 import { BugReportCard } from './BugReportCard'
 import { LOCALES, useLocale } from './i18n'
 import { APP_PRIVACY_POINTS } from './privacy'
+import { getApproxTerrainDownloadMb } from './terrainDownloadEstimate'
+import {
+  emitTerrainQualityChange,
+  TERRAIN_QUALITY_IDS,
+  type TerrainQuality,
+} from './terrainQuality'
 
-type SettingsSection = 'language' | 'about' | 'attributions' | 'privacy'
+type SettingsSection =
+  | 'language'
+  | 'quality'
+  | 'about'
+  | 'attributions'
+  | 'privacy'
 
 const SETTINGS_SECTIONS: readonly {
   id: SettingsSection
@@ -20,6 +32,7 @@ const SETTINGS_SECTIONS: readonly {
   labelKey: string
 }[] = [
   { id: 'about', labelKey: 'settings.section.about' },
+  { id: 'quality', labelKey: 'settings.section.quality' },
   { id: 'attributions', labelKey: 'settings.section.attributions' },
   { id: 'privacy', labelKey: 'settings.section.privacy' },
   { id: 'language', labelKey: 'settings.section.language' },
@@ -92,16 +105,23 @@ export function MapSettingsPanel() {
   const [section, setSection] = useState<SettingsSection>('about')
   const [bugReportOpen, setBugReportOpen] = useState(false)
   const [langMenuOpen, setLangMenuOpen] = useState(false)
+  const [qualityMenuOpen, setQualityMenuOpen] = useState(false)
+  const [terrainQuality, setTerrainQuality] = useState<TerrainQuality>(
+    () => loadAppSettings().immersive.terrainQuality,
+  )
   const titleId = useId()
   const langLabelId = useId()
+  const qualityLabelId = useId()
   const closeRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const langMenuRef = useRef<HTMLDivElement>(null)
+  const qualityMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) {
       setLangMenuOpen(false)
+      setQualityMenuOpen(false)
       return
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -111,11 +131,15 @@ export function MapSettingsPanel() {
         setLangMenuOpen(false)
         return
       }
+      if (qualityMenuOpen) {
+        setQualityMenuOpen(false)
+        return
+      }
       setOpen(false)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, langMenuOpen])
+  }, [open, langMenuOpen, qualityMenuOpen])
 
   useEffect(() => {
     if (!langMenuOpen) return
@@ -129,6 +153,17 @@ export function MapSettingsPanel() {
   }, [langMenuOpen])
 
   useEffect(() => {
+    if (!qualityMenuOpen) return
+    const onPointerDown = (event: PointerEvent) => {
+      const root = qualityMenuRef.current
+      if (!root || root.contains(event.target as Node)) return
+      setQualityMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown, true)
+    return () => window.removeEventListener('pointerdown', onPointerDown, true)
+  }, [qualityMenuOpen])
+
+  useEffect(() => {
     if (!open) return
     closeRef.current?.focus()
   }, [open])
@@ -136,6 +171,8 @@ export function MapSettingsPanel() {
   useEffect(() => {
     if (!open) return
     setLangMenuOpen(false)
+    setQualityMenuOpen(false)
+    setTerrainQuality(loadAppSettings().immersive.terrainQuality)
     contentRef.current?.scrollTo({ top: 0 })
   }, [open, section])
 
@@ -311,6 +348,101 @@ export function MapSettingsPanel() {
                           </details>
                         ))}
                       </div>
+                    </div>
+                  ) : null}
+
+                  {section === 'quality' ? (
+                    <div className="settings-panel__section">
+                      <span
+                        className="settings-panel__lang-label"
+                        id={qualityLabelId}
+                      >
+                        {t('settings.quality.label')}
+                      </span>
+                      <div
+                        className="moon-preview-select-wrap settings-panel__lang-wrap"
+                        ref={qualityMenuRef}
+                      >
+                        <button
+                          type="button"
+                          className="moon-preview-select-trigger"
+                          aria-labelledby={qualityLabelId}
+                          aria-haspopup="listbox"
+                          aria-expanded={qualityMenuOpen}
+                          onClick={() =>
+                            setQualityMenuOpen((value) => !value)
+                          }
+                        >
+                          <span>
+                            {t(`terrainQuality.level.${terrainQuality}`)}
+                          </span>
+                          <svg
+                            viewBox="0 0 16 16"
+                            width="12"
+                            height="12"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M4 6l4 4 4-4"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                        {qualityMenuOpen ? (
+                          <ul
+                            className="moon-preview-select-menu moon-preview-select-menu--down"
+                            role="listbox"
+                            aria-labelledby={qualityLabelId}
+                          >
+                            {TERRAIN_QUALITY_IDS.map((id) => {
+                              const active = id === terrainQuality
+                              const mb = getApproxTerrainDownloadMb(id)
+                              return (
+                                <li key={id} role="none">
+                                  <button
+                                    type="button"
+                                    role="option"
+                                    aria-selected={active}
+                                    className={
+                                      active
+                                        ? 'moon-preview-select-option moon-preview-select-option--active'
+                                        : 'moon-preview-select-option'
+                                    }
+                                    onClick={() => {
+                                      setTerrainQuality(id)
+                                      patchAppSettings({
+                                        immersive: {
+                                          terrainQuality: id,
+                                          terrainQualityChosen: true,
+                                        },
+                                      })
+                                      emitTerrainQualityChange(id)
+                                      setQualityMenuOpen(false)
+                                    }}
+                                  >
+                                    {t(`terrainQuality.level.${id}`)}
+                                    {' · '}
+                                    {t('terrainQuality.approxMb', {
+                                      mb: String(mb),
+                                    })}
+                                  </button>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        ) : null}
+                      </div>
+                      <p className="settings-panel__hint">
+                        {t('settings.quality.hint', {
+                          mb: String(
+                            getApproxTerrainDownloadMb(terrainQuality),
+                          ),
+                        })}
+                      </p>
                     </div>
                   ) : null}
 

@@ -68,9 +68,13 @@ export type LocalHaloControls = {
 }
 
 type ViewfinderSkyControlProps = {
+  /** Sky-flat / sans DEM — local-halo controls (relief-screened) are hidden. */
+  flatTerrain?: boolean
   atmosphereAmount: number
   moonlightEnabled: boolean
   onMoonlightChange: (enabled: boolean) => void
+  showTrajectories: boolean
+  onShowTrajectoriesChange: (enabled: boolean) => void
   airglowAmount: number
   airglowHue: number
   airglowWaves: number
@@ -134,9 +138,12 @@ type SkyPanelBodyProps = Omit<
 >
 
 function SkyPanelBody({
+  flatTerrain = false,
   atmosphereAmount,
   moonlightEnabled,
   onMoonlightChange,
+  showTrajectories,
+  onShowTrajectoriesChange,
   airglowAmount,
   airglowHue,
   airglowWaves,
@@ -161,7 +168,7 @@ function SkyPanelBody({
 }: SkyPanelBodyProps) {
   const t = useT()
   const showAirglowDetails = airglowAmount > 0.001
-  const showHaloDetails = localHalo.enabled
+  const showHaloDetails = !flatTerrain && localHalo.enabled
 
   return (
     <>
@@ -173,6 +180,17 @@ function SkyPanelBody({
           <input type="checkbox" checked={moonlightEnabled}
             onChange={(event) => onMoonlightChange(event.target.checked)}
             title={t('viewfinder.sky.moonlightTip')} />
+        </label>
+        <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
+          <span className="vf-landscape-menu__label">
+            {t('viewfinder.sky.trajectories')}
+          </span>
+          <input
+            type="checkbox"
+            checked={showTrajectories}
+            onChange={(event) => onShowTrajectoriesChange(event.target.checked)}
+            title={t('viewfinder.sky.trajectoriesTip')}
+          />
         </label>
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
@@ -362,19 +380,21 @@ function SkyPanelBody({
           />
         </label>
 
-        <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
-          <span className="vf-landscape-menu__label">
-            <span>{t('viewfinder.sky.localHalos')}</span>
-          </span>
-          <input
-            type="checkbox"
-            checked={localHalo.enabled}
-            title={t('viewfinder.sky.localHalosTip')}
-            onChange={(event) =>
-              onLocalHaloChange({ enabled: event.target.checked })
-            }
-          />
-        </label>
+        {!flatTerrain ? (
+          <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
+            <span className="vf-landscape-menu__label">
+              <span>{t('viewfinder.sky.localHalos')}</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={localHalo.enabled}
+              title={t('viewfinder.sky.localHalosTip')}
+              onChange={(event) =>
+                onLocalHaloChange({ enabled: event.target.checked })
+              }
+            />
+          </label>
+        ) : null}
 
         {showHaloDetails ? (
           <>

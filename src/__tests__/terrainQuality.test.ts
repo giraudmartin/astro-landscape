@@ -39,14 +39,14 @@ describe('getTerrainQualityPreset', () => {
 describe('getApproxTerrainDownloadMb', () => {
   it('keeps multi-site cold-load averages ordered high > medium > low', () => {
     expect(TERRAIN_DOWNLOAD_DEFAULT_MB).toEqual({
-      high: 260,
+      high: 220,
       standard: 110,
-      medium: 50,
+      medium: 40,
       low: 15,
     })
-    expect(getApproxTerrainDownloadMb('high')).toBe(260)
+    expect(getApproxTerrainDownloadMb('high')).toBe(220)
     expect(getApproxTerrainDownloadMb('standard')).toBe(110)
-    expect(getApproxTerrainDownloadMb('medium')).toBe(50)
+    expect(getApproxTerrainDownloadMb('medium')).toBe(40)
     expect(getApproxTerrainDownloadMb('low')).toBe(15)
     expect(getApproxTerrainDownloadMb('high')).toBeGreaterThan(
       getApproxTerrainDownloadMb('standard'),

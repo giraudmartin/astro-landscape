@@ -13,11 +13,14 @@ import type { TerrainQuality } from './terrainQuality'
  * Per-spot high examples from the last run: Hawaii ~185, Atacama ~193,
  * Chamonix/Alps ~320–325, Patagonia ~360, Alaska ~730.
  */
+/**
+ * Mid-lat median from `npm run measure:terrain-download` (8 spots, alpine
+ * Esri floor). Chamonix ≈ 330 / 165 / 60 / 15 — Alaska can be 2–3× higher.
+ */
 export const TERRAIN_DOWNLOAD_DEFAULT_MB: Record<TerrainQuality, number> = {
-  high: 260,
-  /** Same disks as high, coarser ortho; Chamonix ~160 Mo. */
+  high: 220,
   standard: 110,
-  medium: 50,
+  medium: 40,
   low: 15,
 }
 

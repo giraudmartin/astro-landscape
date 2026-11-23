@@ -128,6 +128,7 @@ export const en = {
       toggleOn: 'Hide the light pollution heatmap',
       toggleOff: 'Show the light pollution heatmap',
       title: 'Light pollution heatmap',
+      loading: 'Loading light pollution…',
       opacityAria: 'Heatmap opacity',
       opacityTitle: 'Opacity {pct}%',
       opacityValueText: '{pct} percent',

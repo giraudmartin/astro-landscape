@@ -1204,6 +1204,19 @@ html.is-rail-resizing .my-events-rail {
   color: var(--map-control-primary-muted);
 }
 
+.pl-heatmap-control--loading {
+  color: var(--map-control-primary-muted);
+  cursor: wait;
+}
+
+.pl-heatmap-control--loading .pl-heatmap-control__toggle {
+  cursor: wait;
+}
+
+.pl-heatmap-control--loading .pl-heatmap-control__toggle svg {
+  animation: map-basemap-applying 900ms ease-in-out infinite;
+}
+
 .pl-heatmap-control__toggle {
   display: grid;
   place-items: center;
@@ -1625,6 +1638,11 @@ html.is-rail-resizing .my-events-rail {
 @media (prefers-reduced-motion: reduce) {
   .map-quick-actions__button[data-clicked='true'] svg {
     animation: none;
+  }
+
+  .pl-heatmap-control--loading .pl-heatmap-control__toggle svg {
+    animation: none;
+    opacity: 0.55;
   }
 }
 

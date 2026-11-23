@@ -130,6 +130,7 @@ export const fr = {
       toggleOn: 'Masquer la heatmap pollution lumineuse',
       toggleOff: 'Afficher la heatmap pollution lumineuse',
       title: 'Heatmap pollution lumineuse',
+      loading: 'Chargement de la pollution lumineuse…',
       opacityAria: 'Opacité de la heatmap',
       opacityTitle: 'Opacité {pct}%',
       opacityValueText: '{pct} pour cent',

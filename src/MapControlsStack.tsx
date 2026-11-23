@@ -22,6 +22,8 @@ type MapControlsStackProps = {
   basemapApplying: boolean
   onBasemapModeChange: (next: BasemapMode) => void
   plHeatmapEnabled: boolean
+  /** True while PL tiles are loading before the first reveal. */
+  plHeatmapLoading?: boolean
   plHeatmapOpacity: number
   onPlHeatmapEnabledChange: (next: boolean) => void
   onPlHeatmapOpacityChange: (next: number) => void
@@ -44,6 +46,7 @@ export function MapControlsStack({
   basemapApplying,
   onBasemapModeChange,
   plHeatmapEnabled,
+  plHeatmapLoading = false,
   plHeatmapOpacity,
   onPlHeatmapEnabledChange,
   onPlHeatmapOpacityChange,
@@ -190,6 +193,7 @@ export function MapControlsStack({
 
       <PlHeatmapControl
         enabled={plHeatmapEnabled}
+        loading={plHeatmapLoading}
         opacity={plHeatmapOpacity}
         onEnabledChange={onPlHeatmapEnabledChange}
         onOpacityChange={onPlHeatmapOpacityChange}

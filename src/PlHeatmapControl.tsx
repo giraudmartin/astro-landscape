@@ -10,6 +10,8 @@ import { useT } from './i18n'
 
 type PlHeatmapControlProps = {
   enabled: boolean
+  /** True while the heatmap is fetching tiles before the first reveal. */
+  loading?: boolean
   opacity: number
   onEnabledChange: (next: boolean) => void
   /** Live drag updates (may be coalesced upstream). */
@@ -47,6 +49,7 @@ export function opacityFromTrackClientY(
 /** Standalone control below the map button group — toggle + vertical opacity. */
 export function PlHeatmapControl({
   enabled,
+  loading = false,
   opacity,
   onEnabledChange,
   onOpacityChange,
@@ -149,26 +152,34 @@ export function PlHeatmapControl({
     }
   }
 
+  const className = [
+    'pl-heatmap-control',
+    enabled ? 'pl-heatmap-control--on' : '',
+    loading ? 'pl-heatmap-control--loading' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
     <div
-      className={
-        enabled
-          ? 'pl-heatmap-control pl-heatmap-control--on'
-          : 'pl-heatmap-control'
-      }
+      className={className}
       style={{ ['--pl-t' as string]: String(t) }}
     >
       <button
         type="button"
         className="pl-heatmap-control__toggle"
         data-pl-heatmap-toggle=""
+        data-loading={loading ? 'true' : undefined}
         aria-pressed={enabled}
+        aria-busy={loading}
         aria-label={
-          enabled
-            ? tr('map.pl.toggleOn')
-            : tr('map.pl.toggleOff')
+          loading
+            ? tr('map.pl.loading')
+            : enabled
+              ? tr('map.pl.toggleOn')
+              : tr('map.pl.toggleOff')
         }
-        title={tr('map.pl.title')}
+        title={loading ? tr('map.pl.loading') : tr('map.pl.title')}
         onClick={() => onEnabledChange(!enabled)}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">

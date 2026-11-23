@@ -566,7 +566,8 @@ export function ImmersiveView({
     useState<CompositionGuideMode>(savedImmersive.compositionGuide)
   const [weatherSettings, setWeatherSettings] = useState<ViewfinderWeather>(
     () => ({
-      enabled: savedImmersive.weatherEnabled,
+      // Always start with weather off when entering Three.js — never restore on.
+      enabled: false,
       animateClouds: savedImmersive.weatherAnimateClouds,
       wind: savedImmersive.weatherWind ?? DEFAULT_VIEWFINDER_WEATHER.wind,
       followForecast: savedImmersive.weatherFollowForecast,

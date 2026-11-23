@@ -30,13 +30,16 @@ import { ensurePlMapOverlayProtocol } from './lightPollution/plMapOverlayProtoco
 import {
   applyPlMapOverlay,
   getPlHeatmapEnabledForMap,
+  isPlMapOverlaySourceReady,
   PL_HEATMAP_ENABLE_ZOOM,
   PL_HEATMAP_MIN_ZOOM,
   PL_MAP_OVERLAY_ATTRIBUTION,
+  PL_MAP_OVERLAY_FADE_MS,
   PL_MAP_OVERLAY_LAYER_ID,
   PL_MAP_OVERLAY_MAX_ZOOM,
   PL_MAP_OVERLAY_MIN_ZOOM,
   PL_MAP_OVERLAY_OPACITY_DEFAULT,
+  PL_MAP_OVERLAY_REVEAL_TIMEOUT_MS,
   PL_MAP_OVERLAY_SOURCE_ID,
   PL_MAP_OVERLAY_TILE_URL,
   setPlMapOverlayOpacity,
@@ -280,7 +283,8 @@ function buildStyle(): StyleSpecification {
         layout: { visibility: 'none' },
         paint: {
           'raster-opacity': PL_MAP_OVERLAY_OPACITY_DEFAULT,
-          'raster-fade-duration': 0,
+          // Soft in — avoid tile-by-tile pops after the first reveal.
+          'raster-fade-duration': PL_MAP_OVERLAY_FADE_MS,
           // Nearest avoids hairline seams from linear filter across tile edges.
           'raster-resampling': 'nearest',
         },
@@ -372,6 +376,10 @@ export function MapCanvas({
   const basemapModeRef = useRef(basemapMode)
   const plHeatmapEnabledRef = useRef(plHeatmapEnabled)
   const plHeatmapOpacityRef = useRef(plHeatmapOpacity)
+  /** True after the first idle reveal for the current PL-on cycle. */
+  const plHeatmapRevealedRef = useRef(false)
+  const plRevealSeqRef = useRef(0)
+  const beginPlHeatmapRevealRef = useRef<() => void>(() => {})
   const personalSpotPickingRef = useRef(personalSpotPicking)
   const personalSpotsRef = useRef(personalSpots)
   const personalSpotFoldersRef = useRef(personalSpotFolders)
@@ -621,11 +629,23 @@ export function MapCanvas({
           // Hillshade paint is reset by basemap — restore playhead night/day.
           applyPlMapOverlay(map, {
             enabled: plHeatmapEnabledRef.current,
-            opacity: plHeatmapOpacityRef.current,
+            opacity: plHeatmapRevealedRef.current
+              ? plHeatmapOpacityRef.current
+              : 0,
           })
           applyPlayheadSkyRef.current()
+          // Basemap wipe mid-reveal — wait for tiles again before fading in.
+          if (
+            plHeatmapEnabledRef.current &&
+            !plHeatmapRevealedRef.current
+          ) {
+            beginPlHeatmapRevealRef.current()
+          }
         })
     }
+
+    const paintOpacityForCurrentReveal = (opacity: number) =>
+      plHeatmapRevealedRef.current ? opacity : 0
 
     const setPlHeatmap = (enabled: boolean, opacity: number) => {
       // Opacity-only when the overlay is truly showing. Never skip full apply if
@@ -635,7 +655,7 @@ export function MapCanvas({
           if (
             map.getLayoutProperty(PL_MAP_OVERLAY_LAYER_ID, 'visibility') ===
               'visible' &&
-            setPlMapOverlayOpacity(map, opacity)
+            setPlMapOverlayOpacity(map, paintOpacityForCurrentReveal(opacity))
           ) {
             return
           }
@@ -646,7 +666,7 @@ export function MapCanvas({
       void waitForStyleLoaded(map).then(() => {
         applyPlMapOverlay(map, {
           enabled: plHeatmapEnabledRef.current,
-          opacity: plHeatmapOpacityRef.current,
+          opacity: paintOpacityForCurrentReveal(plHeatmapOpacityRef.current),
         })
         applyPlayheadSkyRef.current()
       })
@@ -810,6 +830,14 @@ export function MapCanvas({
       removeCelestialBodyMarkers(map)
       // Terminator + light before first paint settle — don't wait for a user pan.
       applyPlayheadSkyRef.current()
+      // Prefetch PL tiles at opacity 0 in parallel with basemap glyphs — cuts the
+      // long gap after map settle without touching the immersive terrain loader.
+      if (
+        plHeatmapEnabledRef.current &&
+        map.getZoom() >= PL_HEATMAP_MIN_ZOOM
+      ) {
+        applyPlMapOverlay(map, { enabled: true, opacity: 0 })
+      }
       setBasemapMode(basemapModeRef.current)
       // Don't restore PL at globe zoom — would flash the opacity bar then auto-close.
       if (
@@ -818,8 +846,11 @@ export function MapCanvas({
       ) {
         onPlHeatmapEnabledChangeRef.current(false)
         setPlHeatmap(false, plHeatmapOpacityRef.current)
+      } else if (plHeatmapEnabledRef.current) {
+        // Hold opacity 0 + spinner until PL source tiles are in.
+        beginPlHeatmapRevealRef.current()
       } else {
-        setPlHeatmap(plHeatmapEnabledRef.current, plHeatmapOpacityRef.current)
+        setPlHeatmap(false, plHeatmapOpacityRef.current)
       }
       // One re-apply after first tiles are in; never on every moveend (that
       // rewrote light/veil and looked like time jumping on drag-release).
@@ -1046,6 +1077,8 @@ export function MapCanvas({
   }, [spot, mode])
 
   const [basemapApplying, setBasemapApplying] = useState(false)
+  // Show the small PL spinner immediately when restored on at launch.
+  const [plHeatmapLoading, setPlHeatmapLoading] = useState(plHeatmapEnabled)
   const basemapApplySeqRef = useRef(0)
 
   useEffect(() => {
@@ -1058,9 +1091,96 @@ export function MapCanvas({
     })
   }, [basemapMode])
 
+  /**
+   * PL enable: opacity 0 + small control spinner until the PL source itself is
+   * loaded (not basemap idle — that fired ~30s early at launch). Fade in then.
+   * Runs in parallel with map/basemap work; never extends immersive terrain loader.
+   */
   useEffect(() => {
-    apiRef.current?.setPlHeatmap(plHeatmapEnabled, plHeatmapOpacity)
-  }, [plHeatmapEnabled, plHeatmapOpacity])
+    if (!plHeatmapEnabled) {
+      plRevealSeqRef.current += 1
+      plHeatmapRevealedRef.current = false
+      setPlHeatmapLoading(false)
+      apiRef.current?.setPlHeatmap(false, plHeatmapOpacityRef.current)
+      return
+    }
+
+    const seq = ++plRevealSeqRef.current
+    plHeatmapRevealedRef.current = false
+    setPlHeatmapLoading(true)
+
+    let cancelled = false
+    let timeoutId: number | null = null
+    let sourceHandler: ((e: { sourceId?: string; isSourceLoaded?: boolean }) => void) | null =
+      null
+    let idleHandler: (() => void) | null = null
+
+    const finishReveal = (map: Map) => {
+      if (cancelled || seq !== plRevealSeqRef.current) return
+      if (!plHeatmapEnabledRef.current) return
+      plHeatmapRevealedRef.current = true
+      applyPlMapOverlay(map, {
+        enabled: true,
+        opacity: plHeatmapOpacityRef.current,
+      })
+      setPlHeatmapLoading(false)
+    }
+
+    const clearWait = (map: Map) => {
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId)
+        timeoutId = null
+      }
+      if (sourceHandler) {
+        map.off('sourcedata', sourceHandler)
+        sourceHandler = null
+      }
+      if (idleHandler) {
+        map.off('idle', idleHandler)
+        idleHandler = null
+      }
+    }
+
+    const tryFinish = (map: Map) => {
+      if (cancelled || seq !== plRevealSeqRef.current) return
+      if (!isPlMapOverlaySourceReady(map)) return
+      clearWait(map)
+      finishReveal(map)
+    }
+
+    const run = () => {
+      const map = mapRef.current
+      if (!map || cancelled || seq !== plRevealSeqRef.current) return
+      clearWait(map)
+      void waitForStyleLoaded(map).then(() => {
+        if (cancelled || seq !== plRevealSeqRef.current) return
+        // Start / keep fetching at opacity 0 (may already be prefetching).
+        applyPlMapOverlay(map, { enabled: true, opacity: 0 })
+        sourceHandler = (e) => {
+          if (e.sourceId !== PL_MAP_OVERLAY_SOURCE_ID) return
+          if (e.isSourceLoaded) tryFinish(map)
+        }
+        idleHandler = () => tryFinish(map)
+        map.on('sourcedata', sourceHandler)
+        map.on('idle', idleHandler)
+        timeoutId = window.setTimeout(() => {
+          clearWait(map)
+          finishReveal(map)
+        }, PL_MAP_OVERLAY_REVEAL_TIMEOUT_MS)
+        tryFinish(map)
+      })
+    }
+
+    beginPlHeatmapRevealRef.current = run
+    run()
+
+    return () => {
+      cancelled = true
+      const map = mapRef.current
+      if (map) clearWait(map)
+      else if (timeoutId != null) window.clearTimeout(timeoutId)
+    }
+  }, [plHeatmapEnabled])
 
   const opacityRafRef = useRef<number | null>(null)
   const pendingOpacityRef = useRef(plHeatmapOpacity)
@@ -1081,6 +1201,8 @@ export function MapCanvas({
   const paintPlHeatmapOpacity = useCallback((next: number) => {
     const map = mapRef.current
     if (!map || !plHeatmapEnabledRef.current) return
+    // Still waiting on first tiles — keep opacity 0 until reveal.
+    if (!plHeatmapRevealedRef.current) return
     try {
       const visible =
         map.getLayoutProperty(PL_MAP_OVERLAY_LAYER_ID, 'visibility') ===
@@ -1289,6 +1411,7 @@ export function MapCanvas({
         basemapApplying={basemapApplying}
         onBasemapModeChange={onBasemapModeChange}
         plHeatmapEnabled={plHeatmapEnabled}
+        plHeatmapLoading={plHeatmapLoading}
         plHeatmapOpacity={plHeatmapOpacity}
         onPlHeatmapEnabledChange={requestPlHeatmapEnabled}
         onPlHeatmapOpacityChange={requestPlHeatmapOpacity}
@@ -1312,7 +1435,7 @@ export function MapCanvas({
         </span>
         <span>{APP_COPYRIGHT}</span>
       </p>
-      {plHeatmapEnabled ? <PlMapOverlayLegend /> : null}
+      {plHeatmapEnabled && !plHeatmapLoading ? <PlMapOverlayLegend /> : null}
     </div>
   )
 }

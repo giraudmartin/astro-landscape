@@ -35,7 +35,38 @@ export const PL_MAP_OVERLAY_ATTRIBUTION =
 /** Default opacity — basemap stays readable underneath. */
 export const PL_MAP_OVERLAY_OPACITY_DEFAULT = 0.82
 
+/**
+ * Soft tile fade so PL does not pop tile-by-tile once the layer is revealed.
+ * First reveal still waits for idle (opacity 0 → target) — see MapCanvas.
+ */
+export const PL_MAP_OVERLAY_FADE_MS = 320
+
+/**
+ * Cap how long the PL control spinner waits for the overlay source.
+ * COG colourise can take well beyond a normal basemap idle — keep the small
+ * spinner up; never block the immersive terrain loader on this.
+ */
+export const PL_MAP_OVERLAY_REVEAL_TIMEOUT_MS = 45_000
+
 const plHeatmapEnabledByMap = new WeakMap<MapLibreMap, boolean>()
+
+/**
+ * True when the coloured PL raster has finished its current viewport tiles.
+ * Do not use map.areTilesLoaded() alone — basemap idle fires long before COG.
+ */
+export function isPlMapOverlaySourceReady(map: MapLibreMap): boolean {
+  try {
+    if (!map.getSource(PL_MAP_OVERLAY_SOURCE_ID)) return false
+    if (
+      map.getLayoutProperty(PL_MAP_OVERLAY_LAYER_ID, 'visibility') !== 'visible'
+    ) {
+      return false
+    }
+    return map.isSourceLoaded(PL_MAP_OVERLAY_SOURCE_ID)
+  } catch {
+    return false
+  }
+}
 
 export function getPlHeatmapEnabledForMap(
   map: MapLibreMap,

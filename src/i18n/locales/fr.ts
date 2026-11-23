@@ -628,6 +628,13 @@ export const fr = {
       viewsUnit: 'vues',
       summaryOff: 'Panorama désactivé',
       coverTitle: 'Champ couvert par le panorama (largeur × hauteur)',
+      rangeTitle: 'Départ → arrivée',
+      rangeTitleTip:
+        'Angles de la tête pour la 1ʳᵉ et la dernière vue (ex. Benro Polaris)',
+      rangeAz: 'Azimut',
+      rangeAlt: 'Hauteur',
+      rangeHint:
+        'Angles tête de la 1ʳᵉ vue (haut-gauche) à la dernière (bas-droite) — à saisir sur une tête motorisée (ex. Benro Polaris).',
       columns: 'Colonnes',
       rows: 'Lignes',
       lessCols: 'Moins de colonnes',

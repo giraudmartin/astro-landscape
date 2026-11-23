@@ -620,6 +620,13 @@ export const en = {
       viewsUnit: 'shots',
       summaryOff: 'Panorama off',
       coverTitle: 'Field covered by the panorama (width × height)',
+      rangeTitle: 'Start → end',
+      rangeTitleTip:
+        'Head angles for the first and last shots (e.g. Benro Polaris)',
+      rangeAz: 'Azimuth',
+      rangeAlt: 'Altitude',
+      rangeHint:
+        'Head angles from the first shot (top-left) to the last (bottom-right) — enter these on a motorized head (e.g. Benro Polaris).',
       columns: 'Columns',
       rows: 'Rows',
       lessCols: 'Fewer columns',

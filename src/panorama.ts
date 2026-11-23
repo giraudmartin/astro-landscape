@@ -250,3 +250,57 @@ export function panoramaShotCount(columns: number, rows: number): number {
     clampPanoramaCount(rows, Number.POSITIVE_INFINITY)
   )
 }
+
+/** Normalize azimuth to [0, 360). */
+function wrapAzimuthDeg(deg: number): number {
+  const x = deg % 360
+  return x < 0 ? x + 360 : x
+}
+
+const PANO_AIM_PITCH_MAX_DEG = 89
+
+/**
+ * Head aim at the first and last shots (L→R, top→bottom) — the start / end
+ * angles a motorized mount (e.g. Benro Polaris) needs for the sequence.
+ * Centre = current framing lock (or live look when unlocked).
+ */
+export type PanoramaHeadRange = {
+  /** Leftmost column aim (azimuth, deg). */
+  yawStartDeg: number
+  /** Rightmost column aim (azimuth, deg). */
+  yawEndDeg: number
+  /** Top row aim (altitude, deg; + = up). */
+  pitchStartDeg: number
+  /** Bottom row aim (altitude, deg; + = up). */
+  pitchEndDeg: number
+}
+
+export function panoramaHeadRangeDeg(input: {
+  centerYawDeg: number
+  centerPitchDeg: number
+  opticalHFovDeg: number
+  opticalVFovDeg: number
+  columns: number
+  rows: number
+  overlapPercent: number
+}): PanoramaHeadRange {
+  const columns = clampPanoramaCount(input.columns, Number.POSITIVE_INFINITY)
+  const rows = clampPanoramaCount(input.rows, Number.POSITIVE_INFINITY)
+  const stepYaw = panoramaStepDeg(input.opticalHFovDeg, input.overlapPercent)
+  const stepPitch = panoramaStepDeg(input.opticalVFovDeg, input.overlapPercent)
+  const midC = (columns - 1) / 2
+  const midR = (rows - 1) / 2
+  const clampPitch = (p: number) =>
+    Math.max(
+      -PANO_AIM_PITCH_MAX_DEG,
+      Math.min(PANO_AIM_PITCH_MAX_DEG, p),
+    )
+  // Same grid as PhotoFrameOverlay.shotAimYawPitch: expand symmetrically
+  // around the lock; row 0 is above the centre (higher pitch).
+  return {
+    yawStartDeg: wrapAzimuthDeg(input.centerYawDeg - midC * stepYaw),
+    yawEndDeg: wrapAzimuthDeg(input.centerYawDeg + midC * stepYaw),
+    pitchStartDeg: clampPitch(input.centerPitchDeg + midR * stepPitch),
+    pitchEndDeg: clampPitch(input.centerPitchDeg - midR * stepPitch),
+  }
+}

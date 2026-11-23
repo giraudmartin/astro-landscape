@@ -4,6 +4,7 @@ import {
   clampPanoramaOverlap,
   maxPanoramaCountForCoverage,
   panoramaCoverageDeg,
+  panoramaHeadRangeDeg,
   panoramaShotCount,
   PANORAMA_COUNT_MIN,
   PANORAMA_OVERLAP_MAX,
@@ -38,6 +39,12 @@ type ViewfinderPanoramaPanelProps = {
   orientation?: ViewfinderOrientation
   /** Opens camera settings (prototype « Modifier l’appareil photo »). */
   onEditCamera?: () => void
+  /**
+   * Framing centre (lock when frames are locked, else live look).
+   * Used for absolute start/end head angles on the summary.
+   */
+  framingYawDeg?: number
+  framingPitchDeg?: number
 }
 
 /**
@@ -55,6 +62,8 @@ export function ViewfinderPanoramaPanel({
   focalMm,
   orientation = 'landscape',
   onEditCamera,
+  framingYawDeg,
+  framingPitchDeg,
 }: ViewfinderPanoramaPanelProps) {
   const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -96,6 +105,28 @@ export function ViewfinderPanoramaPanel({
     plan.overlapPercent,
   )
   const coverV = panoramaCoverageDeg(opticalVFovDeg, rows, plan.overlapPercent)
+  const headRange =
+    framingYawDeg != null &&
+    framingPitchDeg != null &&
+    Number.isFinite(framingYawDeg) &&
+    Number.isFinite(framingPitchDeg)
+      ? panoramaHeadRangeDeg({
+          centerYawDeg: framingYawDeg,
+          centerPitchDeg: framingPitchDeg,
+          opticalHFovDeg,
+          opticalVFovDeg,
+          columns,
+          rows,
+          overlapPercent: plan.overlapPercent,
+        })
+      : null
+
+  const formatAz = (deg: number) => `${Math.round(deg)}°`
+  const formatAlt = (deg: number) => {
+    const n = Math.round(deg)
+    if (n > 0) return `+${n}°`
+    return `${n}°`
+  }
 
   useEffect(() => {
     if (!open) return
@@ -199,6 +230,47 @@ export function ViewfinderPanoramaPanel({
           <span className="vf-pano-pop__pill">{cameraPill}</span>
         ) : null}
       </div>
+
+      {headRange ? (
+        <div
+          className="vf-pano-pop__extent"
+          title={t('viewfinder.pano.rangeTitleTip')}
+        >
+          <div className="vf-pano-pop__extent-head">
+            <span className="vf-camera-pop__label">
+              {t('viewfinder.pano.rangeTitle')}
+            </span>
+          </div>
+          <div
+            className="vf-pano-pop__extent-grid"
+            aria-label={t('viewfinder.pano.rangeTitleTip')}
+          >
+            <span className="vf-pano-pop__extent-axis">
+              {t('viewfinder.pano.rangeAz')}
+            </span>
+            <span className="vf-pano-pop__extent-values">
+              <b>{formatAz(headRange.yawStartDeg)}</b>
+              <span className="vf-pano-pop__extent-arrow" aria-hidden="true">
+                →
+              </span>
+              <b>{formatAz(headRange.yawEndDeg)}</b>
+            </span>
+            <span className="vf-pano-pop__extent-axis">
+              {t('viewfinder.pano.rangeAlt')}
+            </span>
+            <span className="vf-pano-pop__extent-values">
+              <b>{formatAlt(headRange.pitchStartDeg)}</b>
+              <span className="vf-pano-pop__extent-arrow" aria-hidden="true">
+                →
+              </span>
+              <b>{formatAlt(headRange.pitchEndDeg)}</b>
+            </span>
+          </div>
+          <p className="vf-pano-pop__extent-hint">
+            {t('viewfinder.pano.rangeHint')}
+          </p>
+        </div>
+      ) : null}
 
       <div className="vf-camera-pop__twocol">
         <div className="vf-camera-pop__field">

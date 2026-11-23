@@ -78,36 +78,47 @@ import { streetViewUrlAt } from './streetView'
 
 setWorkerUrl(maplibreWorkerUrl)
 
+/** Drop a previous in-flight settle when a new fly starts (avoids stacked polls). */
+let cancelActiveGroundSkySettle: (() => void) | null = null
+
 /**
- * After globe→spot flyTo, apply night dim only once the camera is in ground
- * framing. One-shot moveend often fires mid-fly below the gate and never
- * retries — poll + hard deadline so noon ortho cannot stick.
+ * After globe→spot flyTo, apply night dim once the camera is in ground framing.
+ * Never land on the first frames (that killed the visible zoom-out arc).
  */
 function settleGroundSkyAfterFly(
   map: Map,
   minZoom: number,
   onLand: () => void,
 ): void {
+  cancelActiveGroundSkySettle?.()
   let landed = false
+  const teardown = () => {
+    window.clearInterval(poll)
+    window.clearTimeout(hardDeadline)
+    map.off('moveend', onMoveEnd)
+    if (cancelActiveGroundSkySettle === cancel) cancelActiveGroundSkySettle = null
+  }
+  const cancel = () => {
+    if (landed) return
+    landed = true
+    teardown()
+  }
+  cancelActiveGroundSkySettle = cancel
   const finish = (force: boolean) => {
     if (landed) return
     if (!force && map.getZoom() < minZoom) return
+    if (!force && map.isMoving()) return
     landed = true
-    window.clearInterval(poll)
-    window.clearTimeout(hardDeadline)
-    map.off('moveend', onMoveOrIdle)
-    map.off('idle', onMoveOrIdle)
-    map.off('zoomend', onMoveOrIdle)
+    teardown()
     onLand()
   }
-  const onMoveOrIdle = () => finish(false)
-  const poll = window.setInterval(() => finish(false), 120)
-  const hardDeadline = window.setTimeout(() => finish(true), 2200)
-  map.on('moveend', onMoveOrIdle)
-  map.on('idle', onMoveOrIdle)
-  map.on('zoomend', onMoveOrIdle)
-  // Kick once in case fly is already past minZoom when this is registered.
-  queueMicrotask(() => finish(false))
+  const onMoveEnd = () => {
+    if (map.getZoom() < minZoom) return
+    finish(true)
+  }
+  const poll = window.setInterval(() => finish(false), 160)
+  const hardDeadline = window.setTimeout(() => finish(true), 4000)
+  map.on('moveend', onMoveEnd)
 }
 
 export type CameraMode = 'orbit' | 'ground'
@@ -729,30 +740,39 @@ export function MapCanvas({
         ? Math.min(Math.max(saved.pitchDeg, 45), 65)
         : FLAT_PITCH
 
-      // Already on the map: activate pin only — no zoom. Globe: fly in.
-      if (groundViewAmount(map.getZoom()) >= 0.35) {
-        publishSpot(saved.lat, saved.lon, saved.bearingDeg, pitch)
-        return
-      }
-
-      if (!threeDimensionalRef.current) {
-        onThreeDimensionalChangeRef.current(true)
-        threeDimensionalRef.current = true
-      }
       hideLightPollutionForGroundFly()
-      const targetZoom = Math.max(map.getZoom(), 13.5)
+
+      const targetZoom = 13.5
+      // One flyTo with zoom-out → zoom-in. Never easeTo at ground zoom across
+      // oceans (black void, looks like no camera move then a pop-in).
+      cancelActiveGroundSkySettle?.()
+      map.stop()
       map.flyTo({
         center: [saved.lon, saved.lat],
         zoom: targetZoom,
         pitch,
         bearing: saved.bearingDeg,
         essential: true,
-        duration: 900,
+        duration: 1800,
+        curve: 1.42,
       })
-      // Spot list sets React state at globe zoom first (day paint). One-shot
-      // moveend often fired mid-fly below the gate and never retried — noon stuck.
+
       settleGroundSkyAfterFly(map, Math.min(targetZoom - 0.5, 10), () => {
-        publishSpot(saved.lat, saved.lon, saved.bearingDeg, pitch)
+        const heightM =
+          saved.heightM ??
+          readElevation(saved.lon, saved.lat) ??
+          spotRef.current?.heightM ??
+          0
+        const next: SpotState = {
+          lat: saved.lat,
+          lon: saved.lon,
+          heightM,
+          bearingDeg: saved.bearingDeg,
+          pitchDeg: pitch,
+        }
+        spotRef.current = next
+        upsertMarker(saved.lon, saved.lat)
+        onSpotChangeRef.current(next)
         applyPlayheadSkyRef.current()
       })
     }

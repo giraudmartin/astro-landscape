@@ -404,14 +404,9 @@ export default function App() {
   }, [personalSpots, editingSpot, editingName])
 
   const selectPersonalSpot = useCallback((saved: PersonalSpot) => {
+    // Don't setSpot yet — night dim for the destination would paint the
+    // current framing black mid-fly. Spot lands with the camera.
     setSelectedPersonalSpotId(saved.id)
-    setSpot({
-      lat: saved.lat,
-      lon: saved.lon,
-      heightM: saved.heightM ?? 0,
-      bearingDeg: saved.bearingDeg,
-      pitchDeg: saved.pitchDeg,
-    })
     setMode('orbit')
     setFlyToPersonalSpotId(saved.id)
   }, [])

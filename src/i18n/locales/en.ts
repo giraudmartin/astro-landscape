@@ -525,6 +525,7 @@ export const en = {
       az: 'Azimuth grid',
     },
     searchCelestial: 'Search for a celestial object',
+    toolCapsuleAria: 'Scene settings and projection',
     framings: 'Framings',
     exit: 'Exit tripod view',
     halphaCredit: 'reprojected galactic → ICRF/J2000',

@@ -71,6 +71,12 @@ const lastNightShadeByMap = new WeakMap<
   { url: string; strength: number }
 >()
 
+/** Bust light/veil dedupe so fly land can force globe→ground night. */
+export function invalidateGlobeSunCache(map: Map): void {
+  lastGlobeLightByMap.delete(map)
+  lastNightShadeByMap.delete(map)
+}
+
 /** Drive globe terminator light + hillshade from the playhead sun. */
 export function applyGlobeSunLighting(
   map: Map,

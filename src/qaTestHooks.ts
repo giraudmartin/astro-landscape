@@ -215,16 +215,16 @@ export function installThreeGameTestHooks(): void {
 }
 
 export function qaUtcForSite(
-  date = QA_DATE,
-  lon = QA_SITE.lon,
-  localHour = QA_LOCAL_HOUR,
+  date: string = QA_DATE,
+  lon: number = QA_SITE.lon,
+  localHour: number = QA_LOCAL_HOUR,
 ): number {
   return qaUtcMs(date, lon, localHour)
 }
 
 export function qaCivilDateLabel(
   utcMs: number,
-  lon = QA_SITE.lon,
+  lon: number = QA_SITE.lon,
 ): string {
   return civilDateFromUtc(utcMs, lon)
 }

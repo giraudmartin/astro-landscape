@@ -532,6 +532,7 @@ export const fr = {
       az: 'Grille azimutale',
     },
     searchCelestial: 'Rechercher un objet céleste',
+    toolCapsuleAria: 'Réglages de scène et projection',
     framings: 'Cadrages',
     exit: 'Quitter la vue trépied',
     halphaCredit: 'reprojeté galactique → ICRF/J2000',

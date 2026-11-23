@@ -163,7 +163,14 @@ function setPaintIfLayer(
 ): void {
   if (!map.getLayer(layerId)) return
   try {
-    map.setPaintProperty(layerId, property, value)
+    // MapLibre paint keys/values are large unions; basin tint is dynamic.
+    ;(
+      map.setPaintProperty as (
+        id: string,
+        prop: string,
+        val: unknown,
+      ) => void
+    )(layerId, property, value)
   } catch {
     // property not supported on this layer
   }

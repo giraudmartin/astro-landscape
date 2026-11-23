@@ -399,6 +399,17 @@ export function MapCanvas({
 
   const skyUtcMsRef = useRef(skyUtcMs)
   skyUtcMsRef.current = skyUtcMs
+  /**
+   * Fly destination for local sun — selectPersonalSpot delays setSpot until
+   * landing, and render sync can briefly clobber spotRef with the old spot.
+   * Lighting must still track the place we're flying to.
+   */
+  const skyFocusRef = useRef<{ lat: number; lon: number; elevM: number } | null>(
+    null,
+  )
+  /** Bust in-flight style/idle retries when a newer apply is requested. */
+  const skyApplyGenRef = useRef(0)
+  const skyRetryPendingRef = useRef(false)
 
   modeRef.current = mode
   spotRef.current = spot
@@ -421,6 +432,20 @@ export function MapCanvas({
   onRequestEditSpotRef.current = onRequestEditSpot
   onMarkerMenuOpenChangeRef.current = onMarkerMenuOpenChange
 
+  // Drop fly focus once React spot matches the destination.
+  if (
+    spot &&
+    skyFocusRef.current &&
+    Math.abs(spot.lat - skyFocusRef.current.lat) < 1e-5 &&
+    Math.abs(spot.lon - skyFocusRef.current.lon) < 1e-5
+  ) {
+    skyFocusRef.current = {
+      lat: spot.lat,
+      lon: spot.lon,
+      elevM: spot.heightM,
+    }
+  }
+
   const apiRef = useRef<{
     setMode: (next: CameraMode) => void
     setThreeDimensional: (next: boolean) => void
@@ -435,15 +460,35 @@ export function MapCanvas({
   /**
    * Always-fresh playhead apply — mount-effect flyTo closures must not keep a
    * stale copy that paints globe-day ortho after landing on a night spot.
+   * Never silent-return on !isStyleLoaded: DEM/imagery load at land makes that
+   * true often, and noon ortho then sticks while the timeline shows night.
    */
   const applyPlayheadSkyRef = useRef<() => void>(() => {})
   applyPlayheadSkyRef.current = () => {
     const map = mapRef.current
-    if (!map?.isStyleLoaded()) return
+    if (!map) return
+    // Imagery layer is enough — isStyleLoaded() stays false for long stretches
+    // while DEM/PL tiles stream, and silent-skip left noon ortho stuck.
+    if (!map.getLayer('imagery')) {
+      if (skyRetryPendingRef.current) return
+      skyRetryPendingRef.current = true
+      const gen = skyApplyGenRef.current
+      const retry = () => {
+        if (skyApplyGenRef.current !== gen) return
+        skyRetryPendingRef.current = false
+        if (mapRef.current !== map) return
+        applyPlayheadSkyRef.current()
+      }
+      void waitForStyleLoaded(map).then(retry)
+      map.once('idle', retry)
+      return
+    }
+    skyRetryPendingRef.current = false
+    const focus = skyFocusRef.current
     const live = spotRef.current
-    const lat = live?.lat ?? DEFAULT_MAP_VIEW.lat
-    const lon = live?.lon ?? DEFAULT_MAP_VIEW.lon
-    const elev = live?.heightM ?? 0
+    const lat = focus?.lat ?? live?.lat ?? DEFAULT_MAP_VIEW.lat
+    const lon = focus?.lon ?? live?.lon ?? DEFAULT_MAP_VIEW.lon
+    const elev = focus?.elevM ?? live?.heightM ?? 0
     const utc = skyUtcMsRef.current
     const sun = sunPositionAt(lat, lon, elev, utc)
     invalidateMapSkyCache(map)
@@ -456,6 +501,18 @@ export function MapCanvas({
     if (import.meta.env.DEV) {
       ;(window as unknown as { __astroMap?: maplibregl.Map }).__astroMap = map
     }
+  }
+  /** Apply now and once more when tiles settle — land often races style load. */
+  const applyPlayheadSkyNowAndOnIdleRef = useRef<(map: Map) => void>(() => {})
+  applyPlayheadSkyNowAndOnIdleRef.current = (map: Map) => {
+    skyApplyGenRef.current += 1
+    skyRetryPendingRef.current = false
+    const gen = skyApplyGenRef.current
+    applyPlayheadSkyRef.current()
+    map.once('idle', () => {
+      if (skyApplyGenRef.current !== gen) return
+      applyPlayheadSkyRef.current()
+    })
   }
   if (import.meta.env.DEV) {
     ;(
@@ -691,6 +748,11 @@ export function MapCanvas({
       const pitch = THREE_D_PITCH
       hideLightPollutionForGroundFly()
       const targetZoom = 14
+      skyFocusRef.current = {
+        lat: result.lat,
+        lon: result.lon,
+        elevM: spotRef.current?.heightM ?? 0,
+      }
       if (result.bbox) {
         const [west, south, east, north] = result.bbox
         map.fitBounds(
@@ -717,7 +779,7 @@ export function MapCanvas({
       }
       settleGroundSkyAfterFly(map, 10, () => {
         publishSpot(result.lat, result.lon, map.getBearing(), pitch)
-        applyPlayheadSkyRef.current()
+        applyPlayheadSkyNowAndOnIdleRef.current(map)
       })
     }
 
@@ -735,6 +797,11 @@ export function MapCanvas({
           const pitch = threeDimensionalRef.current ? THREE_D_PITCH : FLAT_PITCH
           hideLightPollutionForGroundFly()
           const targetZoom = Math.max(map.getZoom(), 15)
+          skyFocusRef.current = {
+            lat,
+            lon,
+            elevM: spotRef.current?.heightM ?? 0,
+          }
           map.flyTo({
             center: [lon, lat],
             zoom: targetZoom,
@@ -744,7 +811,7 @@ export function MapCanvas({
           })
           settleGroundSkyAfterFly(map, Math.min(targetZoom - 0.5, 12), () => {
             publishSpot(lat, lon, map.getBearing(), pitch)
-            applyPlayheadSkyRef.current()
+            applyPlayheadSkyNowAndOnIdleRef.current(map)
           })
         },
         () => {
@@ -763,6 +830,15 @@ export function MapCanvas({
       hideLightPollutionForGroundFly()
 
       const targetZoom = 13.5
+      // Destination sun for mid-fly ground-crossing applies — delayed setSpot
+      // must not leave noon ortho from the previous spot / DEFAULT_MAP_VIEW.
+      skyFocusRef.current = {
+        lat: saved.lat,
+        lon: saved.lon,
+        elevM: saved.heightM ?? spotRef.current?.heightM ?? 0,
+      }
+      skyApplyGenRef.current += 1
+      skyRetryPendingRef.current = false
       // One flyTo with zoom-out → zoom-in. Never easeTo at ground zoom across
       // oceans (black void, looks like no camera move then a pop-in).
       cancelActiveGroundSkySettle?.()
@@ -790,10 +866,11 @@ export function MapCanvas({
           bearingDeg: saved.bearingDeg,
           pitchDeg: pitch,
         }
+        skyFocusRef.current = { lat: next.lat, lon: next.lon, elevM: heightM }
         spotRef.current = next
         upsertMarker(saved.lon, saved.lat)
         onSpotChangeRef.current(next)
-        applyPlayheadSkyRef.current()
+        applyPlayheadSkyNowAndOnIdleRef.current(map)
       })
     }
 
@@ -1366,7 +1443,7 @@ export function MapCanvas({
     let lastGround = groundViewAmount(lastAppliedZoom) >= 0.35
     const apply = () => {
       map.off('idle', apply)
-      if (!map.isStyleLoaded()) {
+      if (!map.getLayer('imagery')) {
         map.once('idle', apply)
         return
       }
@@ -1398,7 +1475,9 @@ export function MapCanvas({
       map.off('zoomend', apply)
       map.off('moveend', onMoveEnd)
     }
-  }, [mode, skyUtcMs, spot?.lat, spot?.lon, spot?.heightM])
+    // heightM must NOT be a dep: DEM idle rewrites tear down pending idle
+    // retries and leave noon ortho stuck after a night-spot fly.
+  }, [mode, skyUtcMs, spot?.lat, spot?.lon])
 
   return (
     <div className="globe-shell">

@@ -117,6 +117,12 @@ export type NightSkyHandle = {
     starGlow?: number
     /** Fixed-tripod exposure trail (rad of sky arc); 0 = pinpricks. */
     starTrailArcRad?: number
+    /** Mag cut from local Bortle (0 = dark, ~2.2 = inner city). */
+    lightPollutionMagPenalty?: number
+    /** Extra star luminance crush under urban skyglow. */
+    lightPollutionStarBrightMul?: number
+    /** Milky Way opacity × local zenith pollution (0 = gone). */
+    lightPollutionMilkyWayMul?: number
     /** CSS px size of the viewfinder canvas (for HTML constellation names). */
     viewSize?: { width: number; height: number }
     /**

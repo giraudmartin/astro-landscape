@@ -121,13 +121,11 @@ export function ViewfinderSceneSettingsControl({
         aria-expanded={menuOpen}
         aria-controls={menuId}
         aria-haspopup="menu"
+        aria-label={t('viewfinder.scene.title')}
         title={t('viewfinder.scene.title')}
         onClick={() => setMenuOpen((value) => !value)}
       >
         <SettingsSlidersIcon size={16} />
-        <span className="vf-proj-control__muted">
-          {t('viewfinder.scene.muted')}
-        </span>
         <ChevronDownIcon className="vf-proj-control__chevron" size={12} />
       </button>
 

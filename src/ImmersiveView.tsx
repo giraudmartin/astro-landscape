@@ -99,7 +99,7 @@ import type {
   FramingCaptureMode,
   FramingViewSnapshot,
 } from './personalFramings'
-import { FrameModePhotoIcon } from './psIcons'
+import { CompactCloseIcon, FramingsFocusIcon } from './psIcons'
 import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
 import { ViewfinderSceneSettingsControl } from './ViewfinderSceneSettingsControl'
 import { type LocalHaloControls } from './ViewfinderSkyControl'
@@ -3152,60 +3152,67 @@ export function ImmersiveView({
             />
           ) : null}
         </div>
-        <ViewfinderSceneSettingsControl
-          landscape={{
-            brightness: groundNightBrightness,
-            contrast: groundNightContrast,
-            temperature: groundNightTemperature,
-            tint: groundNightTint,
-            onBrightnessChange: setGroundNightBrightness,
-            onContrastChange: setGroundNightContrast,
-            onTemperatureChange: setGroundNightTemperature,
-            onTintChange: setGroundNightTint,
-          }}
-          sky={{
-            atmosphereAmount,
-            moonlightEnabled,
-            onMoonlightChange: setMoonlightEnabled,
-            airglowAmount,
-            airglowHue,
-            airglowWaves,
-            zodiacalAmount,
-            lightPollutionAmount,
-            starMagDepth,
-            starZoomSpan,
-            starBrightness,
-            starGlow,
-            onAtmosphereAmountChange: setAtmosphereAmount,
-            onAirglowAmountChange: setAirglowAmount,
-            onAirglowHueChange: setAirglowHue,
-            onAirglowWavesChange: setAirglowWaves,
-            onZodiacalAmountChange: setZodiacalAmount,
-            onLightPollutionAmountChange: setLightPollutionAmount,
-            localHalo,
-            onLocalHaloChange: patchLocalHalo,
-            onStarMagDepthChange: setStarMagDepth,
-            onStarZoomSpanChange: setStarZoomSpan,
-            onStarBrightnessChange: setStarBrightness,
-            onStarGlowChange: setStarGlow,
-          }}
-          weather={{
-            manual: weatherSettings,
-            weather: weatherControls,
-            onWeatherChange: setWeather,
-          }}
-        />
-        <ViewfinderProjectionControl
-          projection={projection}
-          onProjectionChange={setProjection}
-        />
+        <div
+          className="immersive__tool-capsule"
+          role="group"
+          aria-label={t('immersive.toolCapsuleAria')}
+        >
+          <ViewfinderSceneSettingsControl
+            landscape={{
+              brightness: groundNightBrightness,
+              contrast: groundNightContrast,
+              temperature: groundNightTemperature,
+              tint: groundNightTint,
+              onBrightnessChange: setGroundNightBrightness,
+              onContrastChange: setGroundNightContrast,
+              onTemperatureChange: setGroundNightTemperature,
+              onTintChange: setGroundNightTint,
+            }}
+            sky={{
+              atmosphereAmount,
+              moonlightEnabled,
+              onMoonlightChange: setMoonlightEnabled,
+              airglowAmount,
+              airglowHue,
+              airglowWaves,
+              zodiacalAmount,
+              lightPollutionAmount,
+              starMagDepth,
+              starZoomSpan,
+              starBrightness,
+              starGlow,
+              onAtmosphereAmountChange: setAtmosphereAmount,
+              onAirglowAmountChange: setAirglowAmount,
+              onAirglowHueChange: setAirglowHue,
+              onAirglowWavesChange: setAirglowWaves,
+              onZodiacalAmountChange: setZodiacalAmount,
+              onLightPollutionAmountChange: setLightPollutionAmount,
+              localHalo,
+              onLocalHaloChange: patchLocalHalo,
+              onStarMagDepthChange: setStarMagDepth,
+              onStarZoomSpanChange: setStarZoomSpan,
+              onStarBrightnessChange: setStarBrightness,
+              onStarGlowChange: setStarGlow,
+            }}
+            weather={{
+              manual: weatherSettings,
+              weather: weatherControls,
+              onWeatherChange: setWeather,
+            }}
+          />
+          <span className="immersive__tool-capsule__divider" aria-hidden="true" />
+          <ViewfinderProjectionControl
+            projection={projection}
+            onProjectionChange={setProjection}
+          />
+        </div>
         {onFramingsOpenChange ? (
           <button
             type="button"
             className={
               framingsOpen
-                ? 'vf-proj-control__trigger immersive__framings-btn is-active'
-                : 'vf-proj-control__trigger immersive__framings-btn'
+                ? 'immersive__framings-btn is-active'
+                : 'immersive__framings-btn'
             }
             aria-expanded={framingsOpen}
             aria-controls="framings-rail"
@@ -3213,20 +3220,19 @@ export function ImmersiveView({
             aria-label={t('immersive.framings')}
             onClick={() => onFramingsOpenChange(!framingsOpen)}
           >
-            <FrameModePhotoIcon size={16} />
-            <span className="vf-proj-control__value">
-              {t('immersive.framings')}
+            <span className="immersive__framings-btn__glyph" aria-hidden="true">
+              <FramingsFocusIcon size={18} beacon />
             </span>
           </button>
         ) : null}
         <button
           type="button"
-          className="hud-btn immersive__exit"
+          className="immersive__exit"
           onClick={onExit}
           title={t('immersive.exit')}
           aria-label={t('immersive.exit')}
         >
-          ✕
+          <CompactCloseIcon size={16} />
         </button>
       </div>
 

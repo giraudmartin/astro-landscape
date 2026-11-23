@@ -2497,8 +2497,174 @@ html.is-rail-resizing .rail-resize-handle::after {
   cursor: not-allowed;
 }
 
+/* Right chrome — Settings + Projection share one capsule (left capture height). */
+.immersive__tool-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 4px;
+  border: 1px solid var(--ov-stroke);
+  border-radius: 12px;
+  background: var(--vf-chrome-bg);
+  box-shadow: var(--vf-chrome-inset);
+  backdrop-filter: var(--vf-chrome-blur);
+  -webkit-backdrop-filter: var(--vf-chrome-blur);
+  color: #e8f5ee;
+}
+
+.immersive__tool-capsule .vf-proj-control {
+  flex: 0 0 auto;
+}
+
+.immersive__tool-capsule .vf-proj-control.is-open {
+  z-index: 16;
+}
+
+.immersive__tool-capsule .vf-proj-control__trigger {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  gap: 5px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  line-height: 1;
+}
+
+.immersive__tool-capsule .vf-proj-control__trigger svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.immersive__tool-capsule .vf-proj-control__trigger:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.immersive__tool-capsule .vf-proj-control__trigger.is-active {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8f5ee;
+}
+
+.immersive__tool-capsule__divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 2px;
+  background: var(--ui-stroke-soft);
+}
+
+/* Framings — same vf glass; map focus icon + mint beacon in the reticle */
 .immersive__framings-btn {
   flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--ov-stroke);
+  border-radius: 12px;
+  background: var(--vf-chrome-bg);
+  color: #e8f5ee;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--vf-chrome-inset);
+  backdrop-filter: var(--vf-chrome-blur);
+  -webkit-backdrop-filter: var(--vf-chrome-blur);
+}
+
+.immersive__framings-btn__glyph {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--ui-accent);
+}
+
+.immersive__framings-btn__glyph svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.immersive__framings-btn__glyph .framings-focus-icon__ring {
+  opacity: 0.9;
+}
+
+/* Exact SVG center (12,12) — same origin as the reticle */
+.immersive__framings-btn__glyph .framings-focus-icon__beacon {
+  fill: var(--ui-accent);
+  stroke: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  filter: drop-shadow(0 0 2px rgba(var(--ui-accent-rgb), 0.85));
+  animation: immersive-framings-beacon 1.4s ease-in-out infinite;
+}
+
+.immersive__framings-btn:hover {
+  background: var(--vf-chrome-bg-hover);
+}
+
+.immersive__framings-btn:hover .immersive__framings-btn__glyph {
+  color: var(--ui-accent-hover);
+}
+
+.immersive__framings-btn.is-active {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: var(--vf-chrome-bg-hover);
+  color: #e8f5ee;
+}
+
+.immersive__framings-btn.is-active .immersive__framings-btn__glyph {
+  color: var(--ui-accent);
+}
+
+.immersive__framings-btn.is-active .framings-focus-icon__beacon {
+  animation: none;
+  opacity: 1;
+  transform: none;
+  filter: drop-shadow(0 0 2px rgba(var(--ui-accent-rgb), 0.7));
+}
+
+.immersive__framings-btn:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-ring-offset);
+}
+
+@keyframes immersive-framings-beacon {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.75);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .immersive__framings-btn__glyph .framings-focus-icon__beacon {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Framings rail above Three chrome. */
@@ -5468,9 +5634,10 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   align-items: center;
   gap: 7px;
   box-sizing: border-box;
+  height: 40px;
   min-height: 40px;
   margin: 0;
-  padding: 4px 10px;
+  padding: 0 10px;
   border: 1px solid var(--ov-stroke);
   border-radius: 12px;
   background: var(--vf-chrome-bg);
@@ -5478,10 +5645,16 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   font: inherit;
   font-size: 0.72rem;
   font-weight: 650;
+  line-height: 1;
   cursor: pointer;
   box-shadow: var(--vf-chrome-inset);
   backdrop-filter: var(--vf-chrome-blur);
   -webkit-backdrop-filter: var(--vf-chrome-blur);
+}
+
+.vf-proj-control__trigger svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .vf-proj-control__trigger:hover {
@@ -6242,20 +6415,32 @@ html[data-qa-hide-chrome='1'] .render-diag {
   min-width: 40px;
   min-height: 40px;
   height: 40px;
+  margin: 0;
   padding: 0;
   border: 1px solid var(--ov-stroke);
   border-radius: 12px;
   background: var(--vf-chrome-bg);
   color: #e8f5ee;
-  font-size: 1rem;
+  font: inherit;
   line-height: 1;
+  cursor: pointer;
   box-shadow: var(--vf-chrome-inset);
   backdrop-filter: var(--vf-chrome-blur);
   -webkit-backdrop-filter: var(--vf-chrome-blur);
 }
 
+.immersive__exit svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 .immersive__exit:hover {
   background: var(--vf-chrome-bg-hover);
+}
+
+.immersive__exit:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-ring-offset);
 }
 
 .immersive__hint {
@@ -8132,10 +8317,16 @@ button.ov-capsule:hover {
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
   box-shadow: var(--vf-chrome-inset);
   backdrop-filter: var(--vf-chrome-blur);
   -webkit-backdrop-filter: var(--vf-chrome-blur);
+}
+
+.celestial-dock__toggle svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .celestial-dock__toggle:hover {
@@ -8740,9 +8931,32 @@ button.ov-capsule:hover {
   }
 
   .vf-proj-control__trigger {
+    height: 36px;
     min-height: 36px;
-    padding: 4px 8px;
+    padding: 0 8px;
     font-size: 0.7rem;
+  }
+
+  .immersive__tool-capsule {
+    min-height: 36px;
+    padding: 3px;
+    border-radius: 11px;
+  }
+
+  .immersive__tool-capsule .vf-proj-control__trigger {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 0.7rem;
+    border-radius: 7px;
+  }
+
+  .immersive__framings-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 11px;
   }
 
   .immersive__exit,
@@ -9023,6 +9237,32 @@ button.ov-capsule:hover {
     min-height: 28px;
     padding: 4px 8px;
     font-size: 0.68rem;
+  }
+
+  .immersive__tool-capsule {
+    min-height: 36px;
+    padding: 3px;
+    border-radius: 10px;
+  }
+
+  .immersive__tool-capsule .vf-proj-control__trigger {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 0.68rem;
+    border-radius: 7px;
+  }
+
+  .immersive__tool-capsule__divider {
+    margin: 5px 1px;
+  }
+
+  .immersive__framings-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 10px;
   }
 
   .immersive__exit,

@@ -1,6 +1,21 @@
 /** Live knobs read each frame by ImmersiveView — change one at a time. */
 
-export const RENDER_DIAG_DEFAULTS = {
+export type RenderDiagSettings = {
+  frustumCulling: boolean
+  cameraNearM: number
+  cameraFarM: number
+  terrainWireframe: boolean
+  showTerrainNear: boolean
+  showTerrainFar: boolean
+  showSky: boolean
+  showNightSky: boolean
+  /** Optional cubemap path (normally OFF — production uses vertex warp). */
+  useCubemapPass: boolean
+  /** 3×2 face atlas before stereographic composite (implies cubemap pass). */
+  cubemapAtlasPreview: boolean
+}
+
+export const RENDER_DIAG_DEFAULTS: RenderDiagSettings = {
   frustumCulling: false,
   cameraNearM: 0.5,
   cameraFarM: 450_000,
@@ -9,14 +24,8 @@ export const RENDER_DIAG_DEFAULTS = {
   showTerrainFar: true,
   showSky: true,
   showNightSky: true,
-  /** Optional cubemap path (normally OFF — production uses vertex warp). */
   useCubemapPass: false,
-  /** 3×2 face atlas before stereographic composite (implies cubemap pass). */
   cubemapAtlasPreview: false,
-} as const
-
-export type RenderDiagSettings = {
-  -readonly [K in keyof typeof RENDER_DIAG_DEFAULTS]: (typeof RENDER_DIAG_DEFAULTS)[K]
 }
 
 export type RenderDiagStats = {

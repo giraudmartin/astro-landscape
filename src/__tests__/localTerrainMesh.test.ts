@@ -208,7 +208,9 @@ describe('createFlatLocalTerrainMesh', () => {
     expect(terrain.groundElevationMslAt(0, 0)).toBe(1234)
     expect(terrain.groundYAt(10, -20)).toBe(0)
     expect(terrain.farMesh).toBeNull()
-    const mat = terrain.mesh.material as { color: { getHex: () => number } }
+    const mat = terrain.mesh.material as unknown as {
+      color: { getHex: () => number }
+    }
     expect(mat.color.getHex()).toBe(0x000000)
     expect(terrain.mesh.geometry.getAttribute('position').count).toBeGreaterThan(
       100,

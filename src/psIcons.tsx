@@ -423,6 +423,44 @@ export function FrameModeLibreIcon({ size = 16, className }: IconProps) {
   )
 }
 
+/**
+ * Framings focus — same Lucide focus mark as the map Framings FAB
+ * (`.my-events-control__toggle`). Stroke comes from the parent chrome.
+ * `beacon` adds a filled center dot (immersive pulse), still at 12×12.
+ */
+export function FramingsFocusIcon({
+  size = 16,
+  className,
+  beacon = false,
+}: IconProps & { beacon?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="3" className="framings-focus-icon__ring" />
+      {beacon ? (
+        <circle
+          className="framings-focus-icon__beacon"
+          cx="12"
+          cy="12"
+          r="2"
+          fill="currentColor"
+          stroke="none"
+        />
+      ) : null}
+      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+    </svg>
+  )
+}
+
 /** Capsule frame mode — Photo (open corners). From validated prototype. */
 export function FrameModePhotoIcon({ size = 16, className }: IconProps) {
   return (

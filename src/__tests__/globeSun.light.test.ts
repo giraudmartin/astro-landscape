@@ -8,7 +8,8 @@ describe('globe sun light', () => {
     const light = sunLightSpec(sub, { intensity: 0.62, color: '#ffffff' })
 
     expect(light.anchor).toBe('map')
-    expect(light.position?.[0]).toBe(1.5)
+    const position = light.position as [number, number, number] | undefined
+    expect(position?.[0]).toBe(1.5)
     expect(light['position-transition']).toEqual({ duration: 0, delay: 0 })
 
     // Same UTC → identical Earth-fixed light (pan/zoom must not rewrite this).

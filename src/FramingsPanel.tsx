@@ -14,7 +14,7 @@ import {
   type FramingViewSnapshot,
   type PersonalFraming,
 } from './personalFramings'
-import { CalendarIcon } from './psIcons'
+import { CalendarIcon, FramingsFocusIcon } from './psIcons'
 
 export type FramingsPanelMode = 'map' | 'immersive'
 
@@ -222,19 +222,6 @@ function monthStartOffset(month: string): number {
   return (dow + 6) % 7
 }
 
-/** Lucide focus — sized by `.my-events-control__toggle svg` like Mes spots. */
-function FramingsMapIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-    </svg>
-  )
-}
-
 export function FramingsToggle({
   open,
   onOpenChange,
@@ -258,7 +245,7 @@ export function FramingsToggle({
         title={t('framings.toggle')}
         onClick={() => onOpenChange(!open)}
       >
-        <FramingsMapIcon />
+        <FramingsFocusIcon />
       </button>
     </div>
   )

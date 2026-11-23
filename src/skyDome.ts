@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import {
+  MakeTime,
   Observer,
   RotateVector,
   Rotation_ECL_HOR,
@@ -1041,7 +1042,8 @@ export function eclipticNorthPoleThreeLocal(
   target = new THREE.Vector3(),
 ): THREE.Vector3 {
   const observer = new Observer(latitudeDeg, longitudeDeg, elevationM / 1000)
-  const poleEcl = new Vector(0, 0, 1, when)
-  const hor = RotateVector(Rotation_ECL_HOR(when, observer), poleEcl)
+  const time = MakeTime(when)
+  const poleEcl = new Vector(0, 0, 1, time)
+  const hor = RotateVector(Rotation_ECL_HOR(time, observer), poleEcl)
   return target.set(-hor.y, hor.z, -hor.x).normalize()
 }

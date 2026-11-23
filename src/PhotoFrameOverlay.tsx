@@ -668,18 +668,6 @@ const PANO_MESH_DIV = 10
  */
 const PANO_MESH_EDGE_SAMPLES = 4
 
-function projectOneDir(
-  dir: Vec3,
-  look: { forward: Vec3; right: Vec3; up: Vec3 },
-  stageW: number,
-  stageH: number,
-  stageVfovDeg: number,
-): Pt2 | null {
-  const eye = dirToEye(dir, look)
-  if (eye.z < nearClipMinZForStage()) return null
-  return eyeToScreen(eye, stageW, stageH, stageVfovDeg)
-}
-
 /** Project a closed dir loop with the same eye near-clip as strokes. */
 function projectDirsToScreenPoly(
   dirs: Vec3[],

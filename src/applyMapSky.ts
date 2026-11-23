@@ -1,6 +1,7 @@
 import type { Map, RasterTileSource } from 'maplibre-gl'
 import {
   applyGlobeSunLighting,
+  invalidateGlobeSunCache,
   removeCelestialBodyMarkers,
 } from './globeSun'
 import {
@@ -43,6 +44,7 @@ const lastMapSkyKeyByMap = new WeakMap<Map, string>()
 /** Bust cache so flyTo landing always re-applies night dim (not stale globe day paint). */
 export function invalidateMapSkyCache(map: Map): void {
   lastMapSkyKeyByMap.delete(map)
+  invalidateGlobeSunCache(map)
 }
 
 /**
@@ -121,7 +123,10 @@ export function applyMapSky(
   palette: SkyPalette,
   options?: ApplyMapSkyOptions,
 ): void {
-  if (!map.isStyleLoaded()) return
+  // Prefer layer presence over isStyleLoaded(): DEM/PL sources often keep
+  // style.loaded() false while the map is interactive — that used to skip
+  // night dim entirely and leave noon ortho at spot zoom.
+  if (!map.getLayer('imagery') && !map.isStyleLoaded()) return
 
   const ground = options ? groundViewAmount(options.zoom) : 1
   const globe = 1 - ground

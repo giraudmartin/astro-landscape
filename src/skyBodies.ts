@@ -64,6 +64,7 @@ export type SkyBodiesHandle = {
     lon: number
     elevationM: number
     camera: THREE.PerspectiveCamera
+    showTrajectories?: boolean
   }) => void
   dispose: () => void
 }
@@ -83,7 +84,8 @@ function createPath(color: THREE.ColorRepresentation): THREE.LineSegments {
   const line = new THREE.LineSegments(new THREE.BufferGeometry(), material)
   line.frustumCulled = false
   line.visible = false
-  line.renderOrder = 3
+  // After MW tiles (20+z) / constellation figures (23) / stars (24); before zodiacal (27).
+  line.renderOrder = 25
   return line
 }
 
@@ -257,7 +259,7 @@ export function createSkyBodies(): SkyBodiesHandle {
 
   return {
     root,
-    update: ({ utcMs, lat, lon, elevationM, camera }) => {
+    update: ({ utcMs, lat, lon, elevationM, camera, showTrajectories = true }) => {
       if (disposed) return
       root.position.copy(camera.position)
       if (!lastObservation || lastObservation.utcMs !== utcMs ||
@@ -367,8 +369,10 @@ export function createSkyBodies(): SkyBodiesHandle {
       }
       moonGlow.visible = moonAlbedoReady && moonAboveHorizon
       sunPath.visible =
+        showTrajectories &&
         sunPath.geometry.getAttribute('position')?.count >= 2
       moonPath.visible =
+        showTrajectories &&
         moonPath.geometry.getAttribute('position')?.count >= 2
     },
     dispose: () => {

@@ -520,6 +520,9 @@ export function ImmersiveView({
     clampAtmosphereAmount(savedImmersive.atmosphereAmount),
   )
   const [moonlightEnabled, setMoonlightEnabled] = useState(savedImmersive.moonlightEnabled)
+  const [showTrajectories, setShowTrajectories] = useState(
+    savedImmersive.showTrajectories,
+  )
   const [airglowAmount, setAirglowAmount] = useState(() =>
     clampAirglowAmount(savedImmersive.airglowAmount),
   )
@@ -638,6 +641,7 @@ export function ImmersiveView({
     showHalpha: savedImmersive.showHalpha,
     atmosphereAmount: clampAtmosphereAmount(savedImmersive.atmosphereAmount),
     moonlightEnabled: savedImmersive.moonlightEnabled,
+    showTrajectories: savedImmersive.showTrajectories,
     airglowAmount: clampAirglowAmount(savedImmersive.airglowAmount),
     airglowHue: clampAirglowHue(savedImmersive.airglowHue),
     airglowWaves: clampAirglowWaves(savedImmersive.airglowWaves),
@@ -654,6 +658,7 @@ export function ImmersiveView({
     showHalpha,
     atmosphereAmount,
     moonlightEnabled,
+    showTrajectories,
     airglowAmount,
     airglowHue,
     airglowWaves,
@@ -696,6 +701,7 @@ export function ImmersiveView({
         starGlow,
         showMilkyWay,
         showHalpha,
+        showTrajectories,
         atmosphereAmount,
         moonlightEnabled,
         airglowAmount,
@@ -748,6 +754,7 @@ export function ImmersiveView({
     starGlow,
     showMilkyWay,
     showHalpha,
+    showTrajectories,
     atmosphereAmount,
     moonlightEnabled,
     airglowAmount,
@@ -2094,6 +2101,7 @@ export function ImmersiveView({
         lon,
         elevationM: sceneGroundElevM,
         camera,
+        showTrajectories: skyTogglesRef.current.showTrajectories,
       })
 
       diagContextRef.current.cameraPos = {
@@ -3216,6 +3224,8 @@ export function ImmersiveView({
               atmosphereAmount,
               moonlightEnabled,
               onMoonlightChange: setMoonlightEnabled,
+              showTrajectories,
+              onShowTrajectoriesChange: setShowTrajectories,
               airglowAmount,
               airglowHue,
               airglowWaves,

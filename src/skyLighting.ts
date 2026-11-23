@@ -1,4 +1,5 @@
 import { sampleAtmospherePalette, twilightEnvelope } from './atmosphereSky'
+import { t } from './i18n'
 
 export type SkyEventId =
   | 'day'
@@ -22,19 +23,19 @@ export function skyEventFromSunAltitude(
   const alt = sunAltitudeDeg
   const morning = opts?.morning ?? false
 
-  if (alt >= 6) return { id: 'day', label: 'Journée' }
-  if (alt >= 0.5) return { id: 'golden', label: 'Heure dorée' }
+  if (alt >= 6) return { id: 'day', label: t('sky.period.day') }
+  if (alt >= 0.5) return { id: 'golden', label: t('sky.period.golden') }
   if (alt >= -4) {
     return morning
-      ? { id: 'sunrise', label: 'Lever de soleil' }
-      : { id: 'sunset', label: 'Coucher de soleil' }
+      ? { id: 'sunrise', label: t('sky.period.sunrise') }
+      : { id: 'sunset', label: t('sky.period.sunset') }
   }
-  if (alt >= -8) return { id: 'blue_hour', label: 'Heure bleue' }
-  if (alt >= -12) return { id: 'nautical', label: 'Crépuscule nautique' }
+  if (alt >= -8) return { id: 'blue_hour', label: t('sky.period.blueHour') }
+  if (alt >= -12) return { id: 'nautical', label: t('sky.period.nautical') }
   if (alt >= -18) {
-    return { id: 'astronomical', label: 'Crépuscule astronomique' }
+    return { id: 'astronomical', label: t('sky.period.astronomical') }
   }
-  return { id: 'night', label: 'Nuit' }
+  return { id: 'night', label: t('sky.period.night') }
 }
 
 export type SkyPalette = {

@@ -1,6 +1,25 @@
 # Third-party attributions
 
 Keep in sync with `src/attributions.ts` (Settings panel on the map).
+Celestial catalog build notes: `public/catalogs/ATTRIBUTION.md`.
+
+## HYG (stars)
+
+- **What**: Bright-star positions / magnitudes in the night sky and globe.
+- **Source**: [HYG Database v4.1](https://github.com/astronexus/HYG-Database) (Astronexus), mag ≤ 6 extract (`hygBrightStars.ts` / `catalogs/stars.json`).
+- **License**: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+
+## OpenNGC (deep sky)
+
+- **What**: Messier + bright/named NGC/IC subset for search / overlays.
+- **Source**: [OpenNGC](https://github.com/mattiaverga/OpenNGC) (Mattia Verga).
+- **License**: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+
+## Constellations
+
+- **What**: IAU 88 names + stick-figure geometry.
+- **Source**: IAU designations (public domain); geometry derived from Alan MacRobert / Dominic Ford figures.
+- **License**: Designations public domain; geometry [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## VIIRS radiance COG (Bortle / zenith SQM)
 
@@ -25,6 +44,15 @@ Keep in sync with `src/attributions.ts` (Settings panel on the map).
 ## Esri World Imagery
 
 - Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community.
+
+## OpenStreetMap / OpenFreeMap / Nominatim
+
+- Plan basemap labels via OpenFreeMap (OSM data, [ODbL](https://www.openstreetmap.org/copyright)).
+- Place search via [Nominatim](https://nominatim.org/) — respect the [usage policy](https://operations.osmfoundation.org/policies/nominatim/).
+
+## Open-Meteo
+
+- Forecast + recent archive weather — [Open-Meteo](https://open-meteo.com/) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
 
 ## MapLibre GL JS
 

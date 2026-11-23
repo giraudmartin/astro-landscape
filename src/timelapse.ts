@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 /** Timelapse planner — exposure cadence + mount mode for sequence preview. */
 
 export type TimelapseSupport = 'fixed' | 'equatorial'
@@ -7,9 +9,13 @@ export const TIMELAPSE_SUPPORTS: readonly TimelapseSupport[] = [
   'equatorial',
 ] as const
 
-export const TIMELAPSE_SUPPORT_LABELS: Record<TimelapseSupport, string> = {
-  fixed: 'Trépied fixe',
-  equatorial: 'Monture équatoriale',
+/** Localized support label (call at render time). */
+export function timelapseSupportLabel(support: TimelapseSupport): string {
+  return t(
+    support === 'equatorial'
+      ? 'viewfinder.tlapse.supportEq'
+      : 'viewfinder.tlapse.supportFixed',
+  )
 }
 
 export type TimelapsePlan = {

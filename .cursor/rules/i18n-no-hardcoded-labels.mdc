@@ -1,0 +1,40 @@
+---
+description: No hardcoded UI labels — every user-facing string goes through i18n (fr/en)
+globs: src/**/*.{ts,tsx}
+alwaysApply: true
+---
+
+# i18n — zero hardcoded labels
+
+Every user-facing string (button, title, aria-label, placeholder, hint, empty state, confirm, tooltip, loader tip, constellation/body display name) **must** come from the i18n catalogs. Locales: `fr` | `en`. Default = browser French → `fr`, else `en`; user override in Settings → Langue.
+
+## Where strings live
+
+| Kind | Location |
+|------|----------|
+| Chrome / UI copy | `src/i18n/locales/fr.ts` + `en.ts` (same key tree) |
+| Constellation names | `src/i18n/locales/constellations.fr.ts` + `.en.ts` |
+| Runtime API | `useT()` / `useLocale()` in React; `t()` / `tList()` / `getActiveLocale()` elsewhere (`src/i18n`) |
+
+Add new keys to **both** `fr` and `en`. Prefer dotted paths (`settings.title`, `map.searchPlace`). Use `{param}` placeholders — never concatenate translated fragments ad hoc when a template key works.
+
+## Forbidden
+
+| Hack | Why |
+|------|-----|
+| Hardcoded FR/EN in JSX (`>Fermer<`, `aria-label="…"`, `title="…"`, `placeholder="…"`) | Breaks the other locale; drifts from catalogs |
+| Module-level `LABELS = { …: 'Français' }` / `*_FR` maps of UI copy | Stale after locale switch; bypasses catalogs |
+| Shipping a feature with strings only in one locale file | Incomplete i18n |
+| Native `<select>` / OS chrome for in-app pickers when a dark custom control exists | Use `moon-preview-select-*` (or existing app pattern) |
+| “Just this one label” / debug HUD left in French for users | Still user-facing → catalog it (or gate strictly behind QA/dev flags with non-localized codes only) |
+
+## Allowed (not i18n)
+
+- Proper nouns / handles kept as data (`Martin GIRAUD`, `@tinmar_g`, catalog IDs, URLs)
+- Third-party **licence credit bodies** that are fixed English legalese (`attributions.ts` `credit` fields) — display **names** still via `t(entry.nameKey)`
+- Pure technical tokens (CSS class names, storage keys, GLSL, analytics event ids)
+- Comments and test fixtures that are not shown in the product UI
+
+## Rule of landing
+
+A UI change that introduces a user-visible hardcoded string is a failed change — move it into `fr.ts`/`en.ts` (and wire `t`/`useT`) before merge. When renaming or splitting keys, update **both** catalogs and all call sites.

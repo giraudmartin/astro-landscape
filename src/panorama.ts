@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 /** Panorama planner — multi-shot grid with frame overlap (photographer style). */
 
 /**
@@ -12,11 +14,10 @@ export const PANORAMA_PROJECTION_MODES: readonly PanoramaProjectionMode[] = [
   'spherical',
 ] as const
 
-export const PANORAMA_PROJECTION_LABELS: Record<PanoramaProjectionMode, string> =
-  {
-    optical: 'Optique (trépied)',
-    spherical: 'Sphérique (az/alt)',
-  }
+/** Localized projection-mode label (call at render time). */
+export function panoramaProjectionLabel(mode: PanoramaProjectionMode): string {
+  return t(`viewfinder.pano.proj.${mode}`)
+}
 
 export type PanoramaPlan = {
   enabled: boolean

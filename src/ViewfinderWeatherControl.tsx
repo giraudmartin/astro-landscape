@@ -5,6 +5,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react'
+import { useT } from './i18n'
 import { SettingsSlidersIcon } from './psIcons'
 import { ViewfinderFloatPanel } from './ViewfinderFloatPanel'
 import {
@@ -77,14 +78,17 @@ function LayerEditor({
   altMax: number
   onChange: (next: WeatherCloudLayer) => void
 }) {
+  const t = useT()
   return (
     <WeatherSection title={title}>
       <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
-        <span className="vf-landscape-menu__label">Activer la couche</span>
+        <span className="vf-landscape-menu__label">
+          {t('viewfinder.weather.layerEnable')}
+        </span>
         <input
           type="checkbox"
           checked={layer.enabled}
-          aria-label={`Activer ${title}`}
+          aria-label={t('viewfinder.weather.layerEnableAria', { title })}
           onChange={(event) =>
             onChange({ ...layer, enabled: event.target.checked })
           }
@@ -92,7 +96,7 @@ function LayerEditor({
       </label>
       <label className="vf-landscape-menu__field">
         <span className="vf-landscape-menu__label">
-          <span>Couverture</span>
+          <span>{t('viewfinder.weather.cover')}</span>
           <span className="vf-landscape-menu__value">{layer.cover} %</span>
         </span>
         <input
@@ -103,7 +107,7 @@ function LayerEditor({
           step={1}
           value={layer.cover}
           style={rangeProgressStyle(layer.cover, 0, 100)}
-          aria-label={`Couverture ${title}`}
+          aria-label={t('viewfinder.weather.coverAria', { title })}
           onChange={(event) =>
             onChange({
               ...layer,
@@ -114,7 +118,7 @@ function LayerEditor({
       </label>
       <label className="vf-landscape-menu__field">
         <span className="vf-landscape-menu__label">
-          <span>Altitude de base</span>
+          <span>{t('viewfinder.weather.baseAlt')}</span>
           <span className="vf-landscape-menu__value">
             {layer.altKm.toFixed(1)} km
           </span>
@@ -127,7 +131,7 @@ function LayerEditor({
           step={0.1}
           value={layer.altKm}
           style={rangeProgressStyle(layer.altKm, altMin, altMax)}
-          aria-label={`Altitude ${title}`}
+          aria-label={t('viewfinder.weather.baseAltAria', { title })}
           onChange={(event) =>
             onChange({
               ...layer,
@@ -138,7 +142,7 @@ function LayerEditor({
       </label>
       <label className="vf-landscape-menu__field">
         <span className="vf-landscape-menu__label">
-          <span>Épaisseur</span>
+          <span>{t('viewfinder.weather.thickness')}</span>
           <span className="vf-landscape-menu__value">
             {layer.thickKm.toFixed(1)} km
           </span>
@@ -151,7 +155,7 @@ function LayerEditor({
           step={0.1}
           value={layer.thickKm}
           style={rangeProgressStyle(layer.thickKm, 0.3, 2)}
-          aria-label={`Épaisseur ${title}`}
+          aria-label={t('viewfinder.weather.thicknessAria', { title })}
           onChange={(event) =>
             onChange({
               ...layer,
@@ -162,7 +166,7 @@ function LayerEditor({
       </label>
       <label className="vf-landscape-menu__field">
         <span className="vf-landscape-menu__label">
-          <span>Densité</span>
+          <span>{t('viewfinder.weather.density')}</span>
           <span className="vf-landscape-menu__value">{layer.densityPct} %</span>
         </span>
         <input
@@ -173,7 +177,7 @@ function LayerEditor({
           step={5}
           value={layer.densityPct}
           style={rangeProgressStyle(layer.densityPct, 0, 200)}
-          aria-label={`Densité ${title}`}
+          aria-label={t('viewfinder.weather.densityAria', { title })}
           onChange={(event) =>
             onChange({
               ...layer,
@@ -191,29 +195,34 @@ function WeatherPanelBody({
   weather,
   onWeatherChange,
 }: ViewfinderWeatherControlProps) {
+  const t = useT()
   return (
     <>
-      <WeatherSection title="Nuages">
+      <WeatherSection title={t('viewfinder.weather.clouds')}>
         <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
-          <span className="vf-landscape-menu__label">Activer</span>
+          <span className="vf-landscape-menu__label">
+            {t('viewfinder.weather.enable')}
+          </span>
           <input
             type="checkbox"
             checked={weather.enabled}
-            aria-label="Activer les nuages volumétriques"
+            aria-label={t('viewfinder.weather.enableVolumetric')}
             onChange={(event) =>
               onWeatherChange({ ...base, enabled: event.target.checked })
             }
           />
         </label>
         <p className="vf-landscape-menu__legend-note">
-          Couverture max {weather.totalCloudsPct}% · prototype Chamonix
+          {t('viewfinder.weather.coverNote', {
+            pct: weather.totalCloudsPct,
+          })}
         </p>
         <div className="vf-landscape-menu__field vf-landscape-menu__field--row">
           {(
             [
-              ['clear', 'Dégagé'],
-              ['scattered', 'Épars'],
-              ['overcast', 'Couvert'],
+              ['clear', t('viewfinder.weather.preset.clear')],
+              ['scattered', t('viewfinder.weather.preset.scattered')],
+              ['overcast', t('viewfinder.weather.preset.overcast')],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -230,11 +239,13 @@ function WeatherPanelBody({
           ))}
         </div>
         <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
-          <span className="vf-landscape-menu__label">Suivre Open-Meteo</span>
+          <span className="vf-landscape-menu__label">
+            {t('viewfinder.weather.followOwm')}
+          </span>
           <input
             type="checkbox"
             checked={Boolean(weather.followForecast)}
-            aria-label="Suivre la prévision Open-Meteo"
+            aria-label={t('viewfinder.weather.followOwmAria')}
             onChange={(event) =>
               onWeatherChange({
                 ...base,
@@ -244,11 +255,13 @@ function WeatherPanelBody({
           />
         </label>
         <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
-          <span className="vf-landscape-menu__label">Animer la dérive</span>
+          <span className="vf-landscape-menu__label">
+            {t('viewfinder.weather.animateDrift')}
+          </span>
           <input
             type="checkbox"
             checked={weather.animateClouds}
-            aria-label="Animer la dérive des nuages"
+            aria-label={t('viewfinder.weather.animateDriftAria')}
             onChange={(event) =>
               onWeatherChange({
                 ...base,
@@ -259,7 +272,7 @@ function WeatherPanelBody({
         </label>
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Vent</span>
+            <span>{t('viewfinder.weather.wind')}</span>
             <span className="vf-landscape-menu__value">
               {weather.wind.toFixed(1)}×
             </span>
@@ -272,7 +285,7 @@ function WeatherPanelBody({
             step={0.1}
             value={weather.wind}
             style={rangeProgressStyle(weather.wind, 0, 8)}
-            aria-label="Vitesse du vent des nuages"
+            aria-label={t('viewfinder.weather.windAria')}
             onChange={(event) =>
               onWeatherChange({
                 ...base,
@@ -284,7 +297,7 @@ function WeatherPanelBody({
       </WeatherSection>
 
       <LayerEditor
-        title="Basses · stratus / cumulus"
+        title={t('viewfinder.weather.layer.low')}
         layer={weather.low}
         altMin={1.2}
         altMax={3.5}
@@ -293,7 +306,7 @@ function WeatherPanelBody({
         }
       />
       <LayerEditor
-        title="Moyennes · altocumulus"
+        title={t('viewfinder.weather.layer.mid')}
         layer={weather.mid}
         altMin={3.6}
         altMax={6}
@@ -302,7 +315,7 @@ function WeatherPanelBody({
         }
       />
       <LayerEditor
-        title="Hautes · cirrus"
+        title={t('viewfinder.weather.layer.high')}
         layer={weather.high}
         altMin={6.1}
         altMax={9}
@@ -322,6 +335,7 @@ export function ViewfinderWeatherControl(props: ViewfinderWeatherControlProps) {
     anchorRef,
     ...panelProps
   } = props
+  const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = openProp ?? uncontrolledOpen
   const setOpen = (next: boolean) => {
@@ -352,18 +366,20 @@ export function ViewfinderWeatherControl(props: ViewfinderWeatherControlProps) {
           }
           aria-expanded={open}
           aria-haspopup="dialog"
-          title="Réglages météo"
+          title={t('viewfinder.weather.settingsTitle')}
           onClick={() => setOpen(!open)}
         >
           <SettingsSlidersIcon size={16} />
-          <span className="vf-proj-control__muted">Météo</span>
+          <span className="vf-proj-control__muted">
+            {t('viewfinder.weather.title')}
+          </span>
         </button>
       ) : null}
 
       <ViewfinderFloatPanel
         open={open}
         onClose={() => setOpen(false)}
-        title="Météo"
+        title={t('viewfinder.weather.title')}
         storageKey={FLOAT_POS_STORAGE_KEY}
         defaultPos={DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}

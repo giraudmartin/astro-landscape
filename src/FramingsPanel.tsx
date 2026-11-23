@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { intlLocale, useLocale, useT } from './i18n'
 import { MobileRailChrome } from './MobileRailChrome'
 import { FramingThumb } from './FramingThumb'
 import { shiftIsoDate } from './celestial'
@@ -172,11 +173,6 @@ function PinIcon() {
   )
 }
 
-function formatTime(peakLocal: string): string {
-  const hm = peakLocal.slice(11, 16)
-  return hm ? hm.replace(':', ' h ') : ''
-}
-
 /** Card clock — HH:MM, date lives in the night group header. */
 function formatCardClock(peakLocal: string): string {
   const hm = peakLocal.slice(11, 16)
@@ -184,18 +180,19 @@ function formatCardClock(peakLocal: string): string {
 }
 
 /** Read-only timeline stamp for the save form (no native date picker). */
-function formatFramingWhenLabel(peakLocal: string): string {
+function formatFramingWhenLabel(peakLocal: string, french: boolean): string {
   const day = peakLocal.slice(0, 10)
   const hm = peakLocal.slice(11, 16)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return peakLocal
   const [y, m, d] = day.split('-')
-  return hm ? `${d}/${m}/${y} · ${hm.replace(':', ' h ')}` : `${d}/${m}/${y}`
+  const clock = french ? hm.replace(':', ' h ') : hm
+  return hm ? `${d}/${m}/${y} · ${clock}` : `${d}/${m}/${y}`
 }
 
-function monthLabel(month: string): string {
+function monthLabel(month: string, locale: string): string {
   const [y, m] = month.split('-').map(Number)
   if (!y || !m) return month
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat(locale, {
     month: 'long',
     year: 'numeric',
     timeZone: 'UTC',
@@ -245,6 +242,7 @@ export function FramingsToggle({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const t = useT()
   return (
     <div className="my-events-control framings-control">
       <button
@@ -256,8 +254,8 @@ export function FramingsToggle({
         }
         aria-expanded={open}
         aria-controls="framings-rail"
-        aria-label="Mes cadrages"
-        title="Mes cadrages"
+        aria-label={t('framings.toggle')}
+        title={t('framings.toggle')}
         onClick={() => onOpenChange(!open)}
       >
         <FramingsMapIcon />
@@ -294,6 +292,8 @@ export function FramingsPanel({
   railWidthPx,
   onRailWidthChange,
 }: FramingsPanelProps) {
+  const { locale: appLocale, t, tList } = useLocale()
+  const dateLocale = intlLocale(appLocale)
   const [draftName, setDraftName] = useState('')
   const [draftWhen, setDraftWhen] = useState('')
   const [spotMenuOpen, setSpotMenuOpen] = useState(false)
@@ -360,11 +360,11 @@ export function FramingsPanel({
 
   const title = editor
     ? editor.id
-      ? 'Renommer'
-      : 'Nouveau cadrage'
+      ? t('framings.rename')
+      : t('framings.new')
     : mode === 'map'
-      ? 'Mes cadrages'
-      : 'Cadrages'
+      ? t('framings.titleMap')
+      : t('framings.titleImmersive')
 
   const spotLine =
     editor?.spotName ||
@@ -372,8 +372,8 @@ export function FramingsPanel({
 
   const emptyMessage =
     mode === 'map'
-      ? 'Les cadrages enregistrés depuis la vue trépied apparaîtront ici.'
-      : 'Enregistre le cadrage actuel pour le retrouver à cette heure et à ce spot.'
+      ? t('framings.emptyMap')
+      : t('framings.emptyImmersive')
 
   return (
     <aside
@@ -394,8 +394,8 @@ export function FramingsPanel({
               <button
                 type="button"
                 className="framings-rail__back"
-                aria-label="Retour aux cadrages"
-                title="Retour aux cadrages"
+                aria-label={t('framings.back')}
+                title={t('framings.back')}
                 onClick={() => onEditorChange(null)}
               >
                 ‹
@@ -421,7 +421,7 @@ export function FramingsPanel({
           <button
             type="button"
             className="my-events-rail__close"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
             onClick={onClose}
           >
             ×
@@ -436,7 +436,7 @@ export function FramingsPanel({
                 event.preventDefault()
                 onSubmitEditor({
                   ...editor,
-                  name: draftName.trim() || editor.name || 'Cadrage',
+                  name: draftName.trim() || editor.name || t('framings.defaultName'),
                   peakLocal: editor.id
                     ? editor.peakLocal
                     : peakLocalFromDatetimeLocal(draftWhen),
@@ -444,19 +444,22 @@ export function FramingsPanel({
               }}
             >
               <label className="framings-form__field">
-                <span>Nom</span>
+                <span>{t('framings.name')}</span>
                 <input
                   autoFocus
                   required
                   maxLength={68}
                   value={draftName}
-                  placeholder="Ex. Photo 1"
+                  placeholder={t('framings.placeholder')}
                   onChange={(e) => setDraftName(e.target.value)}
                 />
               </label>
               {!editor.id ? (
                 <p className="framings-form__meta">
-                  {formatFramingWhenLabel(draftWhen || editor.peakLocal)}
+                  {formatFramingWhenLabel(
+                    draftWhen || editor.peakLocal,
+                    appLocale === 'fr',
+                  )}
                   {' · '}
                   {framingViewSummary(editor.view)}
                   {' · '}
@@ -476,11 +479,11 @@ export function FramingsPanel({
                     className="spot-save-card__delete"
                     onClick={() => onDeleteFraming(editor.id!)}
                   >
-                    Supprimer
+                    {t('common.delete')}
                   </button>
                 ) : null}
                 <button type="submit" className="control-panel__primary">
-                  Enregistrer
+                  {t('common.save')}
                 </button>
               </div>
             </form>
@@ -495,37 +498,37 @@ export function FramingsPanel({
                       disabled={!canSaveCurrent}
                       title={
                         canSaveCurrent
-                          ? 'Enregistrer le cadrage actuel'
-                          : 'Passe en Photo, Pano ou Timelapse pour enregistrer'
+                          ? t('framings.saveCurrent')
+                          : t('framings.saveDisabledTitle')
                       }
                       onClick={onRequestSaveCurrent}
                     >
-                      <SaveIcon /> Enregistrer
+                      <SaveIcon /> {t('common.save')}
                     </button>
                     {!canSaveCurrent ? (
                       <p className="framings-panel__hint">
-                        Passe en Photo / Pano, ou ouvre Timelapse.
+                        {t('framings.saveHint')}
                       </p>
                     ) : null}
                   </>
                 ) : (
                   <div className="framings-panel__filter">
-                    <span id={spotLabelId}>Spot</span>
+                    <span id={spotLabelId}>{t('common.spot')}</span>
                     <div className="moon-preview-select-wrap" ref={spotMenuRef}>
                       <button
                         type="button"
                         className="moon-preview-select-trigger"
                         aria-labelledby={spotLabelId}
-                        aria-label="Filtrer par spot"
+                        aria-label={t('framings.filterSpot')}
                         aria-haspopup="listbox"
                         aria-expanded={spotMenuOpen}
                         onClick={() => setSpotMenuOpen((value) => !value)}
                       >
                         <span>
                           {filterSpotId === 'all'
-                            ? 'Tous les spots'
+                            ? t('framings.allSpots')
                             : (spotOptions.find((opt) => opt.id === filterSpotId)
-                                ?.label ?? 'Tous les spots')}
+                                ?.label ?? t('framings.allSpots'))}
                         </span>
                         <svg
                           viewBox="0 0 16 16"
@@ -564,7 +567,7 @@ export function FramingsPanel({
                                 setSpotMenuOpen(false)
                               }}
                             >
-                              Tous les spots
+                              {t('framings.allSpots')}
                             </button>
                           </li>
                           {spotOptions.map((opt) => {
@@ -599,7 +602,7 @@ export function FramingsPanel({
                 <div className="framings-panel__display-row">
                   <nav
                     className="framings-panel__display"
-                    aria-label="Affichage des cadrages"
+                    aria-label={t('framings.displayAria')}
                   >
                     <button
                       type="button"
@@ -611,7 +614,7 @@ export function FramingsPanel({
                       aria-pressed={display === 'list'}
                       onClick={() => onDisplayChange('list')}
                     >
-                      <ListIcon /> Liste
+                      <ListIcon /> {t('common.list')}
                     </button>
                     <button
                       type="button"
@@ -623,7 +626,7 @@ export function FramingsPanel({
                       aria-pressed={display === 'calendar'}
                       onClick={() => onDisplayChange('calendar')}
                     >
-                      <CalendarIcon size={14} /> Calendrier
+                      <CalendarIcon size={14} /> {t('common.calendar')}
                     </button>
                   </nav>
                   <button
@@ -631,13 +634,13 @@ export function FramingsPanel({
                     className="framings-panel__sort"
                     title={
                       listSort === 'newest'
-                        ? 'Ordre : plus récents d’abord. Cliquer pour plus anciens.'
-                        : 'Ordre : plus anciens d’abord. Cliquer pour plus récents.'
+                        ? t('framings.sortNewestTitle')
+                        : t('framings.sortOldestTitle')
                     }
                     aria-label={
                       listSort === 'newest'
-                        ? 'Tri du plus récent au plus ancien. Activer le tri inverse.'
-                        : 'Tri du plus ancien au plus récent. Activer le tri inverse.'
+                        ? t('framings.sortNewestAria')
+                        : t('framings.sortOldestAria')
                     }
                     onClick={() =>
                       setListSort((value) =>
@@ -654,24 +657,24 @@ export function FramingsPanel({
               {display === 'calendar' ? (
                 <section
                   className="framings-cal"
-                  aria-label="Calendrier des cadrages"
+                  aria-label={t('framings.calAria')}
                 >
                   <div className="framings-cal__nav">
                     <button
                       type="button"
                       className="framings-cal__nav-btn"
-                      aria-label="Mois précédent"
+                      aria-label={t('common.prevMonth')}
                       onClick={() =>
                         onCalendarMonthChange(shiftMonth(calendarMonth, -1))
                       }
                     >
                       ‹
                     </button>
-                    <h3 aria-live="polite">{monthLabel(calendarMonth)}</h3>
+                    <h3 aria-live="polite">{monthLabel(calendarMonth, dateLocale)}</h3>
                     <button
                       type="button"
                       className="framings-cal__nav-btn"
-                      aria-label="Mois suivant"
+                      aria-label={t('common.nextMonth')}
                       onClick={() =>
                         onCalendarMonthChange(shiftMonth(calendarMonth, 1))
                       }
@@ -680,11 +683,9 @@ export function FramingsPanel({
                     </button>
                   </div>
                   <div className="framings-cal__weekdays" aria-hidden="true">
-                    {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(
-                      (d) => (
-                        <span key={d}>{d}</span>
-                      ),
-                    )}
+                    {tList('common.weekdaysMed').map((d) => (
+                      <span key={d}>{d}</span>
+                    ))}
                   </div>
                   <div className="framings-cal__grid">
                     {Array.from({ length: monthStartOffset(calendarMonth) }).map(
@@ -735,7 +736,7 @@ export function FramingsPanel({
               {display === 'list' ? (
                 visible.length === 0 ? (
                   <div className="framings-empty">
-                    <strong>Aucun cadrage enregistré</strong>
+                    <strong>{t('framings.emptyTitle')}</strong>
                     <p>{emptyMessage}</p>
                   </div>
                 ) : (
@@ -762,10 +763,8 @@ export function FramingsPanel({
                 />
               ) : (
                 <div className="framings-empty">
-                  <strong>Aucun cadrage à cette date</strong>
-                  <p>
-                    Choisis une autre date ou affiche la liste complète.
-                  </p>
+                  <strong>{t('framings.emptyDayTitle')}</strong>
+                  <p>{t('framings.emptyDayHint')}</p>
                 </div>
               )}
               </div>
@@ -792,15 +791,18 @@ function NightSection({
   onRestore: (framing: PersonalFraming) => void
   onEdit: (framing: PersonalFraming) => void
 }) {
+  const t = useT()
   return (
     <section className="framings-night">
       <header className="framings-night__header">
         <h3>{framingNightLabel(day, items)}</h3>
         <small>
-          {items.length} cadrage{items.length === 1 ? '' : 's'}
+          {items.length === 1
+            ? t('framings.countOne', { n: items.length })
+            : t('framings.countOther', { n: items.length })}
         </small>
       </header>
-      <ul className="framings-list" aria-label="Cadrages de la nuit">
+      <ul className="framings-list" aria-label={t('framings.listAria')}>
         {items.map((framing) => {
           const active = framing.id === activeId
           const clock = formatCardClock(framing.peakLocal)
@@ -817,7 +819,7 @@ function NightSection({
                 className="framings-item__row"
                 aria-pressed={active}
                 aria-current={active ? 'true' : undefined}
-                title="Rouvrir le cadrage"
+                title={t('framings.reopen')}
                 onClick={() => onRestore(framing)}
               >
                 <FramingThumb
@@ -851,10 +853,14 @@ function NightSection({
                 className="framings-item__edit"
                 aria-label={
                   clock
-                    ? `Renommer le cadrage ${typeLabel} « ${framing.name} » à ${clock}`
-                    : `Modifier ${framing.name}`
+                    ? t('framings.renameItem', {
+                        type: typeLabel,
+                        name: framing.name,
+                        clock,
+                      })
+                    : t('framings.editItem', { name: framing.name })
                 }
-                title="Modifier"
+                title={t('common.edit')}
                 onClick={() => onEdit(framing)}
               >
                 <SquarePenIcon />

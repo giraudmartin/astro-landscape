@@ -7,7 +7,7 @@ import {
 import { civilClockFromUtc, civilDayStartUtcMs } from '../celestial'
 import { objectAltitudeDegAt } from './position'
 import {
-  HORIZON_NOTE_FR,
+  horizonNote,
   type CelestialObject,
   type HorizonCrossing,
   type ObjectDayVisibility,
@@ -160,7 +160,7 @@ function fixedTargetVisibility(
   if (samples.length < 3) {
     return {
       status: 'unknown',
-      horizonNote: HORIZON_NOTE_FR,
+      horizonNote: horizonNote(),
       rise: null,
       set: null,
       culmination: null,
@@ -180,7 +180,7 @@ function fixedTargetVisibility(
 
   return {
     status,
-    horizonNote: HORIZON_NOTE_FR,
+    horizonNote: horizonNote(),
     rise:
       status === 'rises_and_sets' && rises[0] != null
         ? toCrossing(rises[0], lon)
@@ -264,7 +264,7 @@ function bodyVisibility(
 
   return {
     status,
-    horizonNote: HORIZON_NOTE_FR,
+    horizonNote: horizonNote(),
     rise: riseInDay != null ? toCrossing(riseInDay, lon) : null,
     set: setInDay != null ? toCrossing(setInDay, lon) : null,
     culmination: culMs != null ? toCrossing(culMs, lon) : null,
@@ -284,7 +284,7 @@ export function computeDayVisibility(
     if (!body) {
       return {
         status: 'unknown',
-        horizonNote: HORIZON_NOTE_FR,
+        horizonNote: horizonNote(),
         rise: null,
         set: null,
         culmination: null,
@@ -303,7 +303,7 @@ export function computeDayVisibility(
   if (object.raHours == null || object.decDeg == null) {
     return {
       status: 'unknown',
-      horizonNote: HORIZON_NOTE_FR,
+      horizonNote: horizonNote(),
       rise: null,
       set: null,
       culmination: null,

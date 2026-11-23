@@ -40,6 +40,7 @@ import {
   takeParkedLocalTerrain,
   reviveLocalTerrainTextures,
   type LocalTerrainHandle,
+  terrainPhaseLabel,
   type TerrainLoadPhase,
 } from './localTerrainMesh'
 import {
@@ -48,19 +49,17 @@ import {
 } from './renderDiagnostic'
 import { RenderDiagnosticCard } from './RenderDiagnosticCard'
 import { shuffleAstroLoaderTips } from './astroLoaderTips'
+import { useLocale } from './i18n'
 import {
   formatMegabytes,
   getNetworkBytesTotal,
   subscribeNetworkBytes,
 } from './networkBytesMeter'
 
-const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
-  dem: 'Relief DEM\u2026',
-  preview: 'Aper\u00e7u satellite\u2026',
-  ortho: 'Ortho haute r\u00e9solution\u2026',
-  detail: 'Relief moyen\u2026',
-  far: 'Horizon 300 km\u2026',
-  ready: 'Pr\u00eat',
+/** Footer terrain status — stored as a key so it re-renders on locale change. */
+type TerrainStatusLabel = {
+  key: string
+  params?: Record<string, string | number>
 }
 
 const LOADER_TIP_ROTATE_MS = 15000
@@ -74,7 +73,7 @@ import { createNightSky } from './nightSky'
 import { createSkyBodies } from './skyBodies'
 import { PhotoFrameOverlay } from './PhotoFrameOverlay'
 import {
-  COMPOSITION_GUIDE_LABEL,
+  compositionGuideLabel,
   nextCompositionGuideMode,
   type CompositionGuideMode,
 } from './compositionGuides'
@@ -232,12 +231,6 @@ const MOVE_KEYS: Record<string, MoveDir> = {
   ArrowLeft: 'left',
   ArrowRight: 'right',
 }
-const MOVE_LABEL: Record<MoveDir, string> = {
-  up: 'Haut',
-  down: 'Bas',
-  left: 'Gauche',
-  right: 'Droite',
-}
 
 function emptyMoveHeld(): Record<MoveDir, boolean> {
   return { up: false, down: false, left: false, right: false }
@@ -318,6 +311,7 @@ export function ImmersiveView({
   onFramingCanSaveChange,
   framingApiRef,
 }: ImmersiveViewProps) {
+  const { t, locale } = useLocale()
   const onTerrainReadyChangeRef = useRef(onTerrainReadyChange)
   onTerrainReadyChangeRef.current = onTerrainReadyChange
   const activeRef = useRef(active)
@@ -413,7 +407,9 @@ export function ImmersiveView({
     setTargetLocked(false)
   }
   const lookAnimRef = useRef<number | null>(null)
-  const [terrainLabel, setTerrainLabel] = useState('Relief…')
+  const [terrainLabel, setTerrainLabel] = useState<TerrainStatusLabel | null>({
+    key: 'immersive.terrain.label.loading',
+  })
   const [terrainPhase, setTerrainPhase] = useState<TerrainLoadPhase>('dem')
   const [terrainDemFromCache, setTerrainDemFromCache] = useState(false)
   const [terrainProgress, setTerrainProgress] = useState(0)
@@ -655,7 +651,7 @@ export function ImmersiveView({
   /** Live fixed-tripod star-trail arc — only while the Timelapse planner is active. */
   const starTrailArcRadRef = useRef(0)
   starTrailArcRadRef.current =
-    frameMode === 'timelapse'
+    cadrageSaveMode === 'timelapse'
       ? timelapseStarTrailArcRad(timelapse.poseS, timelapse.support)
       : 0
 
@@ -1653,8 +1649,16 @@ export function ImmersiveView({
         startLocalHaloOnce()
         setTerrainLabel(
           isFlatTerrainHandle(terrain)
-            ? 'Sol plat · sans DEM'
-            : `DEM z${terrain.stats.demMaxZ} · ${terrain.stats.tiles} tuiles · Δ${Math.round(relief)} m · LOD ${farKm} km`,
+            ? { key: 'immersive.terrain.label.flat' }
+            : {
+                key: 'immersive.terrain.label.lod',
+                params: {
+                  z: terrain.stats.demMaxZ,
+                  tiles: terrain.stats.tiles,
+                  relief: Math.round(relief),
+                  km: farKm,
+                },
+              },
         )
         window.setTimeout(() => {
           if (!disposed) setLoaderVisible(false)
@@ -1662,16 +1666,27 @@ export function ImmersiveView({
         return
       }
       if (!terrain.ready && farKm === 0) {
-        setTerrainLabel(
-          `DEM z${terrain.stats.demMaxZ} · ${terrain.stats.tiles} tuiles · ${terrain.mesh.children.length > 0 ? 'ortho…' : 'aperçu…'}`,
-        )
+        setTerrainLabel({
+          key:
+            terrain.mesh.children.length > 0
+              ? 'immersive.terrain.label.loadingOrtho'
+              : 'immersive.terrain.label.loadingPreview',
+          params: { z: terrain.stats.demMaxZ, tiles: terrain.stats.tiles },
+        })
         return
       }
-      setTerrainLabel(
-        farKm > 0
-          ? `DEM z${terrain.stats.demMaxZ} · ${terrain.stats.tiles} tuiles · Δ${Math.round(relief)} m · LOD ${farKm} km`
-          : `DEM z${terrain.stats.demMaxZ} · ${terrain.stats.tiles} tuiles · Δ${Math.round(relief)} m · ortho z18`,
-      )
+      setTerrainLabel({
+        key:
+          farKm > 0
+            ? 'immersive.terrain.label.lod'
+            : 'immersive.terrain.label.ortho18',
+        params: {
+          z: terrain.stats.demMaxZ,
+          tiles: terrain.stats.tiles,
+          relief: Math.round(relief),
+          km: farKm,
+        },
+      })
     }
 
     if (flatTerrain) {
@@ -1687,7 +1702,7 @@ export function ImmersiveView({
       terrainUnlockedRef.current = true
       setTerrainUnlocked(true)
       setLoaderVisible(false)
-      setTerrainLabel('Sol plat · sans DEM')
+      setTerrainLabel({ key: 'immersive.terrain.label.flat' })
       mountTerrain(flat)
     } else {
       const parked = takeParkedLocalTerrain(lat, lon, sceneGroundElevM)
@@ -1704,7 +1719,7 @@ export function ImmersiveView({
         mountTerrain(parked)
       } else {
         clearParkedLocalTerrain()
-        setTerrainLabel('Relief…')
+        setTerrainLabel({ key: 'immersive.terrain.label.loading' })
         setTerrainPhase('dem')
         setTerrainDemFromCache(false)
         setTerrainProgress(0)
@@ -1748,7 +1763,7 @@ export function ImmersiveView({
           .catch((err: unknown) => {
             console.error('[terrain]', err)
             if (!disposed) {
-              setTerrainLabel('Relief indisponible')
+              setTerrainLabel({ key: 'immersive.terrain.label.unavailable' })
               terrainUnlockedRef.current = true
               setTerrainUnlocked(true)
               setTerrainReady(true)
@@ -2287,7 +2302,7 @@ export function ImmersiveView({
     drawNext()
     const id = window.setInterval(drawNext, LOADER_TIP_ROTATE_MS)
     return () => window.clearInterval(id)
-  }, [loaderVisible])
+  }, [loaderVisible, locale])
 
   const timelapsePreviewApiRef = useRef(timelapsePreview)
   timelapsePreviewApiRef.current = timelapsePreview
@@ -2509,9 +2524,9 @@ export function ImmersiveView({
       <ViewBearingHud
         bearingDeg={yawDeg}
         altitudeMslM={groundElevationM + eyeHeightM}
-        altitudeAriaLabel={`Altitude objectif ${Math.round(
-          groundElevationM + eyeHeightM,
-        )} m`}
+        altitudeAriaLabel={t('immersive.altAria', {
+          m: Math.round(groundElevationM + eyeHeightM),
+        })}
       />
       {loaderVisible ? (
         <div
@@ -2524,21 +2539,25 @@ export function ImmersiveView({
             <div className="immersive__loader-card">
               <div className="immersive__loader-header">
                 <div className="immersive__loader-heading">
-                  <p className="immersive__loader-eyebrow">Terrain</p>
+                  <p className="immersive__loader-eyebrow">
+                    {t('immersive.terrain.eyebrow')}
+                  </p>
                   <p className="immersive__loader-phase">
                     {terrainReady
-                      ? 'Vue prête'
+                      ? t('immersive.terrain.ready')
                       : terrainPhase === 'dem' && terrainDemFromCache
-                        ? 'Relief (cache)\u2026'
-                        : TERRAIN_PHASE_LABEL[terrainPhase]}
+                        ? t('immersive.terrain.cache')
+                        : terrainPhaseLabel(terrainPhase)}
                   </p>
                   <p className="immersive__loader-detail">
                     {terrainReady
-                      ? 'Relief et ortho disponibles'
+                      ? t('immersive.terrain.detailReady')
                       : terrainUnlocked
-                        ? 'Affinage en arrière-plan'
-                        : 'Construction de la scène immersive'}
-                    {` · ${formatMegabytes(netBytes)} reçus`}
+                        ? t('immersive.terrain.detailRefine')
+                        : t('immersive.terrain.detailBuild')}
+                    {` ${t('immersive.terrain.bytesReceived', {
+                      mb: formatMegabytes(netBytes, t('immersive.terrain.mbUnit')),
+                    })}`}
                   </p>
                 </div>
                 <p className="immersive__loader-pct">
@@ -2567,7 +2586,7 @@ export function ImmersiveView({
               >
                 <p className="immersive__loader-tip">
                   <span className="immersive__loader-tip-label">
-                    Le saviez-vous ?
+                    {t('immersive.tipLabel')}
                   </span>
                   {loaderTip}
                 </p>
@@ -2599,13 +2618,13 @@ export function ImmersiveView({
       <div
         className="moon-preview-hud-tools"
         role="toolbar"
-        aria-label="Ciel"
+        aria-label={t('immersive.toolbar.sky')}
       >
         {frameMode === 'dslr' || frameMode === 'pano' ? (
           <div
             className="moon-preview-hud-tools__group"
             role="group"
-            aria-label="Cadrage"
+            aria-label={t('immersive.toolbar.framing')}
           >
             <button
               type="button"
@@ -2618,13 +2637,13 @@ export function ImmersiveView({
               disabled={timelapsePreviewActive}
               title={
                 framesLocked
-                  ? 'Déverrouiller le cadrage (suit le viseur)'
-                  : 'Verrouiller le cadrage sur le paysage'
+                  ? t('immersive.lock.unlockTitle')
+                  : t('immersive.lock.lockTitle')
               }
               aria-label={
                 framesLocked
-                  ? 'Déverrouiller le cadrage'
-                  : 'Verrouiller le cadrage sur le paysage'
+                  ? t('immersive.lock.unlock')
+                  : t('immersive.lock.lock')
               }
               onClick={() => {
                 if (framesLocked) {
@@ -2642,8 +2661,8 @@ export function ImmersiveView({
               type="button"
               className="moon-preview-hud-tool"
               disabled={!framesLocked || timelapsePreviewActive}
-              title="Recentrer la vue sur le cadrage verrouillé"
-              aria-label="Recentrer la vue sur le cadrage verrouillé"
+              title={t('immersive.lock.recenter')}
+              aria-label={t('immersive.lock.recenter')}
               onClick={() => {
                 const { yaw, pitch } = lockLook
                 lookRef.current = { yaw, pitch, roll: 0 }
@@ -2665,13 +2684,17 @@ export function ImmersiveView({
               disabled={frameMode !== 'dslr'}
               title={
                 frameMode !== 'dslr'
-                  ? 'Guide de composition — disponible en mode Photo'
-                  : `Guide de composition : ${COMPOSITION_GUIDE_LABEL[compositionGuide]}. Cliquer pour changer.`
+                  ? t('immersive.guide.photoOnly')
+                  : t('immersive.guide.cycle', {
+                      label: compositionGuideLabel(compositionGuide),
+                    })
               }
               aria-label={
                 frameMode !== 'dslr'
-                  ? 'Guide de composition — disponible en mode Photo'
-                  : `Guide de composition : ${COMPOSITION_GUIDE_LABEL[compositionGuide]}. Cliquer pour changer.`
+                  ? t('immersive.guide.photoOnly')
+                  : t('immersive.guide.cycle', {
+                      label: compositionGuideLabel(compositionGuide),
+                    })
               }
               onClick={() =>
                 setCompositionGuide((mode) => nextCompositionGuideMode(mode))
@@ -2705,7 +2728,7 @@ export function ImmersiveView({
         <div
           className="moon-preview-hud-tools__group"
           role="group"
-          aria-label="Couches célestes"
+          aria-label={t('immersive.layersAria')}
         >
           <button
             type="button"
@@ -2715,8 +2738,8 @@ export function ImmersiveView({
                 : 'moon-preview-hud-tool'
             }
             aria-pressed={showMilkyWay}
-            title="Voie lactée"
-            aria-label="Voie lactée"
+            title={t('immersive.layer.milkyWay')}
+            aria-label={t('immersive.layer.milkyWay')}
             onClick={() => setShowMilkyWay((v) => !v)}
           >
             <MilkyWayIcon />
@@ -2729,8 +2752,8 @@ export function ImmersiveView({
                 : 'moon-preview-hud-tool'
             }
             aria-pressed={showHalpha}
-            title="Hα — émission hydrogène"
-            aria-label="Hα"
+            title={t('immersive.layer.halphaTitle')}
+            aria-label={t('immersive.layer.halpha')}
             onClick={() => {
               setShowHalpha((v) => {
                 const next = !v
@@ -2749,8 +2772,8 @@ export function ImmersiveView({
                 : 'moon-preview-hud-tool'
             }
             aria-pressed={showConstellations}
-            title="Constellations"
-            aria-label="Constellations"
+            title={t('immersive.layer.constellations')}
+            aria-label={t('immersive.layer.constellations')}
             onClick={() => setShowConstellations((v) => !v)}
           >
             <ConstellationsIcon />
@@ -2763,8 +2786,8 @@ export function ImmersiveView({
                 : 'moon-preview-hud-tool'
             }
             aria-pressed={showCelestialGrid}
-            title="Grille RA/Dec"
-            aria-label="Grille RA/Dec"
+            title={t('immersive.layer.radec')}
+            aria-label={t('immersive.layer.radec')}
             onClick={() => setShowCelestialGrid((v) => !v)}
           >
             <RaDecGridIcon />
@@ -2777,8 +2800,8 @@ export function ImmersiveView({
                 : 'moon-preview-hud-tool'
             }
             aria-pressed={showAzimuthGrid}
-            title="Grille azimutale"
-            aria-label="Grille azimutale"
+            title={t('immersive.layer.az')}
+            aria-label={t('immersive.layer.az')}
             onClick={() => setShowAzimuthGrid((v) => !v)}
           >
             <AzimuthGridIcon />
@@ -2803,7 +2826,7 @@ export function ImmersiveView({
               CC BY 4.0
             </a>
             {' · '}
-            reprojeté galactique → ICRF/J2000
+            {t('immersive.halphaCredit')}
           </p>
         ) : null}
       </div>
@@ -2871,7 +2894,11 @@ export function ImmersiveView({
       ) : null}
 
       <div className="move-stack">
-        <div className="move-pad" role="group" aria-label="Déplacement, un mètre">
+        <div
+          className="move-pad"
+          role="group"
+          aria-label={t('immersive.move.group')}
+        >
           {MOVE_DIRS.map((dir) => {
             const down = keyHeld[dir] || pointerHeld[dir]
             return (
@@ -2883,7 +2910,7 @@ export function ImmersiveView({
                     ? `move-pad__key move-pad__key--${dir} is-down`
                     : `move-pad__key move-pad__key--${dir}`
                 }
-                aria-label={MOVE_LABEL[dir]}
+                aria-label={t(`immersive.move.${dir}`)}
                 aria-keyshortcuts={`Arrow${dir === 'up' ? 'Up' : dir === 'down' ? 'Down' : dir === 'left' ? 'Left' : 'Right'}`}
                 aria-pressed={down}
                 disabled={!terrainUnlocked}
@@ -2923,7 +2950,7 @@ export function ImmersiveView({
 
         <div className="eye-height">
           <span className="eye-height__label" id="eye-height-label">
-            Élévation
+            {t('immersive.eye.label')}
           </span>
           <div
             className="eye-height__stepper"
@@ -2933,7 +2960,9 @@ export function ImmersiveView({
             <button
               type="button"
               className="eye-height__btn"
-              aria-label={`Baisser de ${EYE_HEIGHT_STEP_M * 100} cm`}
+              aria-label={t('immersive.eye.lower', {
+                cm: EYE_HEIGHT_STEP_M * 100,
+              })}
               onClick={() => {
                 setEyeHeightDraft(null)
                 setEyeHeightM((h) =>
@@ -2955,7 +2984,7 @@ export function ImmersiveView({
                 value={
                   eyeHeightDraft ?? formatEyeHeightDisplay(eyeHeightM)
                 }
-                aria-label="Élévation de l'objectif au-dessus du sol, en mètres"
+                aria-label={t('immersive.eye.aria')}
                 onChange={(event) => {
                   setEyeHeightDraft(event.target.value)
                 }}
@@ -2984,7 +3013,9 @@ export function ImmersiveView({
             <button
               type="button"
               className="eye-height__btn"
-              aria-label={`Monter de ${EYE_HEIGHT_STEP_M * 100} cm`}
+              aria-label={t('immersive.eye.raise', {
+                cm: EYE_HEIGHT_STEP_M * 100,
+              })}
               onClick={() => {
                 setEyeHeightDraft(null)
                 setEyeHeightM((h) =>
@@ -3012,8 +3043,8 @@ export function ImmersiveView({
             data-celestial-search-toggle=""
             aria-pressed={celestialSearchOpen}
             aria-expanded={celestialSearchOpen}
-            aria-label="Rechercher un objet céleste"
-            title="Rechercher un objet céleste"
+            aria-label={t('immersive.searchCelestial')}
+            title={t('immersive.searchCelestial')}
             onClick={() => setCelestialSearchOpen((v) => !v)}
           >
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -3177,31 +3208,35 @@ export function ImmersiveView({
             }
             aria-expanded={framingsOpen}
             aria-controls="framings-rail"
-            title="Cadrages"
-            aria-label="Cadrages"
+            title={t('immersive.framings')}
+            aria-label={t('immersive.framings')}
             onClick={() => onFramingsOpenChange(!framingsOpen)}
           >
             <FrameModePhotoIcon size={16} />
-            <span className="vf-proj-control__value">Cadrages</span>
+            <span className="vf-proj-control__value">
+              {t('immersive.framings')}
+            </span>
           </button>
         ) : null}
         <button
           type="button"
           className="hud-btn immersive__exit"
           onClick={onExit}
-          title="Quitter la vue trépied"
-          aria-label="Quitter la vue trépied"
+          title={t('immersive.exit')}
+          aria-label={t('immersive.exit')}
         >
           ✕
         </button>
       </div>
 
       <div className="immersive__hint">
-        <span>Molette pour zoomer</span>
-        <span>Drag pour regarder</span>
-        <span>Flèches : 1 m</span>
-        <span>Focale = cadre photo seulement</span>
-        {terrainLabel ? <span>{terrainLabel}</span> : null}
+        <span>{t('immersive.hint.zoom')}</span>
+        <span>{t('immersive.hint.look')}</span>
+        <span>{t('immersive.hint.arrows')}</span>
+        <span>{t('immersive.hint.focal')}</span>
+        {terrainLabel ? (
+          <span>{t(terrainLabel.key, terrainLabel.params)}</span>
+        ) : null}
       </div>
     </div>
   )

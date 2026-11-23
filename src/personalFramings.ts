@@ -1,3 +1,4 @@
+import { getActiveLocale, intlLocale, t } from './i18n'
 import {
   civilClockFromUtc,
   civilDateFromUtc,
@@ -11,7 +12,6 @@ import {
   clampFrameRollDeg,
   normalizeViewfinderFrameMode,
   type SensorFormat,
-  type ViewfinderFrameMode,
   type ViewfinderOrientation,
 } from './lensFov'
 import {
@@ -19,7 +19,6 @@ import {
   type PanoramaPlan,
 } from './panorama'
 import {
-  DEFAULT_TIMELAPSE_PLAN,
   normalizeTimelapsePlan,
   type TimelapsePlan,
 } from './timelapse'
@@ -136,9 +135,9 @@ export function framingTypeKind(frameMode: FramingCaptureMode): FramingTypeKind 
 
 export function framingTypeLabel(frameMode: FramingCaptureMode): string {
   const kind = framingTypeKind(frameMode)
-  if (kind === 'pano') return 'Pano'
-  if (kind === 'timelapse') return 'Timelapse'
-  return 'Photo'
+  if (kind === 'pano') return t('framings.type.pano')
+  if (kind === 'timelapse') return t('framings.type.timelapse')
+  return t('framings.type.photo')
 }
 
 /** List badge: `Pano 5×2` when grid is known, else plain type label. */
@@ -154,9 +153,12 @@ export function framingTypeBadgeLabel(view: FramingViewSnapshot): string {
     columns > 0 &&
     rows > 0
   ) {
-    return `Pano ${Math.round(columns)}×${Math.round(rows)}`
+    return t('framings.type.panoGrid', {
+      cols: Math.round(columns),
+      rows: Math.round(rows),
+    })
   }
-  return 'Pano'
+  return t('framings.type.pano')
 }
 
 /** Default name: `Photo 1`, `Pano 2`, … — next free index among existingNames. */
@@ -173,7 +175,7 @@ export function suggestFramingName(
     const n = m[1] ? Number(m[1]) : 1
     if (Number.isFinite(n) && n > max) max = n
   }
-  return `${type} ${max + 1}`
+  return t('framings.suggest', { type, n: max + 1 })
 }
 
 function escapeRegExp(value: string): string {
@@ -182,8 +184,15 @@ function escapeRegExp(value: string): string {
 
 export function framingViewSummary(view: FramingViewSnapshot): string {
   const mode = framingTypeLabel(view.frameMode)
-  const orient = view.orientation === 'portrait' ? 'Portrait' : 'Paysage'
-  return `${mode} · ${Math.round(view.focalMm)} mm · ${orient}`
+  const orient =
+    view.orientation === 'portrait'
+      ? t('common.portrait')
+      : t('common.landscape')
+  return t('framings.summary', {
+    mode,
+    focal: Math.round(view.focalMm),
+    orient,
+  })
 }
 
 export function framingAngleSummary(view: FramingViewSnapshot): string {
@@ -191,7 +200,10 @@ export function framingAngleSummary(view: FramingViewSnapshot): string {
     view.pitchDeg > 0
       ? `+${Math.round(view.pitchDeg)}°`
       : `${Math.round(view.pitchDeg)}°`
-  return `${Math.round(((view.bearingDeg % 360) + 360) % 360)}° az. · ${alt} él.`
+  return t('framings.angles', {
+    az: Math.round(((view.bearingDeg % 360) + 360) % 360),
+    alt,
+  })
 }
 
 export function createPersonalFraming(input: {
@@ -212,14 +224,14 @@ export function createPersonalFraming(input: {
   const elev = input.heightM
   return {
     id: newId('framing'),
-    name: input.name.trim() || 'Cadrage sans nom',
+    name: input.name.trim() || t('framings.unnamed'),
     lat: input.lat,
     lon: input.lon,
     peakUtc: input.peakUtc,
     peakLocal: input.peakLocal,
     localDate: input.localDate.slice(0, 10),
     spotId: input.spotId,
-    spotName: input.spotName.trim() || 'Spot',
+    spotName: input.spotName.trim() || t('framings.defaultSpot'),
     heightM: elev != null && Number.isFinite(elev) ? elev : null,
     view: normalizeViewSnapshot(input.view),
     thumbId: input.thumbId?.trim() ? input.thumbId : null,
@@ -286,7 +298,7 @@ export function groupFramingsByNight(
 export function framingNightLabel(
   day: string,
   items: PersonalFraming[],
-  locale = 'fr-FR',
+  locale = intlLocale(getActiveLocale()),
 ): string {
   const dayFmt = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -314,7 +326,7 @@ export function framingNightLabel(
   const end = sameYear
     ? `${dayFmt.format(asUtc(next))} ${next.slice(0, 4)}`
     : fullFmt.format(asUtc(next))
-  return `Nuit du ${start} au ${end}`
+  return t('framings.nightOf', { start, end })
 }
 
 function defaultViewSnapshot(): FramingViewSnapshot {
@@ -388,7 +400,7 @@ function migrateEvent(event: PersonalEvent): PersonalFraming {
     peakLocal: event.peakLocal,
     localDate: event.localDate,
     spotId: event.spotId?.trim() || `geo:${event.lat.toFixed(5)},${event.lon.toFixed(5)}`,
-    spotName: event.spotName?.trim() || 'Position carte',
+    spotName: event.spotName?.trim() || t('framings.legacy.mapPosition'),
     heightM: event.heightM,
     view: {
       ...defaultViewSnapshot(),
@@ -421,11 +433,11 @@ function normalizeStoredFraming(value: unknown): PersonalFraming | null {
   const spotName =
     typeof row.spotName === 'string' && row.spotName.trim()
       ? row.spotName.trim()
-      : 'Spot'
+      : t('framings.defaultSpot')
   const name =
     typeof row.name === 'string' && row.name.trim()
       ? row.name.trim()
-      : 'Cadrage sans nom'
+      : t('framings.unnamed')
   const id = typeof row.id === 'string' && row.id ? row.id : newId('framing')
   const elevRaw = Number(row.heightM)
   const source: FramingSource =
@@ -494,7 +506,7 @@ function loadLegacyEvents(): PersonalFraming[] {
           name:
             typeof r.name === 'string' && r.name.trim()
               ? r.name.trim()
-              : 'Événement sans nom',
+              : t('framings.legacy.unnamedEvent'),
           lat,
           lon,
           peakUtc,

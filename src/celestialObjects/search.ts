@@ -2,6 +2,7 @@ import {
   compactCatalogToken,
   normalizeSearchText,
 } from './normalize'
+import { getActiveLocale, intlLocale } from '../i18n'
 import type { CelestialObject, CelestialObjectType } from './types'
 
 export type SearchHit = {
@@ -173,7 +174,10 @@ export function searchCelestialObjects(
     const ta = TYPE_PRIORITY[a.object.type]
     const tb = TYPE_PRIORITY[b.object.type]
     if (ta !== tb) return ta - tb
-    return a.object.name.localeCompare(b.object.name, 'fr')
+    return a.object.name.localeCompare(
+      b.object.name,
+      intlLocale(getActiveLocale()),
+    )
   })
 
   return hits.slice(0, limit)

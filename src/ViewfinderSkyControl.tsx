@@ -39,6 +39,7 @@ import {
   clampLightPollutionAmount,
   clampZodiacalAmount,
 } from './skyLighting'
+import { useT } from './i18n'
 import { SettingsSlidersIcon } from './psIcons'
 import { ViewfinderFloatPanel } from './ViewfinderFloatPanel'
 import {
@@ -158,21 +159,24 @@ function SkyPanelBody({
   onStarBrightnessChange,
   onStarGlowChange,
 }: SkyPanelBodyProps) {
+  const t = useT()
   const showAirglowDetails = airglowAmount > 0.001
   const showHaloDetails = localHalo.enabled
 
   return (
     <>
-      <SkySection title="Ciel">
+      <SkySection title={t('viewfinder.sky.section.sky')}>
         <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
-          <span className="vf-landscape-menu__label">Clair de lune</span>
+          <span className="vf-landscape-menu__label">
+            {t('viewfinder.sky.moonlight')}
+          </span>
           <input type="checkbox" checked={moonlightEnabled}
             onChange={(event) => onMoonlightChange(event.target.checked)}
-            title="Éclairage du ciel et des nuages par la Lune" />
+            title={t('viewfinder.sky.moonlightTip')} />
         </label>
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Atmosphère</span>
+            <span>{t('viewfinder.sky.atmosphere')}</span>
             <span className="vf-landscape-menu__value">
               {atmosphereAmount.toFixed(2)}
             </span>
@@ -189,8 +193,8 @@ function SkyPanelBody({
               ATMOSPHERE_AMOUNT_MIN,
               ATMOSPHERE_AMOUNT_MAX,
             )}
-            aria-label="Quantité d’atmosphère"
-            title="0 = espace / étoiles seules ; 1 = ciel Rayleigh complet"
+            aria-label={t('viewfinder.sky.atmosphereAria')}
+            title={t('viewfinder.sky.atmosphereTip')}
             onChange={(event) =>
               onAtmosphereAmountChange(
                 clampAtmosphereAmount(Number(event.target.value)),
@@ -201,7 +205,7 @@ function SkyPanelBody({
 
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Airglow</span>
+            <span>{t('viewfinder.sky.airglow')}</span>
             <span className="vf-landscape-menu__value">
               {airglowAmount.toFixed(2)}
             </span>
@@ -218,8 +222,8 @@ function SkyPanelBody({
               AIRGLOW_AMOUNT_MIN,
               AIRGLOW_AMOUNT_MAX,
             )}
-            aria-label="Quantité d’airglow"
-            title="Lueur OI nocturne (en plus de l’atmosphère). Visible la nuit."
+            aria-label={t('viewfinder.sky.airglowAria')}
+            title={t('viewfinder.sky.airglowTip')}
             onChange={(event) =>
               onAirglowAmountChange(
                 clampAirglowAmount(Number(event.target.value)),
@@ -232,13 +236,13 @@ function SkyPanelBody({
           <>
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Teinte airglow</span>
+                <span>{t('viewfinder.sky.airglowHue')}</span>
                 <span className="vf-landscape-menu__value">
                   {airglowHue < 0.28
-                    ? 'Vert'
+                    ? t('viewfinder.sky.hue.green')
                     : airglowHue > 0.82
-                      ? 'Rouge'
-                      : 'Vert + Rouge'}
+                      ? t('viewfinder.sky.hue.red')
+                      : t('viewfinder.sky.hue.both')}
                 </span>
               </span>
               <input
@@ -253,8 +257,8 @@ function SkyPanelBody({
                   AIRGLOW_HUE_MIN,
                   AIRGLOW_HUE_MAX,
                 )}
-                aria-label="Teinte airglow vert, les deux, ou rouge"
-                title="Gauche = vert ; milieu = vert et rouge visibles ; droite = rouge"
+                aria-label={t('viewfinder.sky.airglowHueAria')}
+                title={t('viewfinder.sky.airglowHueTip')}
                 onChange={(event) =>
                   onAirglowHueChange(
                     clampAirglowHue(Number(event.target.value)),
@@ -265,13 +269,13 @@ function SkyPanelBody({
 
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Structure airglow</span>
+                <span>{t('viewfinder.sky.airglowStruct')}</span>
                 <span className="vf-landscape-menu__value">
                   {airglowWaves < 0.35
-                    ? 'Dégradé'
+                    ? t('viewfinder.sky.struct.gradient')
                     : airglowWaves > 0.7
-                      ? 'Vagues'
-                      : 'Mix'}
+                      ? t('viewfinder.sky.struct.waves')
+                      : t('viewfinder.sky.struct.mix')}
                 </span>
               </span>
               <input
@@ -286,8 +290,8 @@ function SkyPanelBody({
                   AIRGLOW_WAVES_MIN,
                   AIRGLOW_WAVES_MAX,
                 )}
-                aria-label="Structure airglow dégradé à vagues"
-                title="0 = dégradé van Rhijn (nuit calme) ; 1 = bandes de vagues de gravité"
+                aria-label={t('viewfinder.sky.airglowStructAria')}
+                title={t('viewfinder.sky.airglowStructTip')}
                 onChange={(event) =>
                   onAirglowWavesChange(
                     clampAirglowWaves(Number(event.target.value)),
@@ -300,7 +304,7 @@ function SkyPanelBody({
 
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Lumière zodiacale</span>
+            <span>{t('viewfinder.sky.zodiacal')}</span>
             <span className="vf-landscape-menu__value">
               {zodiacalAmount.toFixed(2)}
             </span>
@@ -317,8 +321,8 @@ function SkyPanelBody({
               ZODIACAL_AMOUNT_MIN,
               ZODIACAL_AMOUNT_MAX,
             )}
-            aria-label="Intensité de la lumière zodiacale"
-            title="Poussière interplanétaire sur l’écliptique : cône crépusculaire, bande, Gegenschein. Visible la nuit."
+            aria-label={t('viewfinder.sky.zodiacalAria')}
+            title={t('viewfinder.sky.zodiacalTip')}
             onChange={(event) =>
               onZodiacalAmountChange(
                 clampZodiacalAmount(Number(event.target.value)),
@@ -328,10 +332,10 @@ function SkyPanelBody({
         </label>
       </SkySection>
 
-      <SkySection title="Pollution">
+      <SkySection title={t('viewfinder.sky.section.pollution')}>
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Intensité</span>
+            <span>{t('viewfinder.sky.pollutionIntensity')}</span>
             <span className="vf-landscape-menu__value">
               {lightPollutionAmount.toFixed(2)}
             </span>
@@ -348,8 +352,8 @@ function SkyPanelBody({
               LIGHT_POLLUTION_AMOUNT_MIN,
               LIGHT_POLLUTION_AMOUNT_MAX,
             )}
-            aria-label="Intensité de la pollution lumineuse"
-            title="Dôme de pollution directionnel (plus clair vers les villes à l’horizon). 0 = ciel propre ; 1 = effet max. Visible la nuit."
+            aria-label={t('viewfinder.sky.pollutionAria')}
+            title={t('viewfinder.sky.pollutionTip')}
             onChange={(event) =>
               onLightPollutionAmountChange(
                 clampLightPollutionAmount(Number(event.target.value)),
@@ -360,12 +364,12 @@ function SkyPanelBody({
 
         <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
           <span className="vf-landscape-menu__label">
-            <span>Halos locaux</span>
+            <span>{t('viewfinder.sky.localHalos')}</span>
           </span>
           <input
             type="checkbox"
             checked={localHalo.enabled}
-            title="Lumière VIIRS diffusée dans l’air au-dessus des émissions (zone 24 × 24 km). Visible la nuit."
+            title={t('viewfinder.sky.localHalosTip')}
             onChange={(event) =>
               onLocalHaloChange({ enabled: event.target.checked })
             }
@@ -376,7 +380,7 @@ function SkyPanelBody({
           <>
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Intensité halo</span>
+                <span>{t('viewfinder.sky.haloIntensity')}</span>
                 <span className="vf-landscape-menu__value">
                   {Math.round(localHalo.intensity * 100)} %
                 </span>
@@ -393,7 +397,7 @@ function SkyPanelBody({
                   LOCAL_HALO_INTENSITY_MIN,
                   LOCAL_HALO_INTENSITY_MAX,
                 )}
-                aria-label="Intensité des halos locaux"
+                aria-label={t('viewfinder.sky.haloIntensityAria')}
                 onChange={(event) =>
                   onLocalHaloChange({
                     intensity: clampLocalHaloIntensity(
@@ -405,7 +409,7 @@ function SkyPanelBody({
             </label>
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Hauteur du halo</span>
+                <span>{t('viewfinder.sky.haloHeight')}</span>
                 <span className="vf-landscape-menu__value">
                   {localHalo.heightKm.toFixed(1)} km
                 </span>
@@ -422,7 +426,7 @@ function SkyPanelBody({
                   LOCAL_HALO_HEIGHT_KM_MIN,
                   LOCAL_HALO_HEIGHT_KM_MAX,
                 )}
-                aria-label="Hauteur des halos locaux"
+                aria-label={t('viewfinder.sky.haloHeightAria')}
                 onChange={(event) =>
                   onLocalHaloChange({
                     heightKm: clampLocalHaloHeightKm(
@@ -434,7 +438,7 @@ function SkyPanelBody({
             </label>
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Brume</span>
+                <span>{t('viewfinder.sky.haze')}</span>
                 <span className="vf-landscape-menu__value">
                   {Math.round(localHalo.haze * 100)} %
                 </span>
@@ -451,7 +455,7 @@ function SkyPanelBody({
                   LOCAL_HALO_HAZE_MIN,
                   LOCAL_HALO_HAZE_MAX,
                 )}
-                aria-label="Brume des halos locaux"
+                aria-label={t('viewfinder.sky.hazeAria')}
                 onChange={(event) =>
                   onLocalHaloChange({
                     haze: clampLocalHaloHaze(Number(event.target.value)),
@@ -461,7 +465,7 @@ function SkyPanelBody({
             </label>
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Teinte</span>
+                <span>{t('viewfinder.sky.haloTint')}</span>
                 <span className="vf-landscape-menu__value">
                   {Math.round(localHalo.tempK)} K
                 </span>
@@ -478,8 +482,8 @@ function SkyPanelBody({
                   LOCAL_HALO_TEMP_K_MIN,
                   LOCAL_HALO_TEMP_K_MAX,
                 )}
-                aria-label="Teinte des halos locaux"
-                title="Réglage artistique de couleur, pas une conversion physique."
+                aria-label={t('viewfinder.sky.haloTintAria')}
+                title={t('viewfinder.sky.haloTintTip')}
                 onChange={(event) =>
                   onLocalHaloChange({
                     tempK: clampLocalHaloTempK(Number(event.target.value)),
@@ -491,10 +495,10 @@ function SkyPanelBody({
         ) : null}
       </SkySection>
 
-      <SkySection title="Étoiles">
+      <SkySection title={t('viewfinder.sky.section.stars')}>
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Luminosité</span>
+            <span>{t('viewfinder.sky.starBrightness')}</span>
             <span className="vf-landscape-menu__value">
               {starBrightness.toFixed(2)}
             </span>
@@ -511,8 +515,8 @@ function SkyPanelBody({
               STAR_BRIGHTNESS_MIN,
               STAR_BRIGHTNESS_MAX,
             )}
-            aria-label="Luminosité des étoiles"
-            title="Multiplicateur de luminosité (1 = défaut)"
+            aria-label={t('viewfinder.sky.starBrightnessAria')}
+            title={t('viewfinder.sky.starBrightnessTip')}
             onChange={(event) =>
               onStarBrightnessChange(
                 clampStarBrightness(Number(event.target.value)),
@@ -523,7 +527,7 @@ function SkyPanelBody({
 
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Glow</span>
+            <span>{t('viewfinder.sky.starGlow')}</span>
             <span className="vf-landscape-menu__value">
               {starGlow.toFixed(2)}
             </span>
@@ -536,8 +540,8 @@ function SkyPanelBody({
             step={0.05}
             value={starGlow}
             style={rangeProgressStyle(starGlow, STAR_GLOW_MIN, STAR_GLOW_MAX)}
-            aria-label="Glow des étoiles brillantes"
-            title="Halo des grosses étoiles (0 = points secs, 1 = max soft)"
+            aria-label={t('viewfinder.sky.starGlowAria')}
+            title={t('viewfinder.sky.starGlowTip')}
             onChange={(event) =>
               onStarGlowChange(clampStarGlow(Number(event.target.value)))
             }
@@ -546,7 +550,7 @@ function SkyPanelBody({
 
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Densité</span>
+            <span>{t('viewfinder.sky.starDensity')}</span>
             <span className="vf-landscape-menu__value">
               {starMagDepth.toFixed(2)}
             </span>
@@ -563,8 +567,8 @@ function SkyPanelBody({
               STAR_MAG_DEPTH_MIN,
               STAR_MAG_DEPTH_MAX,
             )}
-            aria-label="Densité d’étoiles du ciel nocturne"
-            title="Profondeur magnitude (0 = défaut). Décale grand-angle et zoom ensemble."
+            aria-label={t('viewfinder.sky.starDensityAria')}
+            title={t('viewfinder.sky.starDensityTip')}
             onChange={(event) =>
               onStarMagDepthChange(
                 clampStarMagDepth(Number(event.target.value)),
@@ -575,7 +579,7 @@ function SkyPanelBody({
 
         <label className="vf-landscape-menu__field">
           <span className="vf-landscape-menu__label">
-            <span>Gain zoom</span>
+            <span>{t('viewfinder.sky.starZoomGain')}</span>
             <span className="vf-landscape-menu__value">
               {starZoomSpan.toFixed(2)}
             </span>
@@ -592,8 +596,8 @@ function SkyPanelBody({
               STAR_ZOOM_SPAN_MIN,
               STAR_ZOOM_SPAN_MAX,
             )}
-            aria-label="Gain d’étoiles au zoom"
-            title="0 = même densité à tout FOV ; 1 = proportion défaut ; plus de 1 = plus d’étoiles en télé"
+            aria-label={t('viewfinder.sky.starZoomGainAria')}
+            title={t('viewfinder.sky.starZoomGainTip')}
             onChange={(event) =>
               onStarZoomSpanChange(
                 clampStarZoomSpan(Number(event.target.value)),
@@ -618,6 +622,7 @@ export function ViewfinderSkyControl(props: ViewfinderSkyControlProps) {
     anchorRef,
     ...panelProps
   } = props
+  const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = openProp ?? uncontrolledOpen
   const setOpen = (next: boolean) => {
@@ -648,18 +653,20 @@ export function ViewfinderSkyControl(props: ViewfinderSkyControlProps) {
           }
           aria-expanded={open}
           aria-haspopup="dialog"
-          title="Réglages du ciel"
+          title={t('viewfinder.sky.settingsTitle')}
           onClick={() => setOpen(!open)}
         >
           <SettingsSlidersIcon size={16} />
-          <span className="vf-proj-control__muted">Ciel</span>
+          <span className="vf-proj-control__muted">
+            {t('viewfinder.sky.title')}
+          </span>
         </button>
       ) : null}
 
       <ViewfinderFloatPanel
         open={open}
         onClose={() => setOpen(false)}
-        title="Ciel"
+        title={t('viewfinder.sky.title')}
         storageKey={FLOAT_POS_STORAGE_KEY}
         defaultPos={DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}

@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 export type BasemapMode = 'satellite' | 'hybrid' | 'plan'
 
 export const BASEMAP_MODE_ORDER: BasemapMode[] = [
@@ -11,13 +13,14 @@ export function nextBasemapMode(current: BasemapMode): BasemapMode {
   return BASEMAP_MODE_ORDER[(i + 1) % BASEMAP_MODE_ORDER.length]!
 }
 
+/** Localised label (reads the active locale — call during render / events). */
 export function basemapModeLabel(mode: BasemapMode): string {
   switch (mode) {
     case 'satellite':
-      return 'Satellite'
+      return t('map.basemap.satellite')
     case 'hybrid':
-      return 'Satellite + plan'
+      return t('map.basemap.hybrid')
     case 'plan':
-      return 'Plan'
+      return t('map.basemap.plan')
   }
 }

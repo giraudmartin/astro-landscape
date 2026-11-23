@@ -1,7 +1,29 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  APP_ABOUT_LINKS,
+  APP_ABOUT_PARAGRAPH_KEYS,
+  APP_AUTHOR,
+  APP_AUTHOR_TAGLINE_KEY,
+} from './aboutMe'
 import { APP_ATTRIBUTIONS } from './attributions'
+import { APP_COPYRIGHT, APP_NAME, APP_VERSION } from './appMeta'
 import { BugReportCard } from './BugReportCard'
+import { LOCALES, useLocale } from './i18n'
+import { APP_PRIVACY_POINTS } from './privacy'
+
+type SettingsSection = 'language' | 'about' | 'attributions' | 'privacy'
+
+const SETTINGS_SECTIONS: readonly {
+  id: SettingsSection
+  /** i18n key of the nav label. */
+  labelKey: string
+}[] = [
+  { id: 'about', labelKey: 'settings.section.about' },
+  { id: 'attributions', labelKey: 'settings.section.attributions' },
+  { id: 'privacy', labelKey: 'settings.section.privacy' },
+  { id: 'language', labelKey: 'settings.section.language' },
+]
 
 function SettingsIcon() {
   return (
@@ -48,32 +70,79 @@ function CloseIcon() {
   )
 }
 
+function CreditChevron() {
+  return (
+    <span
+      className="ui-chevron settings-panel__credit-chevron"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 12 12">
+        <path d="M3 4.5 6 7.5 9 4.5" />
+      </svg>
+    </span>
+  )
+}
+
 /**
- * Map settings gear + bug report FAB — attributions (Photo Sightline pattern).
+ * Map settings gear + bug report FAB — side nav, fixed card size.
  */
 export function MapSettingsPanel() {
+  const { locale, setLocale, t } = useLocale()
   const [open, setOpen] = useState(false)
+  const [section, setSection] = useState<SettingsSection>('about')
   const [bugReportOpen, setBugReportOpen] = useState(false)
+  const [langMenuOpen, setLangMenuOpen] = useState(false)
   const titleId = useId()
+  const langLabelId = useId()
   const closeRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const langMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setLangMenuOpen(false)
+      return
+    }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setOpen(false)
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      if (langMenuOpen) {
+        setLangMenuOpen(false)
+        return
       }
+      setOpen(false)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open])
+  }, [open, langMenuOpen])
+
+  useEffect(() => {
+    if (!langMenuOpen) return
+    const onPointerDown = (event: PointerEvent) => {
+      const root = langMenuRef.current
+      if (!root || root.contains(event.target as Node)) return
+      setLangMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown, true)
+    return () => window.removeEventListener('pointerdown', onPointerDown, true)
+  }, [langMenuOpen])
 
   useEffect(() => {
     if (!open) return
     closeRef.current?.focus()
   }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    setLangMenuOpen(false)
+    contentRef.current?.scrollTo({ top: 0 })
+  }, [open, section])
+
+  const activeLabelKey = SETTINGS_SECTIONS.find(
+    (item) => item.id === section,
+  )?.labelKey
+  const activeLabel = activeLabelKey ? t(activeLabelKey) : ''
 
   const dialog =
     open && typeof document !== 'undefined'
@@ -95,68 +164,234 @@ export function MapSettingsPanel() {
             >
               <header className="settings-panel__header">
                 <h2 id={titleId} className="settings-panel__title">
-                  Paramètres
+                  {t('settings.title')}
                 </h2>
                 <button
                   ref={closeRef}
                   type="button"
                   className="settings-panel__close"
-                  aria-label="Fermer"
+                  aria-label={t('common.close')}
                   onClick={() => setOpen(false)}
                 >
                   <CloseIcon />
                 </button>
               </header>
 
-              <div className="settings-panel__body">
-                <section
-                  className="settings-panel__section"
-                  aria-labelledby="settings-attr"
+              <div className="settings-panel__shell">
+                <nav
+                  className="settings-panel__nav"
+                  aria-label={t('settings.navAria')}
                 >
-                  <h3
-                    id="settings-attr"
-                    className="settings-panel__section-title"
-                  >
-                    Crédits & licences
+                  {SETTINGS_SECTIONS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      id={`settings-tab-${item.id}`}
+                      aria-selected={section === item.id}
+                      aria-controls={`settings-panel-${item.id}`}
+                      className={
+                        section === item.id
+                          ? 'settings-panel__nav-btn is-active'
+                          : 'settings-panel__nav-btn'
+                      }
+                      onClick={() => setSection(item.id)}
+                    >
+                      {t(item.labelKey)}
+                    </button>
+                  ))}
+                </nav>
+
+                <div
+                  ref={contentRef}
+                  className="settings-panel__content"
+                  role="tabpanel"
+                  id={`settings-panel-${section}`}
+                  aria-labelledby={`settings-tab-${section}`}
+                >
+                  <h3 className="settings-panel__content-title">
+                    {activeLabel}
                   </h3>
-                  <p className="settings-panel__hint">
-                    Sources de données et contenus tiers utilisés par l’app.
-                  </p>
-                  <div className="settings-panel__credits">
-                    {APP_ATTRIBUTIONS.map((entry) => (
-                      <details
-                        key={entry.id}
-                        className="settings-panel__credit"
+
+                  {section === 'about' ? (
+                    <div className="settings-panel__section">
+                      <div className="settings-panel__about-card">
+                        <p className="settings-panel__about-name">
+                          {APP_AUTHOR}
+                        </p>
+                        <p className="settings-panel__about-tagline">
+                          {t(APP_AUTHOR_TAGLINE_KEY)}
+                        </p>
+                        {APP_ABOUT_PARAGRAPH_KEYS.map((key) => (
+                          <p key={key} className="settings-panel__about">
+                            {t(key)}
+                          </p>
+                        ))}
+                        {APP_ABOUT_LINKS.length > 0 ? (
+                          <ul className="settings-panel__about-links">
+                            {APP_ABOUT_LINKS.map((link) => (
+                              <li key={link.id}>
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                >
+                                  {link.label}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <p className="settings-panel__about-meta">
+                          {APP_NAME} · v{APP_VERSION}
+                          <br />
+                          {APP_COPYRIGHT}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {section === 'attributions' ? (
+                    <div className="settings-panel__section">
+                      <p className="settings-panel__hint">
+                        {t('settings.attributions.hint')}
+                      </p>
+                      <div className="settings-panel__credits">
+                        {APP_ATTRIBUTIONS.map((entry) => (
+                          <details
+                            key={entry.id}
+                            className="settings-panel__credit"
+                          >
+                            <summary className="settings-panel__credit-summary">
+                              <span className="settings-panel__credit-name">
+                                {t(entry.nameKey)}
+                              </span>
+                              <CreditChevron />
+                            </summary>
+                            <div className="settings-panel__credit-body">
+                              <span>{entry.credit}</span>
+                              {entry.url ? (
+                                <a
+                                  href={entry.url}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                >
+                                  {entry.url.replace(/^https?:\/\//, '')}
+                                </a>
+                              ) : null}
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {section === 'privacy' ? (
+                    <div className="settings-panel__section">
+                      <p className="settings-panel__hint">
+                        {t('settings.privacy.hint')}
+                      </p>
+                      <div className="settings-panel__credits">
+                        {APP_PRIVACY_POINTS.map((point) => (
+                          <details
+                            key={point.id}
+                            className="settings-panel__credit"
+                          >
+                            <summary className="settings-panel__credit-summary">
+                              <span className="settings-panel__credit-name">
+                                {t(`settings.privacy.${point.textKey}.title`)}
+                              </span>
+                              <CreditChevron />
+                            </summary>
+                            <div className="settings-panel__credit-body">
+                              <span>
+                                {t(`settings.privacy.${point.textKey}.body`)}
+                              </span>
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {section === 'language' ? (
+                    <div className="settings-panel__section">
+                      <span
+                        className="settings-panel__lang-label"
+                        id={langLabelId}
                       >
-                        <summary className="settings-panel__credit-summary">
-                          <span className="settings-panel__credit-name">
-                            {entry.name}
-                          </span>
-                          <span
-                            className="ui-chevron settings-panel__credit-chevron"
+                        {t('settings.language.label')}
+                      </span>
+                      <div
+                        className="moon-preview-select-wrap settings-panel__lang-wrap"
+                        ref={langMenuRef}
+                      >
+                        <button
+                          type="button"
+                          className="moon-preview-select-trigger"
+                          aria-labelledby={langLabelId}
+                          aria-haspopup="listbox"
+                          aria-expanded={langMenuOpen}
+                          onClick={() =>
+                            setLangMenuOpen((value) => !value)
+                          }
+                        >
+                          <span>{t(`settings.language.${locale}`)}</span>
+                          <svg
+                            viewBox="0 0 16 16"
+                            width="12"
+                            height="12"
                             aria-hidden="true"
                           >
-                            <svg viewBox="0 0 12 12">
-                              <path d="M3 4.5 6 7.5 9 4.5" />
-                            </svg>
-                          </span>
-                        </summary>
-                        <div className="settings-panel__credit-body">
-                          <span>{entry.credit}</span>
-                          {entry.url ? (
-                            <a
-                              href={entry.url}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                            >
-                              {entry.url.replace(/^https?:\/\//, '')}
-                            </a>
-                          ) : null}
-                        </div>
-                      </details>
-                    ))}
-                  </div>
-                </section>
+                            <path
+                              d="M4 6l4 4 4-4"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                        {langMenuOpen ? (
+                          <ul
+                            className="moon-preview-select-menu moon-preview-select-menu--down"
+                            role="listbox"
+                            aria-labelledby={langLabelId}
+                          >
+                            {LOCALES.map((id) => {
+                              const active = id === locale
+                              return (
+                                <li key={id} role="none">
+                                  <button
+                                    type="button"
+                                    role="option"
+                                    lang={id}
+                                    aria-selected={active}
+                                    className={
+                                      active
+                                        ? 'moon-preview-select-option moon-preview-select-option--active'
+                                        : 'moon-preview-select-option'
+                                    }
+                                    onClick={() => {
+                                      setLocale(id)
+                                      setLangMenuOpen(false)
+                                    }}
+                                  >
+                                    {t(`settings.language.${id}`)}
+                                  </button>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        ) : null}
+                      </div>
+                      <p className="settings-panel__hint">
+                        {t('settings.language.hint')}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>,
@@ -173,8 +408,8 @@ export function MapSettingsPanel() {
             ? 'settings-anchor__toggle settings-anchor__toggle--active'
             : 'settings-anchor__toggle'
         }
-        aria-label="Signaler un bug"
-        title="Signaler un bug"
+        aria-label={t('settings.bugReport')}
+        title={t('settings.bugReport')}
         aria-expanded={bugReportOpen}
         onClick={() => {
           setOpen(false)
@@ -190,8 +425,8 @@ export function MapSettingsPanel() {
             ? 'settings-anchor__toggle settings-anchor__toggle--active'
             : 'settings-anchor__toggle'
         }
-        aria-label="Paramètres"
-        title="Paramètres"
+        aria-label={t('settings.title')}
+        title={t('settings.title')}
         aria-expanded={open}
         aria-controls="map-settings-panel"
         onClick={() => {

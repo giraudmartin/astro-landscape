@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { CelestialObject } from './celestialObjects'
+import { useT } from './i18n'
 import { PlaySequenceIcon } from './psIcons'
 import {
   clampTimelapseDurationMin,
@@ -14,7 +15,7 @@ import {
   TIMELAPSE_INTERVAL_MAX_S,
   TIMELAPSE_POSE_MAX_S,
   TIMELAPSE_POSE_MIN_S,
-  TIMELAPSE_SUPPORT_LABELS,
+  timelapseSupportLabel,
   TIMELAPSE_SUPPORTS,
   timelapseRuleOf500PoseS,
   timelapseShotCount,
@@ -58,6 +59,7 @@ function TimelapseNumberStepper({
   onChange: (next: number) => void
   ariaLabel: string
 }) {
+  const t = useT()
   const [draft, setDraft] = useState(() => String(value))
   const inputId = useId()
 
@@ -82,7 +84,7 @@ function TimelapseNumberStepper({
       <div className="moon-preview-stepper">
         <button
           type="button"
-          aria-label={`Réduire : ${ariaLabel}`}
+          aria-label={t('viewfinder.tlapse.stepDec', { label: ariaLabel })}
           disabled={disabled || value <= min}
           onClick={() => onChange(value - step)}
         >
@@ -108,7 +110,7 @@ function TimelapseNumberStepper({
         />
         <button
           type="button"
-          aria-label={`Augmenter : ${ariaLabel}`}
+          aria-label={t('viewfinder.tlapse.stepInc', { label: ariaLabel })}
           disabled={disabled || value >= max}
           onClick={() => onChange(value + step)}
         >
@@ -133,6 +135,7 @@ export function ViewfinderTimelapsePanel({
   onOpenChange,
   hideToggle = false,
 }: ViewfinderTimelapsePanelProps) {
+  const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = openProp ?? uncontrolledOpen
   const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
@@ -202,30 +205,41 @@ export function ViewfinderTimelapsePanel({
   const trailHint =
     plan.support === 'fixed'
       ? poseS > rule500
-        ? `Filé d’étoiles actif (pose ${poseS} s > règle des 500 ≈ ${rule500} s @ ${Math.round(focalMm)} mm).`
-        : `Au-delà de ≈ ${rule500} s (@ ${Math.round(focalMm)} mm), le filé devient visible.`
-      : 'Monture EQ : pas de filé (suivi du ciel).'
+        ? t('viewfinder.tlapse.trailHot', {
+            pose: poseS,
+            rule: rule500,
+            focal: Math.round(focalMm),
+          })
+        : t('viewfinder.tlapse.trailWarn', {
+            rule: rule500,
+            focal: Math.round(focalMm),
+          })
+      : t('viewfinder.tlapse.trailEq')
 
   const eqHint =
     plan.support === 'equatorial'
       ? selectedCelestial
-        ? `Verrouillé sur ${selectedCelestial.name} — étoiles fixes dans le cadre, le sol bascule (rotation de champ).`
-        : 'Verrouillé sur le centre du viseur — étoiles fixes dans le cadre, le sol bascule (rotation de champ).'
-      : 'Paysage fixe — le ciel dérive.'
+        ? t('viewfinder.tlapse.eqLockedTarget', {
+            name: selectedCelestial.name,
+          })
+        : t('viewfinder.tlapse.eqLockedCenter')
+      : t('viewfinder.tlapse.fixedHint')
 
   const popupBody = (
     <div
       id={panelId}
       className="vf-camera-pop vf-tlapse-pop"
       role="dialog"
-      aria-label="Timelapse"
+      aria-label={t('viewfinder.tlapse.title')}
     >
       <header className="vf-camera-pop__head">
-        <h2 className="vf-camera-pop__title">Timelapse</h2>
+        <h2 className="vf-camera-pop__title">
+          {t('viewfinder.tlapse.title')}
+        </h2>
         <button
           type="button"
           className="vf-camera-pop__close"
-          aria-label="Fermer les réglages"
+          aria-label={t('common.closeSettings')}
           onClick={() => setOpen(false)}
         >
           ✕
@@ -234,8 +248,8 @@ export function ViewfinderTimelapsePanel({
 
       <div className="vf-camera-pop__twocol">
         <TimelapseNumberStepper
-          label="Pose (s)"
-          ariaLabel="Pose en secondes"
+          label={t('viewfinder.tlapse.pose')}
+          ariaLabel={t('viewfinder.tlapse.poseAria')}
           value={poseS}
           min={TIMELAPSE_POSE_MIN_S}
           max={TIMELAPSE_POSE_MAX_S}
@@ -244,8 +258,8 @@ export function ViewfinderTimelapsePanel({
           onChange={(next) => patch({ poseS: next })}
         />
         <TimelapseNumberStepper
-          label="Intervalle (s)"
-          ariaLabel="Intervalle en secondes"
+          label={t('viewfinder.tlapse.interval')}
+          ariaLabel={t('viewfinder.tlapse.intervalAria')}
           value={intervalS}
           min={poseS}
           max={TIMELAPSE_INTERVAL_MAX_S}
@@ -254,8 +268,8 @@ export function ViewfinderTimelapsePanel({
           onChange={(next) => patch({ intervalS: next })}
         />
         <TimelapseNumberStepper
-          label="Durée (min)"
-          ariaLabel="Durée en minutes"
+          label={t('viewfinder.tlapse.duration')}
+          ariaLabel={t('viewfinder.tlapse.durationAria')}
           value={durationMin}
           min={TIMELAPSE_DURATION_MIN_MIN}
           max={TIMELAPSE_DURATION_MAX_MIN}
@@ -264,8 +278,8 @@ export function ViewfinderTimelapsePanel({
           onChange={(next) => patch({ durationMin: next })}
         />
         <TimelapseNumberStepper
-          label="Lecture (i/s)"
-          ariaLabel="Cadence de lecture en images par seconde"
+          label={t('viewfinder.tlapse.fps')}
+          ariaLabel={t('viewfinder.tlapse.fpsAria')}
           value={playbackFps}
           min={TIMELAPSE_FPS_MIN}
           max={TIMELAPSE_FPS_MAX}
@@ -276,17 +290,17 @@ export function ViewfinderTimelapsePanel({
       </div>
 
       <p className="vf-camera-pop__hint vf-tlapse-pop__interval-hint">
-        Intervalle mesuré entre deux débuts de pose.
+        {t('viewfinder.tlapse.intervalHint')}
       </p>
 
       <div className="vf-camera-pop__field">
         <label className="vf-camera-pop__label" htmlFor={`${panelId}-support`}>
-          Support
+          {t('viewfinder.tlapse.support')}
         </label>
         <select
           id={`${panelId}-support`}
           className="vf-pano-select"
-          aria-label="Type de support"
+          aria-label={t('viewfinder.tlapse.supportAria')}
           disabled={busy}
           value={plan.support}
           onChange={(event) =>
@@ -295,7 +309,7 @@ export function ViewfinderTimelapsePanel({
         >
           {TIMELAPSE_SUPPORTS.map((mode) => (
             <option key={mode} value={mode}>
-              {TIMELAPSE_SUPPORT_LABELS[mode]}
+              {timelapseSupportLabel(mode)}
             </option>
           ))}
         </select>
@@ -314,10 +328,15 @@ export function ViewfinderTimelapsePanel({
       <div className="vf-pano-pop__summary">
         <span className="vf-camera-pop__big vf-tlapse-pop__count">
           {shots}
-          <span className="vf-camera-pop__unit"> images</span>
+          <span className="vf-camera-pop__unit">
+            {' '}
+            {t('viewfinder.tlapse.imagesUnit')}
+          </span>
         </span>
         <span className="vf-pano-pop__pill">
-          {formatTimelapseVideoSeconds(videoS)} de vidéo
+          {t('viewfinder.tlapse.videoOf', {
+            s: formatTimelapseVideoSeconds(videoS),
+          })}
         </span>
       </div>
 
@@ -331,12 +350,13 @@ export function ViewfinderTimelapsePanel({
         }}
       >
         <PlaySequenceIcon size={16} />
-        {busy ? 'Aperçu en cours…' : 'Aperçu de la séquence'}
+        {busy
+          ? t('viewfinder.tlapse.previewBusy')
+          : t('viewfinder.tlapse.preview')}
       </button>
 
       <p className="vf-camera-pop__hint vf-tlapse-pop__foot">
-        La lecture s’affiche en bas de l’écran (hors panneau). Pas d’export
-        vidéo.
+        {t('viewfinder.tlapse.foot')}
       </p>
     </div>
   )

@@ -8,12 +8,13 @@ import {
   PANORAMA_COUNT_MIN,
   PANORAMA_OVERLAP_MAX,
   PANORAMA_OVERLAP_MIN,
-  PANORAMA_PROJECTION_LABELS,
+  panoramaProjectionLabel,
   PANORAMA_PROJECTION_MODES,
   PANORAMA_VERTICAL_COVERAGE_MAX_DEG,
   type PanoramaPlan,
   type PanoramaProjectionMode,
 } from './panorama'
+import { useT } from './i18n'
 import type { ViewfinderOrientation } from './lensFov'
 import {
   CameraBodyIcon,
@@ -55,6 +56,7 @@ export function ViewfinderPanoramaPanel({
   orientation = 'landscape',
   onEditCamera,
 }: ViewfinderPanoramaPanelProps) {
+  const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const [assemblageInfoOpen, setAssemblageInfoOpen] = useState(false)
   const open = openProp ?? uncontrolledOpen
@@ -143,14 +145,16 @@ export function ViewfinderPanoramaPanel({
 
   const summary = plan.enabled
     ? `${columns}×${rows} · ${plan.overlapPercent}%`
-    : 'Panorama off'
+    : t('viewfinder.pano.summaryOff')
 
   if (hideToggle && !open) return null
 
   const cameraPill =
     focalMm != null
       ? `${Math.round(focalMm)} mm · ${
-          orientation === 'landscape' ? 'Paysage' : 'Portrait'
+          orientation === 'landscape'
+            ? t('common.landscape')
+            : t('common.portrait')
         }`
       : null
 
@@ -159,14 +163,16 @@ export function ViewfinderPanoramaPanel({
       id={panelId}
       className="vf-camera-pop vf-pano-pop"
       role="dialog"
-      aria-label="Panorama"
+      aria-label={t('viewfinder.pano.title')}
     >
       <header className="vf-camera-pop__head">
-        <h2 className="vf-camera-pop__title">Panorama</h2>
+        <h2 className="vf-camera-pop__title">
+          {t('viewfinder.pano.title')}
+        </h2>
         <button
           type="button"
           className="vf-camera-pop__close"
-          aria-label="Fermer les réglages"
+          aria-label={t('common.closeSettings')}
           onClick={() => setOpen(false)}
         >
           ✕
@@ -177,11 +183,14 @@ export function ViewfinderPanoramaPanel({
         <div className="vf-pano-pop__summary-main">
           <span className="vf-camera-pop__big">
             {shots}
-            <span className="vf-camera-pop__unit"> vues</span>
+            <span className="vf-camera-pop__unit">
+              {' '}
+              {t('viewfinder.pano.viewsUnit')}
+            </span>
           </span>
           <span
             className="vf-camera-pop__hint vf-pano-pop__cover"
-            title="Champ couvert par le panorama (largeur × hauteur)"
+            title={t('viewfinder.pano.coverTitle')}
           >
             ≈ {coverH.toFixed(0)}° × {coverV.toFixed(0)}°
           </span>
@@ -193,11 +202,13 @@ export function ViewfinderPanoramaPanel({
 
       <div className="vf-camera-pop__twocol">
         <div className="vf-camera-pop__field">
-          <span className="vf-camera-pop__label">Colonnes</span>
+          <span className="vf-camera-pop__label">
+            {t('viewfinder.pano.columns')}
+          </span>
           <div className="moon-preview-stepper">
             <button
               type="button"
-              aria-label="Moins de colonnes"
+              aria-label={t('viewfinder.pano.lessCols')}
               disabled={columns <= PANORAMA_COUNT_MIN}
               onClick={() =>
                 patch({
@@ -211,11 +222,11 @@ export function ViewfinderPanoramaPanel({
             <output>{columns}</output>
             <button
               type="button"
-              aria-label="Plus de colonnes"
+              aria-label={t('viewfinder.pano.moreCols')}
               disabled={columns >= maxColumns}
               title={
                 columns >= maxColumns
-                  ? 'Couverture horizontale limitée à 360°'
+                  ? t('viewfinder.pano.maxH')
                   : undefined
               }
               onClick={() =>
@@ -231,11 +242,13 @@ export function ViewfinderPanoramaPanel({
         </div>
 
         <div className="vf-camera-pop__field">
-          <span className="vf-camera-pop__label">Lignes</span>
+          <span className="vf-camera-pop__label">
+            {t('viewfinder.pano.rows')}
+          </span>
           <div className="moon-preview-stepper">
             <button
               type="button"
-              aria-label="Moins de lignes"
+              aria-label={t('viewfinder.pano.lessRows')}
               disabled={rows <= PANORAMA_COUNT_MIN}
               onClick={() =>
                 patch({
@@ -249,11 +262,11 @@ export function ViewfinderPanoramaPanel({
             <output>{rows}</output>
             <button
               type="button"
-              aria-label="Plus de lignes"
+              aria-label={t('viewfinder.pano.moreRows')}
               disabled={rows >= maxRows}
               title={
                 rows >= maxRows
-                  ? 'Couverture verticale limitée à 180°'
+                  ? t('viewfinder.pano.maxV')
                   : undefined
               }
               onClick={() =>
@@ -271,7 +284,9 @@ export function ViewfinderPanoramaPanel({
 
       <div className="vf-camera-pop__field">
         <div className="vf-pano-pop__overlap-head">
-          <span className="vf-camera-pop__label">Recouvrement</span>
+          <span className="vf-camera-pop__label">
+            {t('viewfinder.pano.overlap')}
+          </span>
           <b className="vf-pano-pop__overlap-value">{plan.overlapPercent}%</b>
         </div>
         <input
@@ -281,7 +296,7 @@ export function ViewfinderPanoramaPanel({
           max={PANORAMA_OVERLAP_MAX}
           step={1}
           value={plan.overlapPercent}
-          aria-label="Recouvrement entre vues"
+          aria-label={t('viewfinder.pano.overlapAria')}
           onChange={(event) =>
             patch({
               overlapPercent: Number(event.target.value),
@@ -297,7 +312,7 @@ export function ViewfinderPanoramaPanel({
             className="vf-camera-pop__label"
             htmlFor={`${panelId}-assemblage`}
           >
-            Assemblage
+            {t('viewfinder.pano.assemblage')}
           </label>
           <button
             type="button"
@@ -308,8 +323,8 @@ export function ViewfinderPanoramaPanel({
             }
             aria-expanded={assemblageInfoOpen}
             aria-controls={assemblageInfoId}
-            title="Différence entre les modes d’assemblage"
-            aria-label="Expliquer les modes d’assemblage"
+            title={t('viewfinder.pano.assemblageDiff')}
+            aria-label={t('viewfinder.pano.assemblageExplain')}
             onClick={() => setAssemblageInfoOpen((value) => !value)}
           >
             <InfoIcon size={14} />
@@ -318,7 +333,7 @@ export function ViewfinderPanoramaPanel({
         <select
           id={`${panelId}-assemblage`}
           className="vf-pano-select"
-          aria-label="Mode d’assemblage panorama"
+          aria-label={t('viewfinder.pano.assemblageModeAria')}
           value={plan.projectionMode}
           onChange={(event) =>
             patch({
@@ -329,33 +344,31 @@ export function ViewfinderPanoramaPanel({
         >
           {PANORAMA_PROJECTION_MODES.map((mode) => (
             <option key={mode} value={mode}>
-              {PANORAMA_PROJECTION_LABELS[mode]}
+              {panoramaProjectionLabel(mode)}
             </option>
           ))}
         </select>
         {assemblageInfoOpen ? (
           <div id={assemblageInfoId} className="vf-pano-pop__assemblage-info">
             <p>
-              <strong>Optique (trépied)</strong> — chaque cadre = ce que voit
-              vraiment l’appareil (le capteur). Utile pour vérifier où tombe
-              une photo. En stéréo, ça se tord sur les bords : normal, pas un
-              bug.
+              <strong>{t('viewfinder.pano.infoOpticalLabel')}</strong>{' '}
+              {t('viewfinder.pano.infoOptical')}
             </p>
             <p>
-              <strong>Sphérique (az/alt)</strong> — cases régulières sur la
-              boule ciel. Plus facile à lire pour régler colonnes, lignes et
-              overlap.
+              <strong>{t('viewfinder.pano.infoSphericalLabel')}</strong>{' '}
+              {t('viewfinder.pano.infoSpherical')}
             </p>
             <p className="vf-pano-pop__assemblage-tip">
-              Astuce : règle le plan en sphérique, vérifie une zone en optique
-              si besoin.
+              {t('viewfinder.pano.infoTip')}
             </p>
           </div>
         ) : null}
       </div>
 
       <div className="vf-camera-pop__field">
-        <span className="vf-camera-pop__label">Affichage</span>
+        <span className="vf-camera-pop__label">
+          {t('viewfinder.pano.display')}
+        </span>
         <div className="vf-pano-viz">
           <button
             type="button"
@@ -363,10 +376,10 @@ export function ViewfinderPanoramaPanel({
               plan.showFrames ? 'vf-pano-switch is-active' : 'vf-pano-switch'
             }
             aria-pressed={plan.showFrames}
-            title="Afficher ou masquer les cadres des tuiles"
+            title={t('viewfinder.pano.framesTitle')}
             onClick={() => patch({ showFrames: !plan.showFrames })}
           >
-            Cadres
+            {t('viewfinder.pano.frames')}
           </button>
           <button
             type="button"
@@ -374,10 +387,10 @@ export function ViewfinderPanoramaPanel({
               plan.showOverlap ? 'vf-pano-switch is-active' : 'vf-pano-switch'
             }
             aria-pressed={plan.showOverlap}
-            title="Afficher ou masquer les zones de recouvrement"
+            title={t('viewfinder.pano.overlapTitle')}
             onClick={() => patch({ showOverlap: !plan.showOverlap })}
           >
-            Overlap
+            {t('viewfinder.pano.overlapToggle')}
           </button>
         </div>
       </div>
@@ -389,13 +402,12 @@ export function ViewfinderPanoramaPanel({
           onClick={onEditCamera}
         >
           <CameraBodyIcon size={16} />
-          Modifier l’appareil photo
+          {t('viewfinder.pano.editCamera')}
         </button>
       ) : null}
 
       <p className="vf-camera-pop__hint">
-        Cadres et overlap se contrôlent ici. Le mode Pano de la capsule active
-        le plan sans interrupteur ON/OFF.
+        {t('viewfinder.pano.hint')}
       </p>
     </div>
   )
@@ -419,14 +431,16 @@ export function ViewfinderPanoramaPanel({
           className="vf-camera-panel__toggle immersive-dock__row"
           aria-expanded={open}
           aria-controls={panelId}
-          title="Panorama"
+          title={t('viewfinder.pano.title')}
           onClick={() => setOpen((value) => !value)}
         >
           <span className="immersive-dock__row-icon" aria-hidden="true">
             <PanoramaGridIcon size={14} />
           </span>
           <span className="vf-camera-panel__toggle-main">{summary}</span>
-          <span className="vf-camera-panel__toggle-meta">Pano</span>
+          <span className="vf-camera-panel__toggle-meta">
+            {t('viewfinder.mode.pano')}
+          </span>
           <ChevronDownIcon className="vf-camera-panel__chevron" size={12} />
         </button>
       )}

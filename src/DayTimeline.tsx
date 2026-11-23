@@ -9,6 +9,7 @@ import {
   type HorizonKind,
 } from './celestial'
 import { dayLightGradientCssAlongUtc } from './dayLight'
+import { useT } from './i18n'
 
 export const TIMELINE_VISIBLE_RADIUS_STEPS_MS = [
   15 * 60_000,
@@ -78,11 +79,8 @@ function polylinePath(
   return d
 }
 
-const MARK_LABELS: Record<HorizonKind, string> = {
-  sunrise: 'Lever du soleil',
-  sunset: 'Coucher du soleil',
-  moonrise: 'Lever de Lune',
-  moonset: 'Coucher de Lune',
+function markLabel(kind: HorizonKind, t: ReturnType<typeof useT>): string {
+  return t(`celestial.schedule.${kind}`)
 }
 
 type Mark = {
@@ -119,6 +117,7 @@ export function DayTimeline({
   onHorizonEventClick,
   advanced = false,
 }: DayTimelineProps) {
+  const t = useT()
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const chartDomId = useId().replace(/:/g, '')
   const clipId = `tl-curve-clip-${chartDomId}`
@@ -337,18 +336,18 @@ export function DayTimeline({
         .join(' ')}
     >
       {advanced ? (
-        <ul className="moon-preview-timeline__legend" aria-label="Courbes">
+        <ul className="moon-preview-timeline__legend" aria-label={t('timeline.curvesAria')}>
           <li>
             <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--sun" />
-            Soleil
+            {t('timeline.legend.sun')}
           </li>
           <li>
             <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--moon" />
-            Lune
+            {t('timeline.legend.moon')}
           </li>
           <li>
             <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--milkyway" />
-            Voie lactée
+            {t('timeline.legend.milkyWay')}
           </li>
         </ul>
       ) : null}
@@ -358,7 +357,7 @@ export function DayTimeline({
         role="slider"
         tabIndex={0}
         aria-valuenow={playheadUtcMs}
-        aria-label="Timeline"
+        aria-label={t('timeline.region')}
         onPointerDown={(event) => {
           if (event.button !== 0) return
           dragRef.current = {
@@ -551,7 +550,7 @@ export function DayTimeline({
           {marks.map((mark) => {
             const left = xFor(mark.utcMs)
             if (left < -20 || left > width + 20) return null
-            const label = MARK_LABELS[mark.kind]
+            const label = markLabel(mark.kind, t)
             return (
               <button
                 key={`${mark.kind}-${mark.utcMs}`}

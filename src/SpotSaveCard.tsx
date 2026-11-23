@@ -1,3 +1,5 @@
+import { useT } from './i18n'
+
 type SpotSaveCardProps = {
   mode: 'save' | 'edit'
   name: string
@@ -22,13 +24,15 @@ export function SpotSaveCard({
   onSubmit,
   onDelete,
 }: SpotSaveCardProps) {
-  const title = mode === 'save' ? 'Enregistrer le spot' : 'Modifier le spot'
+  const t = useT()
+  const title =
+    mode === 'save' ? t('spots.save.title') : t('spots.save.editTitle')
   const intro =
     mode === 'save'
-      ? 'Donne un nom à ce marker pour le retrouver dans Mes spots.'
+      ? t('spots.save.introSave')
       : mapPass
-        ? 'Renomme ce spot, clique sur la carte pour le déplacer, ou supprime-le.'
-        : 'Renomme ce spot ou supprime-le.'
+        ? t('spots.save.introEditMove')
+        : t('spots.save.introEdit')
 
   return (
     <div
@@ -67,7 +71,7 @@ export function SpotSaveCard({
             <button
               type="button"
               className="spot-save-card__close"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
               onClick={onClose}
             >
               <svg
@@ -87,12 +91,12 @@ export function SpotSaveCard({
           <div className="map-card__body">
             <p className="spot-save-card__intro">{intro}</p>
             <label className="spot-save-card__field">
-              <span>Nom du spot</span>
+              <span>{t('spots.save.nameLabel')}</span>
               <input
                 autoFocus
                 value={name}
                 onChange={(event) => onNameChange(event.target.value)}
-                placeholder="Ex. Crête nord"
+                placeholder={t('spots.save.placeholder')}
                 maxLength={80}
               />
             </label>
@@ -102,7 +106,7 @@ export function SpotSaveCard({
               {mapPass ? (
                 <span className="spot-save-card__coordinates-hint">
                   {' '}
-                  · clic carte pour déplacer
+                  {t('spots.save.moveHint')}
                 </span>
               ) : null}
             </p>
@@ -119,11 +123,11 @@ export function SpotSaveCard({
                   className="spot-save-card__delete"
                   onClick={onDelete}
                 >
-                  Supprimer
+                  {t('common.delete')}
                 </button>
               ) : null}
               <button type="submit" className="control-panel__primary">
-                Enregistrer
+                {t('common.save')}
               </button>
             </div>
           </div>

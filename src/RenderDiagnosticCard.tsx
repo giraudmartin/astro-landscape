@@ -4,6 +4,7 @@ import {
   type RenderDiagLive,
   type RenderDiagSettings,
 } from './renderDiagnostic'
+import { intlLocale, useLocale, useT } from './i18n'
 import { RenderDiagIcon } from './psIcons'
 import type { StageProjection } from './stelProjector'
 
@@ -33,6 +34,7 @@ function Toggle({
   onChange: (v: boolean) => void
   hint?: string
 }) {
+  const t = useT()
   return (
     <label className="render-diag__row" title={hint}>
       <span className="render-diag__label">{label}</span>
@@ -45,7 +47,7 @@ function Toggle({
         }
         onClick={() => onChange(!checked)}
       >
-        {checked ? 'ON' : 'OFF'}
+        {checked ? t('common.on') : t('common.off')}
       </button>
     </label>
   )
@@ -70,12 +72,14 @@ function NumRow({
   onChange: (v: number) => void
   hint?: string
 }) {
+  const { locale } = useLocale()
   return (
     <label className="render-diag__block" title={hint}>
       <span className="render-diag__label">
         {label}
         <span className="render-diag__value">
-          {value.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} {unit}
+          {value.toLocaleString(intlLocale(locale), { maximumFractionDigits: 2 })}{' '}
+          {unit}
         </span>
       </span>
       <input
@@ -108,6 +112,7 @@ function NumRow({
  * Does not touch tile loading / LOD. Keeps look orientation.
  */
 export function RenderDiagnosticCard({ liveRef, getContext }: Props) {
+  const { locale, t } = useLocale()
   const [open, setOpen] = useState(false)
   const [settings, setSettings] = useState<RenderDiagSettings>({
     ...RENDER_DIAG_DEFAULTS,
@@ -180,7 +185,7 @@ export function RenderDiagnosticCard({ liveRef, getContext }: Props) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
-      window.prompt('Copier le diagnostic :', text)
+      window.prompt(t('diag.copyPrompt'), text)
     }
   }
 
@@ -194,8 +199,8 @@ export function RenderDiagnosticCard({ liveRef, getContext }: Props) {
         className={
           open ? 'render-diag__warn-btn is-open' : 'render-diag__warn-btn'
         }
-        aria-label="Diagnostic rendu"
-        title="Diagnostic rendu"
+        aria-label={t('diag.title')}
+        title={t('diag.title')}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
@@ -203,88 +208,91 @@ export function RenderDiagnosticCard({ liveRef, getContext }: Props) {
         <RenderDiagIcon size={15} />
       </button>
       {open ? (
-        <div className="render-diag__panel" id={panelId} role="dialog" aria-label="Diagnostic rendu">
+        <div className="render-diag__panel" id={panelId} role="dialog" aria-label={t('diag.title')}>
           <p className="render-diag__hint">
-            Change <strong>un</strong> paramètre à la fois. La vue (yaw/pitch)
-            est conservée. Far = plan de clip caméra, pas la distance LOD.
+            {t('diag.hint.before')}
+            <strong>{t('diag.hint.strong')}</strong>
+            {t('diag.hint.after')}
           </p>
 
-          <p className="render-diag__section">Stats (frame entière)</p>
+          <p className="render-diag__section">{t('diag.section.stats')}</p>
           <div className="render-diag__stats">
             <span>{stats.fps.toFixed(0)} FPS</span>
-            <span>{stats.passes} passe{stats.passes > 1 ? 's' : ''}</span>
+            <span>
+              {stats.passes}{' '}
+              {stats.passes > 1 ? t('diag.passPlural') : t('diag.passSingular')}
+            </span>
             <span>{stats.drawCalls} draws</span>
-            <span>{stats.triangles.toLocaleString('fr-FR')} tris</span>
+            <span>{stats.triangles.toLocaleString(intlLocale(locale))} tris</span>
             <span className="render-diag__path">{stats.path}</span>
           </div>
 
-          <p className="render-diag__section">Culling / clip</p>
+          <p className="render-diag__section">{t('diag.section.culling')}</p>
           <Toggle
-            label="Frustum culling"
+            label={t('diag.frustum')}
             checked={settings.frustumCulling}
-            hint="OFF par défaut — AABBs monde incorrects sous warp"
+            hint={t('diag.frustumHint')}
             onChange={(v) => patch({ frustumCulling: v })}
           />
           <NumRow
-            label="Near caméra"
+            label={t('diag.near')}
             value={settings.cameraNearM}
             min={0.05}
             max={50}
             step={0.05}
             unit="m"
-            hint="Plan near PerspectiveCamera (live)"
+            hint={t('diag.nearHint')}
             onChange={(v) => patch({ cameraNearM: v })}
           />
           <NumRow
-            label="Far caméra (clip)"
+            label={t('diag.far')}
             value={settings.cameraFarM}
             min={1_000}
             max={500_000}
             step={1_000}
             unit="m"
-            hint="Plan far uniquement — ne charge / décharge aucune tuile"
+            hint={t('diag.farHint')}
             onChange={(v) => patch({ cameraFarM: v })}
           />
 
-          <p className="render-diag__section">Terrain</p>
+          <p className="render-diag__section">{t('diag.section.terrain')}</p>
           <Toggle
-            label="Wireframe terrain"
+            label={t('diag.wireframe')}
             checked={settings.terrainWireframe}
             onChange={(v) => patch({ terrainWireframe: v })}
           />
           <Toggle
-            label="Terrain proche"
+            label={t('diag.terrainNear')}
             checked={settings.showTerrainNear}
             onChange={(v) => patch({ showTerrainNear: v })}
           />
           <Toggle
-            label="Terrain far / LOD"
+            label={t('diag.terrainFar')}
             checked={settings.showTerrainFar}
-            hint="Visibilité seule — ne modifie pas le LOD"
+            hint={t('diag.terrainFarHint')}
             onChange={(v) => patch({ showTerrainFar: v })}
           />
 
-          <p className="render-diag__section">Ciel / couches</p>
+          <p className="render-diag__section">{t('diag.section.sky')}</p>
           <Toggle
-            label="Ciel / atmosphère (dôme)"
+            label={t('diag.skyDome')}
             checked={settings.showSky}
             onChange={(v) => patch({ showSky: v })}
           />
           <Toggle
-            label="Ciel nocturne (MW, grilles…)"
+            label={t('diag.nightSky')}
             checked={settings.showNightSky}
             onChange={(v) => patch({ showNightSky: v })}
           />
 
-          <p className="render-diag__section">Passe rendu</p>
+          <p className="render-diag__section">{t('diag.section.pass')}</p>
           <p className="render-diag__note">
-            Production = passe directe (warp vertex). Pas d’EffectComposer.
-            Cubemap = debug optionnel (6 RT + composite).
+            {t('diag.passNote')}
           </p>
           <Toggle
-            label="Passe cubemap stéréo"
+            label={t('diag.cubemap')}
             checked={settings.useCubemapPass}
-            hint="Live — bascule le chemin de rendu"
+            hint={t('diag.cubemapHint')}
             onChange={(v) =>
               patch({
                 useCubemapPass: v,
@@ -293,9 +301,9 @@ export function RenderDiagnosticCard({ liveRef, getContext }: Props) {
             }
           />
           <Toggle
-            label="Aperçu atlas faces (avant reproj.)"
+            label={t('diag.atlas')}
             checked={settings.cubemapAtlasPreview}
-            hint="Active aussi la passe cubemap"
+            hint={t('diag.atlasHint')}
             onChange={(v) =>
               patch({
                 cubemapAtlasPreview: v,
@@ -305,20 +313,19 @@ export function RenderDiagnosticCard({ liveRef, getContext }: Props) {
           />
 
           <p className="render-diag__locked">
-            logarithmicDepthBuffer : ON (fixé à la création du renderer —
-            recréer la ressource pour changer)
+            {t('diag.depthLocked')}
           </p>
 
           <div className="render-diag__actions">
             <button type="button" className="render-diag__btn" onClick={reset}>
-              Réinitialiser
+              {t('diag.reset')}
             </button>
             <button
               type="button"
               className="render-diag__btn"
               onClick={() => void copyDiag()}
             >
-              {copied ? 'Copié' : 'Copier le diagnostic'}
+              {copied ? t('diag.copied') : t('diag.copy')}
             </button>
           </div>
         </div>

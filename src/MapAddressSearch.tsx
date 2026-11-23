@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { searchAddresses, type AddressSearchResult } from './addressSearch'
+import { useT } from './i18n'
 
 const DEBOUNCE_MS = 420
 const MIN_QUERY_LENGTH = 3
@@ -28,6 +29,7 @@ export function MapAddressSearch({
   getMapCenter,
   getViewbox,
 }: MapAddressSearchProps) {
+  const t = useT()
   const listId = useId()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -167,7 +169,8 @@ export function MapAddressSearch({
           className="map-address-search__input"
           type="search"
           value={query}
-          placeholder="Rechercher un lieu…"
+          placeholder={t('map.searchPlaceholder')}
+          aria-label={t('map.searchPlace')}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
@@ -182,17 +185,22 @@ export function MapAddressSearch({
       </form>
       {center ? (
         <p className="map-address-search__near">
-          Priorité près de {center.lat.toFixed(2)}°, {center.lon.toFixed(2)}°
+          {t('map.searchNear', {
+            lat: center.lat.toFixed(2),
+            lon: center.lon.toFixed(2),
+          })}
         </p>
       ) : null}
       {status === 'loading' ? (
-        <p className="map-address-search__hint">Recherche…</p>
+        <p className="map-address-search__hint">{t('map.searchLoading')}</p>
       ) : null}
       {status === 'error' ? (
-        <p className="map-address-search__hint">Erreur de recherche</p>
+        <p className="map-address-search__hint">{t('map.searchError')}</p>
       ) : null}
       {status === 'ready' && results.length === 0 ? (
-        <p className="map-address-search__hint">Aucun résultat</p>
+        <p className="map-address-search__hint">
+          {t('common.searchNoResults')}
+        </p>
       ) : null}
       {results.length > 0 ? (
         <div className="map-address-search__results">

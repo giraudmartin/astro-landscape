@@ -1,3 +1,5 @@
+import { useT } from './i18n'
+
 type FolderSaveCardProps = {
   mode: 'create' | 'edit'
   name: string
@@ -15,11 +17,15 @@ export function FolderSaveCard({
   onSubmit,
   onDelete,
 }: FolderSaveCardProps) {
-  const title = mode === 'create' ? 'Nouveau dossier' : 'Modifier le dossier'
+  const t = useT()
+  const title =
+    mode === 'create'
+      ? t('spots.folder.createTitle')
+      : t('spots.folder.editTitle')
   const intro =
     mode === 'create'
-      ? 'Donne un nom à ce dossier pour y ranger tes spots.'
-      : 'Renomme ce dossier ou supprime-le. Les spots seront conservés.'
+      ? t('spots.folder.introCreate')
+      : t('spots.folder.introEdit')
 
   return (
     <div
@@ -53,7 +59,7 @@ export function FolderSaveCard({
             <button
               type="button"
               className="spot-save-card__close"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
               onClick={onClose}
             >
               <svg
@@ -73,12 +79,12 @@ export function FolderSaveCard({
           <div className="map-card__body">
             <p className="spot-save-card__intro">{intro}</p>
             <label className="spot-save-card__field">
-              <span>Nom du dossier</span>
+              <span>{t('spots.folder.nameLabel')}</span>
               <input
                 autoFocus
                 value={name}
                 onChange={(event) => onNameChange(event.target.value)}
-                placeholder="Ex. Alpes"
+                placeholder={t('spots.folder.placeholder')}
                 maxLength={80}
               />
             </label>
@@ -95,11 +101,11 @@ export function FolderSaveCard({
                   className="spot-save-card__delete"
                   onClick={onDelete}
                 >
-                  Supprimer
+                  {t('common.delete')}
                 </button>
               ) : null}
               <button type="submit" className="control-panel__primary">
-                Enregistrer
+                {t('common.save')}
               </button>
             </div>
           </div>

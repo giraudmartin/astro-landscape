@@ -5,6 +5,7 @@ import {
   IMAGERY_MAX_ZOOM,
 } from './globeConstants'
 import { TRIPOD_HEIGHT_M } from './presets'
+import { t } from './i18n'
 import { attachStelProjector } from './stelProjector'
 
 const MAPTERHORN = 'https://tiles.mapterhorn.com'
@@ -2521,13 +2522,9 @@ export type LocalTerrainHandle = {
   }
 }
 
-export const TERRAIN_PHASE_LABEL: Record<TerrainLoadPhase, string> = {
-  dem: 'Relief DEM...',
-  preview: 'Apercu satellite...',
-  ortho: 'Ortho haute resolution...',
-  detail: 'Relief moyen...',
-  far: 'Horizon 300 km...',
-  ready: 'Pret',
+/** Localized loader phase label (call at render time). */
+export function terrainPhaseLabel(phase: TerrainLoadPhase): string {
+  return t(`immersive.terrain.phase.${phase}`)
 }
 
 export async function createLocalTerrainMesh(input: {

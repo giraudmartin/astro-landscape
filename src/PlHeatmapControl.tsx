@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
+import { useT } from './i18n'
 
 type PlHeatmapControlProps = {
   enabled: boolean
@@ -51,6 +52,7 @@ export function PlHeatmapControl({
   onOpacityChange,
   onOpacityCommit,
 }: PlHeatmapControlProps) {
+  const tr = useT()
   const trackRef = useRef<HTMLDivElement | null>(null)
   const draggingRef = useRef(false)
   // Local value so the thumb tracks the pointer without waiting on App re-render.
@@ -163,10 +165,10 @@ export function PlHeatmapControl({
         aria-pressed={enabled}
         aria-label={
           enabled
-            ? 'Masquer la heatmap pollution lumineuse'
-            : 'Afficher la heatmap pollution lumineuse'
+            ? tr('map.pl.toggleOn')
+            : tr('map.pl.toggleOff')
         }
-        title="Heatmap pollution lumineuse"
+        title={tr('map.pl.title')}
         onClick={() => onEnabledChange(!enabled)}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -193,10 +195,10 @@ export function PlHeatmapControl({
             aria-valuemin={Math.round(OP_MIN * 100)}
             aria-valuemax={Math.round(OP_MAX * 100)}
             aria-valuenow={pct}
-            aria-valuetext={`${pct} pour cent`}
-            aria-label="Opacité de la heatmap"
+            aria-valuetext={tr('map.pl.opacityValueText', { pct })}
+            aria-label={tr('map.pl.opacityAria')}
             aria-disabled={!enabled}
-            title={`Opacité ${pct}%`}
+            title={tr('map.pl.opacityTitle', { pct })}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}

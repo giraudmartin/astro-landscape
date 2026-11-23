@@ -8,6 +8,7 @@ import {
   Observer,
   SearchRiseSet,
 } from 'astronomy-engine'
+import { t } from './i18n'
 
 export type LightingBand = 'night' | 'day' | 'near_sunset' | 'near_sunrise'
 
@@ -136,11 +137,21 @@ function isMorningCivil(utcMs: number, lon: number): boolean {
 }
 
 export function phaseLabelFromFraction(frac: number, waxing: boolean): string {
-  if (frac < 0.03) return 'Nouvelle lune'
-  if (frac < 0.47) return waxing ? 'Premier croissant' : 'Dernier croissant'
-  if (frac <= 0.53) return waxing ? 'Premier quartier' : 'Dernier quartier'
-  if (frac < 0.97) return waxing ? 'Gibbeuse croissante' : 'Gibbeuse décroissante'
-  return 'Pleine lune'
+  if (frac < 0.03) return t('moon.phase.new')
+  if (frac < 0.47) {
+    return waxing
+      ? t('moon.phase.waxingCrescent')
+      : t('moon.phase.waningCrescent')
+  }
+  if (frac <= 0.53) {
+    return waxing ? t('moon.phase.firstQuarter') : t('moon.phase.lastQuarter')
+  }
+  if (frac < 0.97) {
+    return waxing
+      ? t('moon.phase.waxingGibbous')
+      : t('moon.phase.waningGibbous')
+  }
+  return t('moon.phase.full')
 }
 
 function lightingAt(
@@ -270,11 +281,8 @@ export type ScheduleRow = {
   label: string
 }
 
-const SCHEDULE_LABELS: Record<ScheduleKind, string> = {
-  sunrise: 'Lever du soleil',
-  sunset: 'Coucher du soleil',
-  moonrise: 'Lever de Lune',
-  moonset: 'Coucher de Lune',
+function scheduleLabel(kind: ScheduleKind): string {
+  return t(`celestial.schedule.${kind}`)
 }
 
 /** Chronological day schedule for the Overview card (sun + moon only). */
@@ -289,7 +297,7 @@ export function buildDaySchedule(info: DayInfo): ScheduleRow[] {
       kind,
       datetimeLocal: event.datetimeLocal,
       datetimeUtc: event.datetimeUtc,
-      label: SCHEDULE_LABELS[kind],
+      label: scheduleLabel(kind),
     })
   }
   push('sunrise', info.sunrise)

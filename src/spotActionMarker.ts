@@ -1,4 +1,5 @@
 /** Radial spot-action marker — same actions always; add↔edit is the only swap. */
+import { subscribeLocale, t } from './i18n'
 
 export type SpotActionMarkerActions = {
   onMenuOpen?: () => void
@@ -72,23 +73,31 @@ const icon = (
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`
 }
 
-export const SPOT_ACTION_MARKER_LABELS_FR: SpotActionMarkerLabels = {
-  group: 'Actions du spot',
-  openMenu: 'Ouvrir les actions du marker',
-  closeMenu: 'Fermer les actions du marker',
-  street: 'Ouvrir Google Street View',
-  immersive: 'Ouvrir la vue trépied (Three.js)',
-  skyFlat: 'Vue ciel (sol plat, sans DEM)',
-  save: 'Enregistrer ce spot',
-  edit: 'Modifier ce spot',
+/** Marker labels in the active locale (reads `t()` at call time). */
+export function spotActionMarkerLabels(): SpotActionMarkerLabels {
+  return {
+    group: t('map.spotAction.group'),
+    openMenu: t('map.spotAction.openMenu'),
+    closeMenu: t('map.spotAction.closeMenu'),
+    street: t('map.spotAction.street'),
+    immersive: t('map.spotAction.immersive'),
+    skyFlat: t('map.spotAction.skyFlat'),
+    save: t('map.spotAction.save'),
+    edit: t('map.spotAction.edit'),
+  }
 }
 
+/**
+ * When `labels` is omitted the marker follows the active locale and
+ * re-labels itself on locale change (no caller wiring needed).
+ */
 export function createSpotActionMarkerElement(
   initialSaved: boolean,
   actions: SpotActionMarkerActions,
-  labels: SpotActionMarkerLabels = SPOT_ACTION_MARKER_LABELS_FR,
+  labels?: SpotActionMarkerLabels,
 ): SpotActionMarkerController {
-  let currentLabels = labels
+  let followLocale = labels === undefined
+  let currentLabels = labels ?? spotActionMarkerLabels()
   const element = document.createElement('div')
   // Working pin is always the active point — green camera chrome.
   element.className = 'spot-action-marker spot-action-marker--active'
@@ -204,9 +213,15 @@ export function createSpotActionMarkerElement(
   }
 
   const setLabels = (next: SpotActionMarkerLabels): void => {
+    followLocale = false
     currentLabels = next
     applyLabels()
   }
+  const unsubscribeLocale = subscribeLocale(() => {
+    if (!followLocale) return
+    currentLabels = spotActionMarkerLabels()
+    applyLabels()
+  })
 
   const stopMapInteraction = (event: Event): void => event.stopPropagation()
   const onDocumentPointerDown = (event: PointerEvent): void => {
@@ -270,6 +285,7 @@ export function createSpotActionMarkerElement(
     open: () => setOpen(true),
     close: closeThisMenu,
     destroy: () => {
+      unsubscribeLocale()
       if (closeOpenMarkerMenu === closeThisMenu) closeOpenMarkerMenu = null
       document.removeEventListener('pointerdown', onDocumentPointerDown)
       document.removeEventListener('keydown', onKeyDown)

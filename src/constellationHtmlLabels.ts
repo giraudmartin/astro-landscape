@@ -6,6 +6,7 @@ import {
   type ConstellationFigure,
 } from './constellationFigures'
 import { j2000ToNasaMapDirection } from './celestialVectors'
+import { subscribeLocale } from './i18n'
 import { stelProjectEye } from './stelProjector'
 
 export type ConstellationHtmlLabelsHandle = {
@@ -37,6 +38,8 @@ export type ConstellationHtmlLabelsHandle = {
 
 type Anchor = {
   el: HTMLSpanElement
+  /** IAU / figure name key for live i18n refresh. */
+  name: string
   local: THREE.Vector3
 }
 
@@ -104,9 +107,16 @@ export function createConstellationHtmlLabels(
       el.textContent = a.text
       el.style.display = 'none'
       layer.appendChild(el)
-      return { el, local: a.local }
+      return { el, name: a.name, local: a.local }
     },
   )
+
+  const relabel = () => {
+    for (const a of anchors) {
+      a.el.textContent = constellationLabel(a.name) ?? a.name
+    }
+  }
+  const unsubscribeLocale = subscribeLocale(relabel)
 
   let visibleWanted = false
   let opacity = 1
@@ -197,6 +207,7 @@ export function createConstellationHtmlLabels(
       }
     },
     dispose: () => {
+      unsubscribeLocale()
       layer.remove()
       anchors.length = 0
     },

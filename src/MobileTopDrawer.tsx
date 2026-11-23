@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useT } from './i18n'
 
 type MobileTopDrawerProps = {
   open: boolean
@@ -23,6 +24,7 @@ export function MobileTopDrawer({
   onOpenChange,
   children,
 }: MobileTopDrawerProps) {
+  const t = useT()
   const titleId = useId()
   const dragRef = useRef<{
     pointerId: number
@@ -152,7 +154,7 @@ export function MobileTopDrawer({
         <button
           type="button"
           className="mobile-top-drawer__backdrop"
-          aria-label="Fermer"
+          aria-label={t('common.close')}
           style={{ opacity: Math.min(1, progress) * 0.45 }}
           onClick={() => {
             setProgress(0)
@@ -173,7 +175,7 @@ export function MobileTopDrawer({
         aria-hidden={progress < 0.05}
       >
         <h2 id={titleId} className="u-sr-only">
-          Aperçu et météo
+          {t('map.drawer.title')}
         </h2>
         <div className="mobile-top-drawer__body">{children}</div>
       </div>
@@ -182,7 +184,7 @@ export function MobileTopDrawer({
         type="button"
         className="mobile-top-drawer__tab"
         aria-expanded={open}
-        aria-label="Ouvrir aperçu et météo"
+        aria-label={t('map.drawer.open')}
         onClick={() => {
           if (suppressClickRef.current) {
             suppressClickRef.current = false

@@ -1,3 +1,5 @@
+import { useT } from './i18n'
+
 type ViewPitchHudProps = {
   /** Look pitch: 0 = horizon, + = up, − = down (deg). */
   pitchDeg: number
@@ -34,6 +36,7 @@ function formatPitchLabel(pitchDeg: number): string {
  * marks must not rely on `%` of the track (height collapses to 0).
  */
 export function ViewPitchHud({ pitchDeg }: ViewPitchHudProps) {
+  const t = useT()
   const pitch = clampPitch(pitchDeg)
   const windowH = HALF_SPAN_DEG * 2 * PX_PER_DEG
 
@@ -45,7 +48,9 @@ export function ViewPitchHud({ pitchDeg }: ViewPitchHudProps) {
   return (
     <div
       className="moon-preview-pitch-tape"
-      aria-label={`Site ${formatPitchLabel(pitch)}`}
+      aria-label={t('immersive.pitch.site', {
+        label: formatPitchLabel(pitch),
+      })}
     >
       <div
         className="moon-preview-pitch-tape__window"

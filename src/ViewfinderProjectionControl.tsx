@@ -5,8 +5,10 @@ import {
   ProjectionRectilinearIcon,
   ProjectionStereoIcon,
 } from './psIcons'
+import { useT } from './i18n'
 import {
   STAGE_PROJECTIONS,
+  stageProjectionMeta,
   type StageProjection,
 } from './stelProjector'
 
@@ -32,6 +34,7 @@ export function ViewfinderProjectionControl({
   projection,
   onProjectionChange,
 }: ViewfinderProjectionControlProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const menuId = useId()
@@ -39,6 +42,7 @@ export function ViewfinderProjectionControl({
     STAGE_PROJECTIONS.find((mode) => mode.id === projection) ??
     STAGE_PROJECTIONS[0]!
   const CurrentIcon = PROJECTION_ICONS[current.id]
+  const currentMeta = stageProjectionMeta(current.id)
 
   useEffect(() => {
     if (!open) return
@@ -76,12 +80,14 @@ export function ViewfinderProjectionControl({
         aria-expanded={open}
         aria-controls={menuId}
         aria-haspopup="listbox"
-        title="Changer la projection"
+        title={t('viewfinder.proj.change')}
         onClick={() => setOpen((value) => !value)}
       >
         <CurrentIcon size={16} />
-        <span className="vf-proj-control__muted">Projection</span>
-        <b className="vf-proj-control__value">{current.shortLabel}</b>
+        <span className="vf-proj-control__muted">
+          {t('viewfinder.proj.label')}
+        </span>
+        <b className="vf-proj-control__value">{currentMeta.shortLabel}</b>
         <ChevronDownIcon
           className="vf-proj-control__chevron"
           size={12}
@@ -93,10 +99,11 @@ export function ViewfinderProjectionControl({
           id={menuId}
           className="vf-proj-control__menu"
           role="listbox"
-          aria-label="Choisir la projection"
+          aria-label={t('viewfinder.proj.choose')}
         >
           {STAGE_PROJECTIONS.map((mode) => {
             const selected = projection === mode.id
+            const meta = stageProjectionMeta(mode.id)
             return (
               <button
                 key={mode.id}
@@ -108,15 +115,15 @@ export function ViewfinderProjectionControl({
                     ? 'vf-proj-control__option is-active'
                     : 'vf-proj-control__option'
                 }
-                title={mode.title}
+                title={meta.title}
                 onClick={() => {
                   onProjectionChange(mode.id)
                   setOpen(false)
                 }}
               >
                 <span className="vf-proj-control__option-copy">
-                  <b>{mode.label}</b>
-                  <small>{mode.title}</small>
+                  <b>{meta.label}</b>
+                  <small>{meta.title}</small>
                 </span>
               </button>
             )

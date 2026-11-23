@@ -6,6 +6,8 @@
  * artificial glow ∝ radiance, plus a natural night-sky floor (~22 mag/arcsec²).
  */
 
+import { t } from '../i18n'
+
 export const BORTLE_MIN = 1
 export const BORTLE_MAX = 9
 
@@ -26,18 +28,6 @@ const BORTLE_FROM_MAG: ReadonlyArray<{ bortle: number; minMag: number }> = [
   { bortle: 8, minMag: 17.8 },
   { bortle: 9, minMag: -Infinity },
 ]
-
-const BORTLE_LABELS_FR: Record<number, string> = {
-  1: 'Ciel excellent',
-  2: 'Site vraiment sombre',
-  3: 'Ciel rural',
-  4: 'Rural / périurbain',
-  5: 'Ciel suburbain',
-  6: 'Suburbain clair',
-  7: 'Suburbain / urbain',
-  8: 'Ciel de ville',
-  9: 'Centre-ville',
-}
 
 export function clampBortle(value: number): number {
   if (!Number.isFinite(value)) return 4
@@ -138,9 +128,16 @@ export function bortleFromBlackMarbleRgb(
   )
 }
 
-export function bortleLabelFr(bortle: number): string {
-  return BORTLE_LABELS_FR[clampBortle(bortle)] ?? 'Estimé'
+/** Localized Bortle class label (active locale, via module-level `t`). */
+export function bortleLabel(bortle: number): string {
+  const n = clampBortle(bortle)
+  return n >= BORTLE_MIN && n <= BORTLE_MAX
+    ? t(`bortle.class.${n}`)
+    : t('bortle.class.fallback')
 }
+
+/** @deprecated Use {@link bortleLabel} — kept so existing imports keep working. */
+export const bortleLabelFr = bortleLabel
 
 /** 0 = pristine, 1 = inner-city — for sky glow scaling. */
 export function bortlePollutionFactor(bortle: number): number {

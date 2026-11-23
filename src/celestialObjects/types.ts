@@ -1,3 +1,5 @@
+import { t } from '../i18n'
+
 /** Shared celestial search / target types. */
 
 export type CelestialObjectType =
@@ -69,18 +71,47 @@ export type ObjectLiveInfo = {
   constellationLabel: string | null
 }
 
-export const TYPE_LABEL_FR: Record<CelestialObjectType, string> = {
-  star: 'Étoile',
-  constellation: 'Constellation',
-  nebula: 'Nébuleuse',
-  galaxy: 'Galaxie',
-  cluster: 'Amas',
-  dso: 'Objet du ciel profond',
-  planet: 'Planète',
-  sun: 'Soleil',
-  moon: 'Lune',
-  galactic_center: 'Centre galactique',
+const TYPE_KEY: Record<CelestialObjectType, string> = {
+  star: 'star',
+  constellation: 'constellation',
+  nebula: 'nebula',
+  galaxy: 'galaxy',
+  cluster: 'cluster',
+  dso: 'dso',
+  planet: 'planet',
+  sun: 'sun',
+  moon: 'moon',
+  galactic_center: 'galacticCenter',
 }
 
-export const HORIZON_NOTE_FR =
-  'Horaires au franchissement de l’horizon astronomique (altitude 0°). Le relief et les obstacles peuvent masquer l’objet plus tôt ou plus tard.'
+/** Localized label for an object type (call at render time). */
+export function typeLabel(type: CelestialObjectType): string {
+  return t(`celestial.type.${TYPE_KEY[type]}`)
+}
+
+/** Localized astronomical-horizon note (call at render time). */
+export function horizonNote(): string {
+  return t('celestial.horizonNote')
+}
+
+const BODY_KEY: Record<string, string> = {
+  'body:sun': 'sun',
+  'body:moon': 'moon',
+  'body:mercury': 'mercury',
+  'body:venus': 'venus',
+  'body:mars': 'mars',
+  'body:jupiter': 'jupiter',
+  'body:saturn': 'saturn',
+  'body:uranus': 'uranus',
+  'body:neptune': 'neptune',
+  'gc:sgr-a': 'galacticCenter',
+}
+
+/**
+ * Localized display name (call at render time). Solar-system bodies and the
+ * galactic center resolve via i18n; everything else uses the catalog name.
+ */
+export function celestialObjectDisplayName(object: CelestialObject): string {
+  const key = BODY_KEY[object.id]
+  return key ? t(`celestial.body.${key}`) : object.name
+}

@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react'
+import { intlLocale, useLocale } from './i18n'
 import { MoonPhaseDisc } from './moonVisuals'
 import { createPortal } from 'react-dom'
 import {
@@ -96,13 +97,14 @@ export function CalendarPopover({
   onSelectDate,
   onNow,
 }: CalendarPopoverProps) {
+  const { locale: appLocale, t, tList } = useLocale()
   const byDate = useMemo(
     () => new Map(days.map((day) => [day.date, day])),
     [days],
   )
   const cells = monthCalendarCells(year, month)
   const title = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString(
-    'fr-FR',
+    intlLocale(appLocale),
     { month: 'long', year: 'numeric', timeZone: 'UTC' },
   )
   const prev = shiftMonth(year, month, -1)
@@ -172,30 +174,30 @@ export function CalendarPopover({
       : { top: pos.top }),
   }
 
-  const weekdays = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di']
+  const weekdays = tList('common.weekdaysShort')
 
   return createPortal(
     <div
       className="moon-calendar-popover"
       role="dialog"
-      aria-label="Calendrier"
+      aria-label={t('common.calendar')}
       style={style}
     >
       <div className="moon-calendar-popover__header">
-        <p className="moon-calendar-popover__title">Calendrier lunaire</p>
+        <p className="moon-calendar-popover__title">{t('timeline.cal.title')}</p>
         <div className="moon-calendar-popover__header-actions">
           <button
             type="button"
             className="moon-calendar-popover__now"
-            aria-label="Maintenant"
+            aria-label={t('timeline.cal.now')}
             onClick={onNow}
           >
-            Maintenant
+            {t('timeline.cal.now')}
           </button>
           <button
             type="button"
             className="moon-calendar-popover__close"
-            aria-label="Fermer le calendrier"
+            aria-label={t('timeline.cal.close')}
             onClick={onClose}
           >
             ×
@@ -208,7 +210,7 @@ export function CalendarPopover({
           <button
             type="button"
             className="moon-cal__nav-btn"
-            aria-label="Mois précédent"
+            aria-label={t('common.prevMonth')}
             onClick={() => onMonthChange(prev.year, prev.month)}
           >
             ‹
@@ -217,7 +219,7 @@ export function CalendarPopover({
           <button
             type="button"
             className="moon-cal__nav-btn"
-            aria-label="Mois suivant"
+            aria-label={t('common.nextMonth')}
             onClick={() => onMonthChange(next.year, next.month)}
           >
             ›
@@ -228,7 +230,7 @@ export function CalendarPopover({
             <span key={label}>{label}</span>
           ))}
         </div>
-        <div className="moon-cal__grid" role="grid" aria-label="Calendrier lunaire">
+        <div className="moon-cal__grid" role="grid" aria-label={t('timeline.cal.gridAria')}>
           {cells.map((cellDate, index) => {
             if (!cellDate) {
               return (
@@ -269,8 +271,10 @@ export function CalendarPopover({
           </span>
           <span>
             {readoutDay.moonInNightMinutes > 0
-              ? `Au-dessus de l’horizon pendant ${nightDuration(readoutDay.moonInNightMinutes)} cette nuit.`
-              : 'Sous l’horizon toute la nuit.'}
+              ? t('timeline.cal.aboveHorizon', {
+                  duration: nightDuration(readoutDay.moonInNightMinutes),
+                })
+              : t('timeline.cal.belowAllNight')}
           </span>
         </p>
       </div>

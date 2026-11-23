@@ -1,3 +1,5 @@
+import { useT } from './i18n'
+
 type ConfirmCardProps = {
   title: string
   message: string
@@ -9,10 +11,11 @@ type ConfirmCardProps = {
 export function ConfirmCard({
   title,
   message,
-  confirmLabel = 'Supprimer',
+  confirmLabel,
   onConfirm,
   onClose,
 }: ConfirmCardProps) {
+  const t = useT()
   return (
     <div
       className="spot-save-card-backdrop"
@@ -41,7 +44,7 @@ export function ConfirmCard({
             <button
               type="button"
               className="spot-save-card__close"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
               onClick={onClose}
             >
               <svg
@@ -66,7 +69,7 @@ export function ConfirmCard({
                 className="spot-save-card__cancel"
                 onClick={onClose}
               >
-                Annuler
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -74,7 +77,7 @@ export function ConfirmCard({
                 autoFocus
                 onClick={onConfirm}
               >
-                {confirmLabel}
+                {confirmLabel ?? t('common.delete')}
               </button>
             </div>
           </div>

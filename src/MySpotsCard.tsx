@@ -1,4 +1,5 @@
 import { useMemo, useState, type DragEvent, type MouseEvent } from 'react'
+import { useT } from './i18n'
 import { MobileRailChrome } from './MobileRailChrome'
 import type { PersonalSpot, PersonalSpotFolder } from './personalSpots'
 
@@ -20,7 +21,6 @@ type MySpotsRailProps = {
   onRenameFolder: (folder: PersonalSpotFolder) => void
   onToggleFolderVisible: (folderId: string) => void
   onMoveSpotToFolder: (spotId: string, folderId: string | null) => void
-  onViewFramings?: (spot: PersonalSpot) => void
   railWidthPx?: number
   onRailWidthChange?: (widthPx: number) => void
 }
@@ -158,23 +158,6 @@ function PinIcon() {
   )
 }
 
-function FinderIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect width="18" height="14" x="3" y="5" rx="2" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  )
-}
-
 function ChevronIcon({ open }: { open: boolean }) {
   return (
     <svg
@@ -208,6 +191,7 @@ function stopRowSideEffect(event: MouseEvent) {
 }
 
 export function MySpotsToggle({ open, onOpenChange }: MySpotsToggleProps) {
+  const t = useT()
   return (
     <div className="my-spots-control">
       <button
@@ -219,8 +203,8 @@ export function MySpotsToggle({ open, onOpenChange }: MySpotsToggleProps) {
         }
         aria-expanded={open}
         aria-controls="my-spots-rail"
-        aria-label="Mes spots"
-        title="Mes spots"
+        aria-label={t('spots.title')}
+        title={t('spots.title')}
         onClick={() => onOpenChange(!open)}
       >
         <MapIcon />
@@ -236,7 +220,6 @@ function SpotRow({
   onSelect,
   onRename,
   onToggleVisible,
-  onViewFramings,
   onDragStart,
   onDragEnd,
 }: {
@@ -246,10 +229,10 @@ function SpotRow({
   onSelect: () => void
   onRename: () => void
   onToggleVisible: () => void
-  onViewFramings?: () => void
   onDragStart: (event: DragEvent) => void
   onDragEnd: () => void
 }) {
+  const t = useT()
   const altitude =
     spot.heightM != null ? `${Math.round(spot.heightM)} m` : null
 
@@ -297,15 +280,15 @@ function SpotRow({
           type="button"
           className={
             mapHidden
-              ? 'my-spots-row__edit my-spots-row__edit--off'
-              : 'my-spots-row__edit'
+              ? 'my-spots-row__edit my-spots-row__edit--visibility my-spots-row__edit--off'
+              : 'my-spots-row__edit my-spots-row__edit--visibility'
           }
-          aria-label={`Visibilité sur la carte · ${spot.name}`}
+          aria-label={t('spots.visibilitySpot', { name: spot.name })}
           aria-pressed={!mapHidden}
           title={
             mapHidden
-              ? `Afficher ${spot.name} sur la carte`
-              : `Masquer ${spot.name} sur la carte`
+              ? t('spots.showOnMap', { name: spot.name })
+              : t('spots.hideOnMap', { name: spot.name })
           }
           onMouseDown={stopRowSideEffect}
           onClick={(event) => {
@@ -315,26 +298,11 @@ function SpotRow({
         >
           {mapHidden ? <EyeOffIcon /> : <EyeIcon />}
         </button>
-        {onViewFramings ? (
-          <button
-            type="button"
-            className="my-spots-row__edit"
-            aria-label={`Ouvrir le viseur · ${spot.name}`}
-            title={`Ouvrir le viseur · ${spot.name}`}
-            onMouseDown={stopRowSideEffect}
-            onClick={(event) => {
-              stopRowSideEffect(event)
-              onViewFramings()
-            }}
-          >
-            <FinderIcon />
-          </button>
-        ) : null}
         <button
           type="button"
           className="my-spots-row__edit"
-          aria-label={`Modifier le spot · ${spot.name}`}
-          title={`Modifier le spot · ${spot.name}`}
+          aria-label={t('spots.editSpot', { name: spot.name })}
+          title={t('spots.editSpot', { name: spot.name })}
           onMouseDown={stopRowSideEffect}
           onClick={(event) => {
             stopRowSideEffect(event)
@@ -361,10 +329,10 @@ export function MySpotsRail({
   onRenameFolder,
   onToggleFolderVisible,
   onMoveSpotToFolder,
-  onViewFramings,
   railWidthPx,
   onRailWidthChange,
 }: MySpotsRailProps) {
+  const t = useT()
   const [query, setQuery] = useState('')
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(
     () => new Set(),
@@ -480,9 +448,6 @@ export function MySpotsRail({
         onSelect={() => onSelect(spot)}
         onRename={() => onRename(spot)}
         onToggleVisible={() => onToggleSpotVisible(spot.id)}
-        onViewFramings={
-          onViewFramings ? () => onViewFramings(spot) : undefined
-        }
         onDragStart={(event) => beginSpotDrag(event, spot.id)}
         onDragEnd={endSpotDrag}
       />
@@ -490,14 +455,14 @@ export function MySpotsRail({
   }
 
   const showToolbar = spots.length > 0 || folders.length > 0
-  const showAllLabel = allSpotsVisible ? 'Tout masquer' : 'Tout afficher'
+  const showAllLabel = allSpotsVisible ? t('spots.hideAll') : t('spots.showAll')
 
   return (
     <aside
       id="my-spots-rail"
       className="my-spots-rail"
       role="complementary"
-      aria-label="Mes spots"
+      aria-label={t('spots.title')}
     >
       <MobileRailChrome
         onClose={onClose}
@@ -508,26 +473,25 @@ export function MySpotsRail({
         <header className="my-spots-rail__header">
           <div>
             <h2 className="my-spots-rail__title">
-              Mes spots
+              {t('spots.title')}
               <span
                 className="my-spots-rail__count"
-                aria-label={`${spots.length} spots`}
+                aria-label={t('spots.countAria', { n: spots.length })}
               >
                 {spots.length}
               </span>
             </h2>
             <p className="my-spots-rail__sub">
-              Clic droit pose le pin actif (vert) · clic sur un spot le rend
-              actif · range-les dans des dossiers.
+              {t('spots.sub')}
               {searching && spots.length > 0 ? (
-                <> · {matchingSpots.length} visible(s)</>
+                <> {t('spots.visibleCount', { n: matchingSpots.length })}</>
               ) : null}
             </p>
           </div>
           <button
             type="button"
             className="my-spots-rail__close"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
             onClick={onClose}
           >
             ×
@@ -556,28 +520,28 @@ export function MySpotsRail({
                   <button
                     type="button"
                     className="my-spots-panel__tool"
-                    aria-label="Nouveau dossier"
-                    title="Nouveau dossier"
+                    aria-label={t('spots.newFolder')}
+                    title={t('spots.newFolder')}
                     onClick={onCreateFolder}
                   >
                     <FolderPlusIcon />
                     <span className="my-spots-panel__tool-label">
-                      Nouveau dossier
+                      {t('spots.newFolder')}
                     </span>
                   </button>
                 </div>
                 <label className="my-spots-panel__search">
                   <span className="my-spots-panel__search-label">
-                    Rechercher un spot
+                    {t('spots.search')}
                   </span>
                   <SearchIcon />
                   <input
                     type="search"
                     value={query}
-                    placeholder="Rechercher un spot"
+                    placeholder={t('spots.search')}
                     autoComplete="off"
                     spellCheck={false}
-                    aria-label="Rechercher un spot"
+                    aria-label={t('spots.search')}
                     onChange={(event) => setQuery(event.target.value)}
                   />
                 </label>
@@ -586,19 +550,19 @@ export function MySpotsRail({
               <button
                 type="button"
                 className="my-spots-panel__tool my-spots-panel__tool--block"
-                aria-label="Nouveau dossier"
-                title="Nouveau dossier"
+                aria-label={t('spots.newFolder')}
+                title={t('spots.newFolder')}
                 onClick={onCreateFolder}
               >
                 <FolderPlusIcon />
-                <span>Nouveau dossier</span>
+                <span>{t('spots.newFolder')}</span>
               </button>
             )}
 
             {spots.length === 0 && folders.length === 0 ? (
-              <p className="my-spots-rail__empty">Aucun spot enregistré.</p>
+              <p className="my-spots-rail__empty">{t('spots.empty')}</p>
             ) : matchingSpots.length === 0 && visibleFolders.length === 0 ? (
-              <p className="my-spots-rail__empty">Aucun résultat.</p>
+              <p className="my-spots-rail__empty">{t('spots.noResults')}</p>
             ) : (
               <div className="my-spots-tree">
                 {visibleFolders.map((folder) => {
@@ -667,15 +631,15 @@ export function MySpotsRail({
                             type="button"
                             className={
                               !folder.visible
-                                ? 'my-spots-row__edit my-spots-row__edit--off'
-                                : 'my-spots-row__edit'
+                                ? 'my-spots-row__edit my-spots-row__edit--visibility my-spots-row__edit--off'
+                                : 'my-spots-row__edit my-spots-row__edit--visibility'
                             }
-                            aria-label={`Visibilité sur la carte · dossier ${folder.name}`}
+                            aria-label={t('spots.folderVisibility', { name: folder.name })}
                             aria-pressed={folder.visible}
                             title={
                               folder.visible
-                                ? `Masquer le dossier ${folder.name}`
-                                : `Afficher le dossier ${folder.name}`
+                                ? t('spots.hideFolder', { name: folder.name })
+                                : t('spots.showFolder', { name: folder.name })
                             }
                             onClick={() => onToggleFolderVisible(folder.id)}
                           >
@@ -684,8 +648,8 @@ export function MySpotsRail({
                           <button
                             type="button"
                             className="my-spots-row__edit"
-                            aria-label={`Renommer le dossier · ${folder.name}`}
-                            title={`Renommer le dossier · ${folder.name}`}
+                            aria-label={t('spots.renameFolder', { name: folder.name })}
+                            title={t('spots.renameFolder', { name: folder.name })}
                             onClick={() => onRenameFolder(folder)}
                           >
                             <SquarePenIcon />
@@ -695,7 +659,7 @@ export function MySpotsRail({
                       <div id={folderSpotsListId} hidden={!expanded}>
                         {children.length === 0 ? (
                           <p className="my-spots-folder__empty">
-                            Glisse un spot ici
+                            {t('spots.dropHere')}
                           </p>
                         ) : (
                           <ul className="my-spots-list">
@@ -738,7 +702,7 @@ export function MySpotsRail({
                     <header className="my-spots-folder__row my-spots-root__header">
                       <h3 className="my-spots-folder__title">
                         <span className="my-spots-root__label">
-                          Sans dossier
+                          {t('spots.ungrouped')}
                           <span className="my-spots-folder__count">
                             {rootSpots.length}
                           </span>
@@ -748,7 +712,7 @@ export function MySpotsRail({
                   ) : null}
                   {rootSpots.length === 0 && folders.length > 0 ? (
                     <p className="my-spots-folder__empty">
-                      Glisse un spot ici pour le sortir du dossier
+                      {t('spots.dropToRoot')}
                     </p>
                   ) : rootSpots.length > 0 ? (
                     <ul className="my-spots-list">{rootSpots.map(renderSpot)}</ul>

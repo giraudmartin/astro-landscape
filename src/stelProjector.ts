@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { t } from './i18n'
 import {
   EQUIRECT_VFOV_MAX_DEG,
   PERSPECTIVE_CAMERA_VFOV_MAX_DEG,
@@ -23,31 +24,31 @@ export type StageProjection =
   | 'equirectangular'
   | 'rectilinear'
 
-export const STAGE_PROJECTIONS: readonly {
-  id: StageProjection
+export const STAGE_PROJECTIONS: readonly { id: StageProjection }[] = [
+  { id: 'stereographic' },
+  { id: 'equirectangular' },
+  { id: 'rectilinear' },
+]
+
+const STAGE_PROJECTION_I18N_KEY: Record<StageProjection, string> = {
+  stereographic: 'stereo',
+  equirectangular: 'equi',
+  rectilinear: 'recti',
+}
+
+/** Localized projection chrome (call at render time). Labels only — no math. */
+export function stageProjectionMeta(id: StageProjection): {
   label: string
   shortLabel: string
   title: string
-}[] = [
-  {
-    id: 'stereographic',
-    label: 'Stéréographique',
-    shortLabel: 'Stéréo',
-    title: 'Champ large',
-  },
-  {
-    id: 'equirectangular',
-    label: 'Équirectangulaire',
-    shortLabel: 'Équi',
-    title: 'Azimut et hauteur, horizon droit',
-  },
-  {
-    id: 'rectilinear',
-    label: 'Rectiligne',
-    shortLabel: 'Recti',
-    title: "Ce que voit l'objectif. Les bords s'étirent, comme sur la photo",
-  },
-]
+} {
+  const key = STAGE_PROJECTION_I18N_KEY[id]
+  return {
+    label: t(`viewfinder.proj.${key}`),
+    shortLabel: t(`viewfinder.proj.${key}Short`),
+    title: t(`viewfinder.proj.${key}Title`),
+  }
+}
 
 /** Shared by every projected material. 0 stereo, 1 equirect, 2 recti. */
 export const stelModeUniform = { value: 0 }

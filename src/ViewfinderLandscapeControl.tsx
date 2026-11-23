@@ -13,6 +13,7 @@ import {
   GROUND_NIGHT_TINT_MAX,
   GROUND_NIGHT_TINT_MIN,
 } from './skyLighting'
+import { useT } from './i18n'
 import { SettingsSlidersIcon } from './psIcons'
 import { ViewfinderFloatPanel } from './ViewfinderFloatPanel'
 
@@ -51,6 +52,7 @@ export function ViewfinderLandscapeControl({
   showTrigger = true,
   anchorRef,
 }: ViewfinderLandscapeControlProps) {
+  const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = openProp ?? uncontrolledOpen
   const setOpen = (next: boolean) => {
@@ -92,28 +94,32 @@ export function ViewfinderLandscapeControl({
           }
           aria-expanded={open}
           aria-haspopup="dialog"
-          title="Réglages du paysage"
+          title={t('viewfinder.landscape.settingsTitle')}
           onClick={() => setOpen(!open)}
         >
           <SettingsSlidersIcon size={16} />
-          <span className="vf-proj-control__muted">Paysage</span>
+          <span className="vf-proj-control__muted">
+            {t('viewfinder.landscape.title')}
+          </span>
         </button>
       ) : null}
 
       <ViewfinderFloatPanel
         open={open}
         onClose={() => setOpen(false)}
-        title="Paysage"
+        title={t('viewfinder.landscape.title')}
         storageKey={FLOAT_POS_STORAGE_KEY}
         defaultPos={DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}
       >
         <section className="vf-sky-panel__section">
-          <h3 className="vf-sky-panel__section-title">Sol nuit</h3>
+          <h3 className="vf-sky-panel__section-title">
+            {t('viewfinder.landscape.nightSoil')}
+          </h3>
           <div className="vf-sky-panel__section-body">
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Luminosité</span>
+                <span>{t('viewfinder.landscape.brightness')}</span>
                 <span className="vf-landscape-menu__value">
                   {brightness.toFixed(2)}
                 </span>
@@ -130,8 +136,8 @@ export function ViewfinderLandscapeControl({
                   GROUND_NIGHT_BRIGHTNESS_MIN,
                   GROUND_NIGHT_BRIGHTNESS_MAX,
                 )}
-                aria-label="Luminosité du sol après le coucher et la nuit"
-                title="Multiplicateur crépuscule / nuit (1 = défaut, jour inchangé)"
+                aria-label={t('viewfinder.landscape.brightnessAria')}
+                title={t('viewfinder.landscape.brightnessTip')}
                 onChange={(event) =>
                   onBrightnessChange(
                     clampGroundNightBrightness(Number(event.target.value)),
@@ -142,7 +148,7 @@ export function ViewfinderLandscapeControl({
 
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Contraste</span>
+                <span>{t('viewfinder.landscape.contrast')}</span>
                 <span className="vf-landscape-menu__value">
                   {contrast.toFixed(2)}
                 </span>
@@ -159,8 +165,8 @@ export function ViewfinderLandscapeControl({
                   GROUND_NIGHT_CONTRAST_MIN,
                   GROUND_NIGHT_CONTRAST_MAX,
                 )}
-                aria-label="Contraste du sol après le coucher et la nuit"
-                title="Contraste crépuscule / nuit (1 = défaut, jour inchangé)"
+                aria-label={t('viewfinder.landscape.contrastAria')}
+                title={t('viewfinder.landscape.contrastTip')}
                 onChange={(event) =>
                   onContrastChange(
                     clampGroundNightContrast(Number(event.target.value)),
@@ -171,7 +177,7 @@ export function ViewfinderLandscapeControl({
 
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Température</span>
+                <span>{t('viewfinder.landscape.temperature')}</span>
                 <span className="vf-landscape-menu__value">
                   {signedLabel(temperature)}
                 </span>
@@ -188,8 +194,8 @@ export function ViewfinderLandscapeControl({
                   GROUND_NIGHT_TEMPERATURE_MIN,
                   GROUND_NIGHT_TEMPERATURE_MAX,
                 )}
-                aria-label="Température couleur du sol après le coucher et la nuit"
-                title="Froid (−2) → neutre (0) → chaud (+2) ; jour inchangé"
+                aria-label={t('viewfinder.landscape.temperatureAria')}
+                title={t('viewfinder.landscape.temperatureTip')}
                 onChange={(event) =>
                   onTemperatureChange(
                     clampGroundNightTemperature(Number(event.target.value)),
@@ -200,7 +206,7 @@ export function ViewfinderLandscapeControl({
 
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>Teinte</span>
+                <span>{t('viewfinder.landscape.tint')}</span>
                 <span className="vf-landscape-menu__value">
                   {signedLabel(tint)}
                 </span>
@@ -217,8 +223,8 @@ export function ViewfinderLandscapeControl({
                   GROUND_NIGHT_TINT_MIN,
                   GROUND_NIGHT_TINT_MAX,
                 )}
-                aria-label="Teinte du sol après le coucher et la nuit"
-                title="Vert (−2) → neutre (0) → violet (+2) ; jour inchangé"
+                aria-label={t('viewfinder.landscape.tintAria')}
+                title={t('viewfinder.landscape.tintTip')}
                 onChange={(event) =>
                   onTintChange(clampGroundNightTint(Number(event.target.value)))
                 }

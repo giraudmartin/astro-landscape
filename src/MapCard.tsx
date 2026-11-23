@@ -1,5 +1,6 @@
 /** Ported from Photo Sightline MapCard — keep chrome identical. */
 import { useState, type ReactNode } from 'react'
+import { useT } from './i18n'
 import { ChevronDownIcon } from './psIcons'
 
 type MapCardProps = {
@@ -28,6 +29,7 @@ export function MapCard({
   onCollapsedChange,
   collapsedSummary,
 }: MapCardProps) {
+  const t = useT()
   const [collapsedState, setCollapsedState] = useState(defaultCollapsed)
   const controlled = collapsedProp !== undefined
   const collapsed = controlled ? collapsedProp : collapsedState
@@ -56,7 +58,11 @@ export function MapCard({
             type="button"
             className="map-card__collapse-btn"
             aria-expanded={!collapsed}
-            aria-label={collapsed ? `Développer ${title}` : `Réduire ${title}`}
+            aria-label={
+              collapsed
+                ? t('mapCard.expand', { title })
+                : t('mapCard.collapse', { title })
+            }
             onClick={() => setCollapsed(!collapsed)}
           >
             <h2 className="map-card__title">{title}</h2>

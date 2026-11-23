@@ -1,4 +1,5 @@
 import type { ChangeEvent, SyntheticEvent } from 'react'
+import { useT } from './i18n'
 import {
   CompactCloseIcon,
   CompactPauseIcon,
@@ -70,6 +71,7 @@ export function TimelapsePreviewHud({
   onSeek,
   onRotateRender,
 }: TimelapsePreviewHudProps) {
+  const t = useT()
   if (phase === 'idle') return null
 
   const ended = phase === 'ended'
@@ -78,7 +80,11 @@ export function TimelapsePreviewHud({
   const current = Math.min(shotIndex + 1, total)
   const progress = ended ? 100 : (current / total) * 100
 
-  const primaryLabel = ended ? 'Rejouer' : paused ? 'Reprendre' : 'Pause'
+  const primaryLabel = ended
+    ? t('immersive.tlapse.replay')
+    : paused
+      ? t('immersive.tlapse.resume')
+      : t('immersive.tlapse.pause')
   const PrimaryIcon = ended
     ? CompactReplayIcon
     : paused
@@ -125,7 +131,7 @@ export function TimelapsePreviewHud({
             step={1}
             value={current}
             style={{ ['--progress' as string]: `${progress}%` }}
-            aria-label="Image de la séquence"
+            aria-label={t('immersive.tlapse.seekAria')}
             onChange={onRangeChange}
             onPointerDown={(event) => {
               event.stopPropagation()
@@ -155,8 +161,8 @@ export function TimelapsePreviewHud({
               onStop()
             }}
             onPointerDown={stopProp}
-            title="Arrêter et revenir au début"
-            aria-label="Arrêter et revenir au début"
+            title={t('immersive.tlapse.stop')}
+            aria-label={t('immersive.tlapse.stop')}
           >
             <CompactStopIcon size={18} />
           </button>
@@ -174,8 +180,8 @@ export function TimelapsePreviewHud({
             onRotateRender()
           }}
           onPointerDown={stopProp}
-          title="Tourner le rendu"
-          aria-label="Tourner le rendu de 90 degrés"
+          title={t('immersive.tlapse.rotateTitle')}
+          aria-label={t('immersive.tlapse.rotateAria')}
         >
           <RotateRenderIcon size={18} />
         </button>
@@ -188,8 +194,8 @@ export function TimelapsePreviewHud({
             onOpenSettings()
           }}
           onPointerDown={stopProp}
-          title="Réglages timelapse"
-          aria-label="Réglages timelapse"
+          title={t('immersive.tlapse.settings')}
+          aria-label={t('immersive.tlapse.settings')}
         >
           <SettingsSlidersIcon size={18} />
         </button>
@@ -202,8 +208,8 @@ export function TimelapsePreviewHud({
             onExit()
           }}
           onPointerDown={stopProp}
-          title="Quitter la lecture"
-          aria-label="Quitter la lecture"
+          title={t('immersive.tlapse.exit')}
+          aria-label={t('immersive.tlapse.exit')}
         >
           <CompactCloseIcon size={18} />
         </button>

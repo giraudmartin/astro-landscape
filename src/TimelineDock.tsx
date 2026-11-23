@@ -19,6 +19,7 @@ import {
   TIMELINE_VISIBLE_RADIUS_STEPS_MS,
 } from './DayTimeline'
 import { CalendarPopover } from './CalendarPopover'
+import { useLocale } from './i18n'
 import {
   ClockIcon,
   CalendarIcon,
@@ -58,6 +59,7 @@ export function TimelineDock({
   onPlayheadChange,
   onScrubbingChange,
 }: TimelineDockProps) {
+  const { locale: appLocale, t } = useLocale()
   const [zoomIndex, setZoomIndex] = useState(
     () => loadAppSettings().timeline.zoomIndex,
   )
@@ -75,7 +77,8 @@ export function TimelineDock({
 
   const dayInfo: DayInfo = useMemo(
     () => buildDayInfo(date, lat, lon, elevationM),
-    [date, lat, lon, elevationM],
+    // appLocale: phase labels are baked in via module-level t()
+    [date, lat, lon, elevationM, appLocale],
   )
 
   const calKey = date.slice(0, 7)
@@ -109,7 +112,7 @@ export function TimelineDock({
 
   const calendarDays = useMemo(
     () => buildMonthCalendar(calYear, calMonth, lat, lon, elevationM),
-    [calYear, calMonth, lat, lon, elevationM],
+    [calYear, calMonth, lat, lon, elevationM, appLocale],
   )
 
   const canZoomIn = zoomIndex > 0
@@ -176,8 +179,8 @@ export function TimelineDock({
         <button
           type="button"
           className="map-quick-actions__button"
-          aria-label="Afficher la timeline"
-          title="Afficher la timeline"
+          aria-label={t('timeline.show')}
+          title={t('timeline.show')}
           onClick={() => setCollapsed(false)}
         >
           <ClockIcon />
@@ -195,7 +198,7 @@ export function TimelineDock({
             : 'moon-timeline-dock'
         }
         role="region"
-        aria-label="Timeline"
+        aria-label={t('timeline.region')}
       >
         <div className="moon-timeline-dock__controls">
           <div className="moon-timeline-dock__controls-left">
@@ -208,14 +211,14 @@ export function TimelineDock({
               }
               aria-label={
                 advanced
-                  ? 'Masquer les courbes d’altitude'
-                  : 'Afficher les courbes d’altitude'
+                  ? t('timeline.hideCurves')
+                  : t('timeline.showCurves')
               }
               aria-pressed={advanced}
               title={
                 advanced
-                  ? 'Mode simple'
-                  : 'Mode avancé — altitudes Soleil, Lune, Voie lactée'
+                  ? t('timeline.modeSimple')
+                  : t('timeline.modeAdvanced')
               }
               onClick={() => setAdvanced((v) => !v)}
             >
@@ -224,7 +227,7 @@ export function TimelineDock({
             <button
               type="button"
               className="moon-timeline-dock__icon-btn"
-              aria-label="Jour précédent"
+              aria-label={t('timeline.prevDay')}
               onClick={() => {
                 const prev = shiftIsoDate(date, -1)
                 if (prev) onDateChange(prev)
@@ -235,8 +238,8 @@ export function TimelineDock({
             <button
               type="button"
               className="moon-timeline-dock__icon-btn"
-              aria-label="Dézoomer la timeline"
-              title={`Fenêtre ±${zoomMinutes} min`}
+              aria-label={t('timeline.zoomOut')}
+              title={t('timeline.zoomWindow', { min: zoomMinutes })}
               disabled={!canZoomOut}
               onClick={() => setZoomIndex((z) => Math.min(z + 1, TIMELINE_VISIBLE_RADIUS_STEPS_MS.length - 1))}
             >
@@ -266,7 +269,7 @@ export function TimelineDock({
                   step="1"
                   value={clockDraft}
                   aria-label={
-                    clockIsUtc ? 'Régler l’heure UTC' : 'Régler l’heure locale'
+                    clockIsUtc ? t('timeline.setUtc') : t('timeline.setLocal')
                   }
                   onChange={(event) => applyClockDraft(event.currentTarget.value)}
                   onBlur={() => setEditingClock(false)}
@@ -283,8 +286,8 @@ export function TimelineDock({
                   className="moon-timeline-dock__time-main"
                   title={
                     clockIsUtc
-                      ? 'Heure UTC — régler l’heure exacte'
-                      : 'Heure locale du spot — régler l’heure exacte'
+                      ? t('timeline.utcExact')
+                      : t('timeline.localExact')
                   }
                   onClick={() => {
                     setClockDraft(playheadClock)
@@ -298,11 +301,11 @@ export function TimelineDock({
                 className="moon-timeline-dock__time-shot"
                 title={
                   clockIsUtc
-                    ? 'Pas de spot : heure mondiale UTC'
-                    : 'Heure civile approximative au spot'
+                    ? t('timeline.noSpotUtc')
+                    : t('timeline.civilApprox')
                 }
               >
-                {clockIsUtc ? 'UTC' : 'locale'}
+                {clockIsUtc ? t('timeline.utc') : t('timeline.local')}
               </span>
             </span>
           </div>
@@ -311,8 +314,8 @@ export function TimelineDock({
             <button
               type="button"
               className="moon-timeline-dock__icon-btn"
-              aria-label="Zoomer la timeline"
-              title={`Fenêtre ±${zoomMinutes} min`}
+              aria-label={t('timeline.zoomIn')}
+              title={t('timeline.zoomWindow', { min: zoomMinutes })}
               disabled={!canZoomIn}
               onClick={() => setZoomIndex((z) => Math.max(z - 1, 0))}
             >
@@ -321,7 +324,7 @@ export function TimelineDock({
             <button
               type="button"
               className="moon-timeline-dock__icon-btn"
-              aria-label="Jour suivant"
+              aria-label={t('timeline.nextDay')}
               onClick={() => {
                 const next = shiftIsoDate(date, 1)
                 if (next) onDateChange(next)
@@ -337,9 +340,9 @@ export function TimelineDock({
                   ? 'moon-timeline-dock__icon-btn moon-timeline-dock__icon-btn--accent is-active'
                   : 'moon-timeline-dock__icon-btn moon-timeline-dock__icon-btn--accent'
               }
-              aria-label="Calendrier"
+              aria-label={t('timeline.calendar')}
               aria-pressed={calendarOpen}
-              title="Calendrier"
+              title={t('timeline.calendar')}
               onClick={() => setCalendarOpen((o) => !o)}
             >
               <CalendarIcon />
@@ -347,8 +350,8 @@ export function TimelineDock({
             <button
               type="button"
               className="moon-timeline-dock__icon-btn"
-              aria-label="Réduire la timeline"
-              title="Réduire la timeline"
+              aria-label={t('timeline.collapse')}
+              title={t('timeline.collapse')}
               onClick={collapseTimeline}
             >
               <ChevronDownIcon />
@@ -372,12 +375,17 @@ export function TimelineDock({
 
         <div className="moon-timeline-dock__ephemeris">
           <span>
-            {phase.label} · Soleil {sunAlt.toFixed(1)}°
-            {moonAlt != null ? ` · Lune ${moonAlt.toFixed(1)}°` : ''}
-            {milkyAlt != null ? ` · VL ${milkyAlt.toFixed(1)}°` : ''}
+            {phase.label} · {t('timeline.legend.sun')} {sunAlt.toFixed(1)}°
+            {moonAlt != null
+              ? ` · ${t('timeline.legend.moon')} ${moonAlt.toFixed(1)}°`
+              : ''}
+            {milkyAlt != null
+              ? ` · ${t('timeline.legend.milkyWayShort')} ${milkyAlt.toFixed(1)}°`
+              : ''}
           </span>
           <span>
-            Lune {dayInfo.illuminationPercent}% · {dayInfo.phaseLabel}
+            {t('timeline.legend.moon')} {dayInfo.illuminationPercent}% ·{' '}
+            {dayInfo.phaseLabel}
           </span>
         </div>
       </div>

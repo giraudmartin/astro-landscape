@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 /** Full-frame sensor FOV helpers (same math as Photo Sightline). */
 
 export const FOCAL_LENGTH_PRESETS_MM = [
@@ -16,16 +18,14 @@ export const VIEWFINDER_FRAME_MODES: readonly ViewfinderFrameMode[] = [
   'pano',
 ] as const
 
-export const VIEWFINDER_FRAME_MODE_LABEL: Record<ViewfinderFrameMode, string> = {
-  off: 'Libre',
-  dslr: 'Photo',
-  pano: 'Pano',
+/** Localized capsule label (call at render time). */
+export function viewfinderFrameModeLabel(mode: ViewfinderFrameMode): string {
+  return t(`viewfinder.mode.${mode}`)
 }
 
-export const VIEWFINDER_FRAME_MODE_TITLE: Record<ViewfinderFrameMode, string> = {
-  off: 'Vue libre sans cadre',
-  dslr: 'Afficher le champ de l’appareil photo',
-  pano: 'Afficher les tuiles du panorama',
+/** Localized capsule tooltip / aria-label (call at render time). */
+export function viewfinderFrameModeTitle(mode: ViewfinderFrameMode): string {
+  return t(`viewfinder.modeTitle.${mode}`)
 }
 
 export const DEFAULT_FOCAL_LENGTH_MM: FocalLengthMm = 20
@@ -63,10 +63,9 @@ export type SensorFormat = (typeof SENSOR_FORMATS)[number]
 
 export const DEFAULT_SENSOR_FORMAT: SensorFormat = 'ff'
 
-export const SENSOR_FORMAT_LABEL: Record<SensorFormat, string> = {
-  ff: 'Plein Format',
-  apsc15: 'APS-C 1.5',
-  apsc16: 'APS-C 1.6',
+/** Localized sensor-format label (call at render time). */
+export function sensorFormatLabel(format: SensorFormat): string {
+  return t(`viewfinder.sensor.${format}`)
 }
 
 /** Compact sensor tag for the capture capsule summary (e.g. « 20 mm · FF · Paysage »). */

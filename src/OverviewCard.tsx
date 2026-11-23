@@ -1,6 +1,7 @@
 /** Overview card — Photo Sightline chrome, without moon lighting tags. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarPopover } from './CalendarPopover'
+import { intlLocale, useLocale } from './i18n'
 import { MapCard } from './MapCard'
 import { MoonPhaseDisc } from './moonVisuals'
 import {
@@ -27,13 +28,13 @@ type OverviewCardProps = {
   onCollapsedChange?: (collapsed: boolean) => void
 }
 
-function formatOverviewDate(isoDate: string): string {
+function formatOverviewDate(isoDate: string, locale: string): string {
   const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!match) return isoDate
   const value = new Date(
     Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12),
   )
-  return value.toLocaleDateString('fr-FR', {
+  return value.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -53,13 +54,20 @@ export function OverviewCard({
   collapsed,
   onCollapsedChange,
 }: OverviewCardProps) {
+  const { locale: appLocale, t } = useLocale()
+  const dateLocale = intlLocale(appLocale)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const dateBtnRef = useRef<HTMLButtonElement | null>(null)
   const dayInfo = useMemo(
     () => buildDayInfo(date, lat, lon, elevationM),
-    [date, lat, lon, elevationM],
+    // appLocale: phase labels are baked in via module-level t()
+    [date, lat, lon, elevationM, appLocale],
   )
-  const schedule = useMemo(() => buildDaySchedule(dayInfo), [dayInfo])
+  const schedule = useMemo(
+    () => buildDaySchedule(dayInfo),
+    // appLocale: schedule labels are baked in via module-level t()
+    [dayInfo, appLocale],
+  )
   const activeKind = useMemo(
     () => nearestScheduleKind(schedule, playheadUtcMs),
     [schedule, playheadUtcMs],
@@ -76,11 +84,15 @@ export function OverviewCard({
 
   const calendarDays = useMemo(
     () => buildMonthCalendar(calYear, calMonth, lat, lon, elevationM),
-    [calYear, calMonth, lat, lon, elevationM],
+    [calYear, calMonth, lat, lon, elevationM, appLocale],
   )
 
-  const illuminatedLabel = `${dayInfo.illuminationPercent} % illuminé`
-  const moonInNightLabel = `${formatDurationMinutes(dayInfo.moonInNightMinutes)} de lune dans la nuit`
+  const illuminatedLabel = t('overview.illuminated', {
+    pct: dayInfo.illuminationPercent,
+  })
+  const moonInNightLabel = t('overview.moonInNight', {
+    duration: formatDurationMinutes(dayInfo.moonInNightMinutes),
+  })
 
   const dateCapsule = (
     <button
@@ -90,8 +102,8 @@ export function OverviewCard({
       onClick={() => setCalendarOpen(true)}
     >
       <span className="ov-status ov-status--live" aria-hidden="true" />
-      <span className="ov-capsule__main">{formatOverviewDate(date)}</span>
-      <span className="ov-capsule__action">Calendrier</span>
+      <span className="ov-capsule__main">{formatOverviewDate(date, dateLocale)}</span>
+      <span className="ov-capsule__action">{t('overview.calendarAction')}</span>
     </button>
   )
 
@@ -118,10 +130,10 @@ export function OverviewCard({
       </div>
       {schedule.length === 0 ? (
         <p className="ov-hint">
-          Aucun lever/coucher soleil ou Lune pour cette date.
+          {t('overview.emptySchedule')}
         </p>
       ) : (
-        <ol className="ov-schedule" aria-label="Horaires du jour">
+        <ol className="ov-schedule" aria-label={t('overview.scheduleAria')}>
           {schedule.map((row) => {
             const active = activeKind === row.kind
             return (
@@ -155,7 +167,7 @@ export function OverviewCard({
         body
       ) : (
         <MapCard
-          title="Overview"
+          title={t('overview.title')}
           className="map-card--overview"
           collapsible
           glow

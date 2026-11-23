@@ -75,6 +75,7 @@ import {
   qaUtcForSite,
   type QaAppApi,
 } from './qaTestHooks'
+import { useT } from './i18n'
 import './App.css'
 import './timelineCalendar.css'
 
@@ -88,6 +89,7 @@ type PendingSave = {
 }
 
 export default function App() {
+  const t = useT()
   const savedMap = useMemo(() => loadAppSettings().map, [])
   const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const [mode, setMode] = useState<CameraMode>('orbit')
@@ -228,9 +230,9 @@ export default function App() {
         sourceHint={
           bortleSample.source === 'viirs-cog'
             ? bortleSample.terrainApplied
-              ? 'VIIRS · First Rig · DEM · estimé'
-              : 'VIIRS · First Rig · estimé'
-            : 'Black Marble · First Rig · estimé'
+              ? t('bortle.source.viirsDem')
+              : t('bortle.source.viirs')
+            : t('bortle.source.blackMarble')
         }
         onOpenSkyBrightness={() => setSkyBrightnessOpen(true)}
       />
@@ -444,11 +446,11 @@ export default function App() {
       editingOriginRef.current = null
       setEditingSpot(null)
       setPendingSave(input)
-      setPendingSaveName(`Spot ${personalSpots.length + 1}`)
+      setPendingSaveName(`${t('common.spot')} ${personalSpots.length + 1}`)
       setPersonalSpotPicking(false)
       setMarkerMenuOpen(false)
     },
-    [personalSpots.length],
+    [personalSpots.length, t],
   )
 
   const openEditDialog = useCallback((saved: PersonalSpot) => {
@@ -555,7 +557,9 @@ export default function App() {
   const commitPendingSave = useCallback(() => {
     if (!pendingSave) return
     const saved = createPersonalSpot({
-      name: pendingSaveName.trim() || `Spot ${personalSpots.length + 1}`,
+      name:
+        pendingSaveName.trim() ||
+        `${t('common.spot')} ${personalSpots.length + 1}`,
       lat: pendingSave.lat,
       lon: pendingSave.lon,
       heightM: pendingSave.heightM,
@@ -567,7 +571,7 @@ export default function App() {
     setPendingSaveName('')
     setMySpotsOpen(true)
     selectPersonalSpot(saved)
-  }, [pendingSave, pendingSaveName, personalSpots.length, selectPersonalSpot])
+  }, [pendingSave, pendingSaveName, personalSpots.length, selectPersonalSpot, t])
 
   const commitEditingSpot = useCallback(() => {
     if (!editingSpot) return
@@ -609,8 +613,10 @@ export default function App() {
 
   const onCreateFolder = useCallback(() => {
     setFolderDialog({ mode: 'create', folder: null })
-    setFolderDialogName(`Dossier ${personalSpotFolders.length + 1}`)
-  }, [personalSpotFolders.length])
+    setFolderDialogName(
+      `${t('spots.folder.defaultName')} ${personalSpotFolders.length + 1}`,
+    )
+  }, [personalSpotFolders.length, t])
 
   const onRenameFolder = useCallback((folder: PersonalSpotFolder) => {
     setFolderDialog({ mode: 'edit', folder })
@@ -621,8 +627,8 @@ export default function App() {
     if (!folderDialog) return
     const fallback =
       folderDialog.mode === 'create'
-        ? `Dossier ${personalSpotFolders.length + 1}`
-        : (folderDialog.folder?.name ?? 'Dossier')
+        ? `${t('spots.folder.defaultName')} ${personalSpotFolders.length + 1}`
+        : (folderDialog.folder?.name ?? t('spots.folder.defaultName'))
     const name = folderDialogName.trim() || fallback
     if (folderDialog.mode === 'create') {
       const folder = createPersonalSpotFolder({ name })
@@ -637,7 +643,7 @@ export default function App() {
     }
     setFolderDialog(null)
     setFolderDialogName('')
-  }, [folderDialog, folderDialogName, personalSpotFolders.length])
+  }, [folderDialog, folderDialogName, personalSpotFolders.length, t])
 
   const requestDeleteFolderFromDialog = useCallback(() => {
     if (!folderDialog?.folder) return
@@ -762,13 +768,6 @@ export default function App() {
 
   const canSaveFraming =
     mode === 'ground' && currentFramingSpot != null && immersiveCanSaveFraming
-
-  const openFramingsForSpot = useCallback((saved: PersonalSpot) => {
-    setFramingsFilterSpotId(saved.id)
-    setFramingsEditor(null)
-    setMySpotsOpen(false)
-    setFramingsOpen(true)
-  }, [])
 
   const requestSaveCurrentFraming = useCallback(() => {
     const api = framingApiRef.current
@@ -1195,7 +1194,9 @@ export default function App() {
           }}
         >
           <section className="mobile-top-drawer__section">
-            <h3 className="mobile-top-drawer__section-title">Overview</h3>
+            <h3 className="mobile-top-drawer__section-title">
+              {t('map.drawer.sectionOverview')}
+            </h3>
             <OverviewCard
               lat={observer.lat}
               lon={observer.lon}
@@ -1208,7 +1209,9 @@ export default function App() {
             />
           </section>
           <section className="mobile-top-drawer__section mobile-top-drawer__section--weather">
-            <h3 className="mobile-top-drawer__section-title">Météo</h3>
+            <h3 className="mobile-top-drawer__section-title">
+              {t('map.drawer.sectionWeather')}
+            </h3>
             <WeatherCard
               date={date}
               playheadUtcMs={playheadUtcMs}
@@ -1219,7 +1222,9 @@ export default function App() {
           </section>
           {bortleCard ? (
             <section className="mobile-top-drawer__section">
-              <h3 className="mobile-top-drawer__section-title">Bortle</h3>
+              <h3 className="mobile-top-drawer__section-title">
+                {t('map.drawer.sectionBortle')}
+              </h3>
               {bortleCard}
             </section>
           ) : null}
@@ -1227,7 +1232,7 @@ export default function App() {
       ) : null}
 
       {!immersive && !isPhone ? (
-        <div className="map-ui" aria-label="Aperçu et météo">
+        <div className="map-ui" aria-label={t('map.uiAria')}>
           <div className="ov-anchor">
             <OverviewCard
               lat={observer.lat}
@@ -1279,7 +1284,6 @@ export default function App() {
           onRenameFolder={onRenameFolder}
           onToggleFolderVisible={onToggleFolderVisible}
           onMoveSpotToFolder={onMoveSpotToFolder}
-          onViewFramings={openFramingsForSpot}
           railWidthPx={mapRailWidthPx}
           onRailWidthChange={onMapRailWidthChange}
         />
@@ -1327,7 +1331,7 @@ export default function App() {
           setConfirmDialog({
             kind: 'framing',
             id,
-            name: row?.name ?? 'Cadrage',
+            name: row?.name ?? t('framings.defaultName'),
           })
         }}
         onRestore={restoreFraming}
@@ -1385,17 +1389,21 @@ export default function App() {
         <ConfirmCard
           title={
             confirmDialog.kind === 'spot'
-              ? 'Supprimer le spot'
+              ? t('spots.confirm.deleteSpotTitle')
               : confirmDialog.kind === 'framing'
-                ? 'Supprimer le cadrage'
-                : 'Supprimer le dossier'
+                ? t('spots.confirm.deleteFramingTitle')
+                : t('spots.confirm.deleteFolderTitle')
           }
           message={
             confirmDialog.kind === 'spot'
-              ? `Supprimer « ${confirmDialog.name} » ? Cette action est définitive.`
+              ? t('spots.confirm.deleteSpotMsg', { name: confirmDialog.name })
               : confirmDialog.kind === 'framing'
-                ? `Supprimer « ${confirmDialog.name} » ? Cette action est définitive.`
-                : `Supprimer « ${confirmDialog.name} » ? Les spots seront conservés hors dossier.`
+                ? t('spots.confirm.deleteFramingMsg', {
+                    name: confirmDialog.name,
+                  })
+                : t('spots.confirm.deleteFolderMsg', {
+                    name: confirmDialog.name,
+                  })
           }
           onConfirm={commitConfirmDialog}
           onClose={() => setConfirmDialog(null)}

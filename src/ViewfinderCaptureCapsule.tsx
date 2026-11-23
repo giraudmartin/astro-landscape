@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import {
   SENSOR_FORMAT_SHORT,
-  VIEWFINDER_FRAME_MODE_LABEL,
-  VIEWFINDER_FRAME_MODE_TITLE,
+  viewfinderFrameModeLabel,
+  viewfinderFrameModeTitle,
   VIEWFINDER_FRAME_MODES,
   type SensorFormat,
   type ViewfinderFrameMode,
@@ -18,6 +18,7 @@ import {
   TimelapseIcon,
 } from './psIcons'
 import type { CelestialObject } from './celestialObjects'
+import { useT } from './i18n'
 import type { TimelapsePlan } from './timelapse'
 import { ViewfinderCameraPanel } from './ViewfinderCameraPanel'
 import { ViewfinderPanoramaPanel } from './ViewfinderPanoramaPanel'
@@ -90,6 +91,7 @@ export function ViewfinderCaptureCapsule({
   onTimelapseSettingsOpenChange,
   selectedCelestial,
 }: ViewfinderCaptureCapsuleProps) {
+  const t = useT()
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const frameModeRef = useRef(frameMode)
@@ -134,7 +136,7 @@ export function ViewfinderCaptureCapsule({
   }, [onFrameModeChange])
 
   const summary = `${Math.round(focalMm)} mm · ${SENSOR_FORMAT_SHORT[sensorFormat]} · ${
-    orientation === 'landscape' ? 'Paysage' : 'Portrait'
+    orientation === 'landscape' ? t('common.landscape') : t('common.portrait')
   }`
 
   const toggleSettings = (panel: Exclude<SettingsPanel, null>) => {
@@ -157,12 +159,12 @@ export function ViewfinderCaptureCapsule({
       <div
         className="vf-capture-capsule__bar"
         role="toolbar"
-        aria-label="Prise de vue"
+        aria-label={t('viewfinder.capture.aria')}
       >
         <span
           className="moon-preview-dock__rec"
-          title="Viseur"
-          aria-label="Viseur"
+          title={t('viewfinder.capture.finder')}
+          aria-label={t('viewfinder.capture.finder')}
         />
 
         <button
@@ -174,7 +176,7 @@ export function ViewfinderCaptureCapsule({
           }
           aria-expanded={settingsPanel === 'camera'}
           aria-haspopup="dialog"
-          title={`Réglages de l’appareil : ${summary}`}
+          title={t('viewfinder.capture.cameraSettings', { summary })}
           onClick={() => toggleSettings('camera')}
         >
           <CameraBodyIcon size={16} />
@@ -190,7 +192,9 @@ export function ViewfinderCaptureCapsule({
               ·
             </span>
             <span className="vf-capture-capsule__detail">
-              {orientation === 'landscape' ? 'Paysage' : 'Portrait'}
+              {orientation === 'landscape'
+                ? t('common.landscape')
+                : t('common.portrait')}
             </span>
           </span>
         </button>
@@ -201,7 +205,7 @@ export function ViewfinderCaptureCapsule({
           <div
             className="vf-capture-capsule__modes"
             role="radiogroup"
-            aria-label="Cadre affiché"
+            aria-label={t('viewfinder.capture.frameAria')}
           >
             {VIEWFINDER_FRAME_MODES.map((mode) => {
               const selected = frameMode === mode
@@ -212,8 +216,8 @@ export function ViewfinderCaptureCapsule({
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  aria-label={VIEWFINDER_FRAME_MODE_TITLE[mode]}
-                  title={VIEWFINDER_FRAME_MODE_TITLE[mode]}
+                  aria-label={viewfinderFrameModeTitle(mode)}
+                  title={viewfinderFrameModeTitle(mode)}
                   className={
                     selected
                       ? 'vf-capture-capsule__mode is-active'
@@ -222,7 +226,7 @@ export function ViewfinderCaptureCapsule({
                   onClick={() => applyFrameMode(mode)}
                 >
                   <Icon size={16} />
-                  <span>{VIEWFINDER_FRAME_MODE_LABEL[mode]}</span>
+                  <span>{viewfinderFrameModeLabel(mode)}</span>
                 </button>
               )
             })}
@@ -238,8 +242,8 @@ export function ViewfinderCaptureCapsule({
               }
               aria-expanded={settingsPanel === 'pano'}
               aria-haspopup="dialog"
-              title="Réglages panorama"
-              aria-label="Réglages panorama"
+              title={t('viewfinder.capture.panoSettings')}
+              aria-label={t('viewfinder.capture.panoSettings')}
               onClick={() => toggleSettings('pano')}
             >
               <SettingsSlidersIcon size={16} />
@@ -258,12 +262,12 @@ export function ViewfinderCaptureCapsule({
           }
           aria-expanded={settingsPanel === 'timelapse'}
           aria-haspopup="dialog"
-          title="Réglages timelapse"
-          aria-label="Réglages timelapse"
+          title={t('viewfinder.capture.tlapseSettings')}
+          aria-label={t('viewfinder.capture.tlapseSettings')}
           onClick={openTimelapse}
         >
           <TimelapseIcon size={16} />
-          <span>Timelapse</span>
+          <span>{t('viewfinder.capture.timelapse')}</span>
         </button>
       </div>
 

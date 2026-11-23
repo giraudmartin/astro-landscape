@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { useT } from './i18n'
 
 export type BugReportPayload = {
   title: string
@@ -42,6 +43,7 @@ function isImageFile(file: File | null | undefined): file is File {
  * Submit is stubbed until a mail / feedback endpoint is wired.
  */
 export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
+  const t = useT()
   const titleId = useId()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
@@ -49,6 +51,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
   const [screenshot, setScreenshot] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  /** i18n key of the current error (re-translated if the locale changes). */
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -88,11 +91,11 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
   const applyFile = (file: File | null | undefined) => {
     if (!file) return
     if (!isImageFile(file)) {
-      setError('Ajoute une image (PNG, JPG, WebP…).')
+      setError('settings.bug.errImageType')
       return
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setError('Image trop lourde (max 8 Mo).')
+      setError('settings.bug.errImageSize')
       return
     }
     setError(null)
@@ -109,11 +112,11 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
     const trimmedTitle = title.trim()
     const trimmedDescription = description.trim()
     if (!trimmedTitle) {
-      setError('Ajoute un titre.')
+      setError('settings.bug.errNeedTitle')
       return
     }
     if (!trimmedDescription) {
-      setError('Décris le bug.')
+      setError('settings.bug.errNeedDesc')
       return
     }
 
@@ -145,7 +148,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
       setSent(true)
       window.setTimeout(() => onClose(), 900)
     } catch {
-      setError("Envoi impossible pour l'instant. Réessaie plus tard.")
+      setError('settings.bug.errSend')
     } finally {
       setSending(false)
     }
@@ -174,12 +177,12 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
         <div className="map-card map-card--spot-save">
           <header className="map-card__header">
             <h2 className="map-card__title" id={titleId}>
-              Signaler un bug
+              {t('settings.bug.title')}
             </h2>
             <button
               type="button"
               className="spot-save-card__close"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
               onClick={onClose}
             >
               <CloseIcon />
@@ -188,27 +191,27 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
 
           <div className="map-card__body">
             <p className="spot-save-card__intro">
-              Décris ce qui ne marche pas. Une capture aide beaucoup.
+              {t('settings.bug.intro')}
             </p>
 
             <label className="spot-save-card__field">
-              <span>Titre</span>
+              <span>{t('settings.bug.fieldTitle')}</span>
               <input
                 autoFocus
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="Ex. Carte figée en 3D"
+                placeholder={t('settings.bug.phTitle')}
                 maxLength={120}
                 disabled={sending || sent}
               />
             </label>
 
             <label className="spot-save-card__field spot-save-card__field--textarea">
-              <span>Description</span>
+              <span>{t('settings.bug.fieldDesc')}</span>
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Que s’est-il passé ? Sur quel appareil / navigateur ?"
+                placeholder={t('settings.bug.phDesc')}
                 rows={4}
                 maxLength={4000}
                 disabled={sending || sent}
@@ -256,7 +259,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
                   <img src={previewUrl} alt="" />
                   <span className="bug-report-card__preview-meta">
                     <span className="bug-report-card__preview-name">
-                      {screenshot?.name ?? 'Capture'}
+                      {screenshot?.name ?? t('settings.bug.captureFallback')}
                     </span>
                     <button
                       type="button"
@@ -269,17 +272,17 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
                         setError(null)
                       }}
                     >
-                      Retirer
+                      {t('settings.bug.remove')}
                     </button>
                   </span>
                 </span>
               ) : (
                 <span className="bug-report-card__dropzone-copy">
                   <span className="bug-report-card__dropzone-title">
-                    Glisse une capture ici
+                    {t('settings.bug.dropTitle')}
                   </span>
                   <span className="bug-report-card__dropzone-hint">
-                    ou clique pour choisir une image
+                    {t('settings.bug.dropHint')}
                   </span>
                 </span>
               )}
@@ -287,7 +290,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
 
             {error ? (
               <p className="bug-report-card__error" role="alert">
-                {error}
+                {t(error)}
               </p>
             ) : null}
 
@@ -297,7 +300,11 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
                 className="control-panel__primary"
                 disabled={sending || sent}
               >
-                {sent ? 'Envoyé' : sending ? 'Envoi…' : 'Envoyer'}
+                {sent
+                  ? t('settings.bug.sent')
+                  : sending
+                    ? t('settings.bug.sending')
+                    : t('settings.bug.send')}
               </button>
             </div>
           </div>

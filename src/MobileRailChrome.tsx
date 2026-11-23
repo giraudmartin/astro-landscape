@@ -10,6 +10,7 @@ import {
   MAP_RAIL_WIDTH_MAX_PX,
   MAP_RAIL_WIDTH_MIN_PX,
 } from './mapRailWidth'
+import { useT } from './i18n'
 import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 import { useSwipeToDismiss } from './useSwipeToDismiss'
 
@@ -30,6 +31,7 @@ export function MobileRailChrome({
   desktopWidthPx,
   onDesktopWidthChange,
 }: MobileRailChromeProps) {
+  const t = useT()
   const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const swipe = useSwipeToDismiss(onClose, isPhone)
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
@@ -88,7 +90,7 @@ export function MobileRailChrome({
         <button
           type="button"
           className="mobile-rail-backdrop"
-          aria-label="Fermer"
+          aria-label={t('common.close')}
           onClick={onClose}
         />
       ) : null}
@@ -103,11 +105,11 @@ export function MobileRailChrome({
             className="rail-resize-handle"
             role="separator"
             aria-orientation="vertical"
-            aria-label="Redimensionner le panneau"
+            aria-label={t('map.rail.resize')}
             aria-valuenow={desktopWidthPx}
             aria-valuemin={MAP_RAIL_WIDTH_MIN_PX}
             aria-valuemax={MAP_RAIL_WIDTH_MAX_PX}
-            title="Glisser pour élargir"
+            title={t('map.rail.resizeTitle')}
             onPointerDown={onResizePointerDown}
             onPointerMove={onResizePointerMove}
             onPointerUp={onResizePointerUp}

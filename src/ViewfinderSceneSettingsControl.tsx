@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { useT } from './i18n'
 import { ChevronDownIcon, SettingsSlidersIcon } from './psIcons'
 import {
   ViewfinderLandscapeControl,
@@ -59,27 +60,7 @@ type ViewfinderSceneSettingsControlProps = {
   }
 }
 
-const PANEL_ITEMS: ReadonlyArray<{
-  id: ScenePanelId
-  label: string
-  hint: string
-}> = [
-  {
-    id: 'landscape',
-    label: 'Paysage',
-    hint: 'Luminosité, contraste, température, teinte',
-  },
-  {
-    id: 'sky',
-    label: 'Ciel',
-    hint: 'Atmosphère, étoiles, pollution',
-  },
-  {
-    id: 'weather',
-    label: 'Météo',
-    hint: 'Nuages et couverture',
-  },
-]
+const PANEL_IDS: ReadonlyArray<ScenePanelId> = ['landscape', 'sky', 'weather']
 
 /**
  * Single Réglages trigger → menu card with Paysage / Ciel / Météo, each
@@ -90,6 +71,7 @@ export function ViewfinderSceneSettingsControl({
   sky,
   weather,
 }: ViewfinderSceneSettingsControlProps) {
+  const t = useT()
   const [menuOpen, setMenuOpen] = useState(false)
   const [panel, setPanel] = useState<ScenePanelId | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -139,11 +121,13 @@ export function ViewfinderSceneSettingsControl({
         aria-expanded={menuOpen}
         aria-controls={menuId}
         aria-haspopup="menu"
-        title="Réglages scène"
+        title={t('viewfinder.scene.title')}
         onClick={() => setMenuOpen((value) => !value)}
       >
         <SettingsSlidersIcon size={16} />
-        <span className="vf-proj-control__muted">Réglages</span>
+        <span className="vf-proj-control__muted">
+          {t('viewfinder.scene.muted')}
+        </span>
         <ChevronDownIcon className="vf-proj-control__chevron" size={12} />
       </button>
 
@@ -152,10 +136,12 @@ export function ViewfinderSceneSettingsControl({
           id={menuId}
           className="vf-proj-control__menu"
           role="menu"
-          aria-label="Réglages scène"
+          aria-label={t('viewfinder.scene.title')}
         >
-          {PANEL_ITEMS.map(({ id, label, hint }) => {
+          {PANEL_IDS.map((id) => {
             const selected = panel === id
+            const label = t(`viewfinder.scene.${id}`)
+            const hint = t(`viewfinder.scene.${id}Hint`)
             return (
               <button
                 key={id}

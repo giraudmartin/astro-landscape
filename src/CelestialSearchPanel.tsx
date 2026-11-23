@@ -8,12 +8,14 @@ import {
 } from 'react'
 import {
   buildSearchIndex,
+  celestialObjectDisplayName,
   loadCelestialCatalog,
   searchCelestialObjects,
-  TYPE_LABEL_FR,
+  typeLabel,
   type CelestialObject,
   type SearchHit,
 } from './celestialObjects'
+import { useT } from './i18n'
 
 type CelestialSearchPanelProps = {
   open: boolean
@@ -28,6 +30,7 @@ export function CelestialSearchPanel({
   onSelect,
   selectedId,
 }: CelestialSearchPanelProps) {
+  const t = useT()
   const listId = useId()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -147,8 +150,8 @@ export function CelestialSearchPanel({
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
-          placeholder="Étoile, constellation, M42…"
-          aria-label="Rechercher un objet céleste"
+          placeholder={t('celestial.search.placeholder')}
+          aria-label={t('celestial.search.aria')}
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={
@@ -161,15 +164,15 @@ export function CelestialSearchPanel({
       </form>
 
       {status === 'loading' ? (
-        <p className="celestial-search__hint">Chargement des catalogues…</p>
+        <p className="celestial-search__hint">{t('celestial.search.loading')}</p>
       ) : null}
       {status === 'error' ? (
         <p className="celestial-search__hint celestial-search__hint--error">
-          Impossible de charger les catalogues.
+          {t('celestial.search.error')}
         </p>
       ) : null}
       {status === 'ready' && query.trim() && !hits.length ? (
-        <p className="celestial-search__hint">Aucun résultat.</p>
+        <p className="celestial-search__hint">{t('common.searchNoResultsDot')}</p>
       ) : null}
 
       {hits.length ? (
@@ -178,7 +181,7 @@ export function CelestialSearchPanel({
             id={listId}
             className="celestial-search__list"
             role="listbox"
-            aria-label="Résultats"
+            aria-label={t('celestial.search.resultsAria')}
           >
             {hits.map((hit, i) => {
               const active = i === activeIndex
@@ -200,21 +203,25 @@ export function CelestialSearchPanel({
                   >
                     <span className="celestial-search__option-main">
                       <span className="celestial-search__option-name">
-                        {hit.object.name}
+                        {celestialObjectDisplayName(hit.object)}
                       </span>
                       <span className="celestial-search__option-type">
-                        {TYPE_LABEL_FR[hit.object.type]}
+                        {typeLabel(hit.object.type)}
                       </span>
                     </span>
                     {hit.matchedOn &&
                     normalizeLoose(hit.matchedOn) !==
-                      normalizeLoose(hit.object.name) ? (
+                        normalizeLoose(hit.object.name) &&
+                    normalizeLoose(hit.matchedOn) !==
+                      normalizeLoose(celestialObjectDisplayName(hit.object)) ? (
                       <span className="celestial-search__option-meta">
                         {hit.matchedOn}
                       </span>
                     ) : hit.object.mag != null ? (
                       <span className="celestial-search__option-meta">
-                        mag {hit.object.mag.toFixed(1)}
+                        {t('celestial.search.mag', {
+                          mag: hit.object.mag.toFixed(1),
+                        })}
                       </span>
                     ) : null}
                   </button>

@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 export type CompositionGuideMode =
   | 'off'
   | 'thirds'
@@ -13,12 +15,9 @@ export const COMPOSITION_GUIDE_CYCLE: readonly CompositionGuideMode[] = [
   'golden',
 ] as const
 
-export const COMPOSITION_GUIDE_LABEL: Record<CompositionGuideMode, string> = {
-  off: 'Aucune grille',
-  thirds: 'Grille 3×3',
-  phi: 'Grille Phi',
-  center: 'Centrage',
-  golden: 'Triangle d’or',
+/** Localized guide name (call at render time). */
+export function compositionGuideLabel(mode: CompositionGuideMode): string {
+  return t(`viewfinder.guide.${mode}`)
 }
 
 /** φ⁻¹ ≈ 0.618 — Phi grid lines sit at 1−φ⁻¹ and φ⁻¹. */

@@ -1,3 +1,4 @@
+import { useT } from './i18n'
 import {
   bearingToCardinal,
   formatBearingLabel,
@@ -34,6 +35,7 @@ export function ViewBearingHud({
   altitudeMslM = null,
   altitudeAriaLabel,
 }: ViewBearingHudProps) {
+  const t = useT()
   const bearing = normalizeBearingDeg(bearingDeg)
   const altitudeText =
     typeof altitudeMslM === 'number' && Number.isFinite(altitudeMslM)
@@ -41,7 +43,7 @@ export function ViewBearingHud({
       : null
   const aria = altitudeText
     ? `${formatBearingLabel(bearing)} · ${altitudeAriaLabel ?? altitudeText}`
-    : `Cap ${formatBearingLabel(bearing)}`
+    : t('immersive.bearing.cap', { label: formatBearingLabel(bearing) })
 
   return (
     <div className="moon-preview-bearing-tape" aria-label={aria}>

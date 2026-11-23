@@ -6,7 +6,11 @@ export type {
   ObjectLiveInfo,
   VisibilityStatus,
 } from './types'
-export { HORIZON_NOTE_FR, TYPE_LABEL_FR } from './types'
+export {
+  celestialObjectDisplayName,
+  horizonNote,
+  typeLabel,
+} from './types'
 export { normalizeSearchText, compactCatalogToken } from './normalize'
 export {
   loadCelestialCatalog,
@@ -23,4 +27,4 @@ export {
 } from './position'
 export { computeDayVisibility } from './visibility'
 export { SOLAR_SYSTEM_OBJECTS } from './solarSystem'
-export { buildObjectLiveInfo } from './liveInfo'
+export { buildObjectLiveInfo, constellationLabel } from './liveInfo'

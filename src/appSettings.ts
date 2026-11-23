@@ -1,4 +1,5 @@
 import type { BasemapMode } from './basemapMode'
+import { detectBrowserLocale, isLocale, type Locale } from './i18n'
 import { TRIPOD_HEIGHT_M, clampEyeHeightM } from './presets'
 import { TIMELINE_VISIBLE_RADIUS_STEPS_MS } from './DayTimeline'
 import {
@@ -198,6 +199,8 @@ export type TimelineSettings = {
 }
 
 export type AppSettings = {
+  /** UI language (fr / en). Falls back to browser detection when unset. */
+  locale: Locale
   map: MapSettings
   immersive: ImmersiveSettings
   timeline: TimelineSettings
@@ -268,6 +271,7 @@ export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = {
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  locale: detectBrowserLocale(),
   map: { ...DEFAULT_MAP_SETTINGS },
   immersive: {
     ...DEFAULT_IMMERSIVE_SETTINGS,
@@ -573,19 +577,31 @@ function normalizeTimeline(value: unknown): TimelineSettings {
   }
 }
 
+function normalizeLocale(value: unknown): Locale {
+  return isLocale(value) ? value : detectBrowserLocale()
+}
+
+function defaultAppSettings(): AppSettings {
+  return {
+    ...structuredClone(DEFAULT_APP_SETTINGS),
+    locale: detectBrowserLocale(),
+  }
+}
+
 export function loadAppSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(APP_SETTINGS_STORAGE_KEY)
-    if (!raw) return structuredClone(DEFAULT_APP_SETTINGS)
+    if (!raw) return defaultAppSettings()
     const parsed = asRecord(JSON.parse(raw) as unknown)
-    if (!parsed) return structuredClone(DEFAULT_APP_SETTINGS)
+    if (!parsed) return defaultAppSettings()
     return {
+      locale: normalizeLocale(parsed.locale),
       map: normalizeMap(parsed.map),
       immersive: normalizeImmersive(parsed.immersive),
       timeline: normalizeTimeline(parsed.timeline),
     }
   } catch {
-    return structuredClone(DEFAULT_APP_SETTINGS)
+    return defaultAppSettings()
   }
 }
 
@@ -600,6 +616,7 @@ export function saveAppSettings(settings: AppSettings): void {
 /** Merge a partial patch into stored settings and persist. */
 export function patchAppSettings(
   patch: Partial<{
+    locale: Locale
     map: Partial<MapSettings>
     immersive: Partial<ImmersiveSettings>
     timeline: Partial<TimelineSettings>
@@ -607,6 +624,7 @@ export function patchAppSettings(
 ): AppSettings {
   const current = loadAppSettings()
   const next: AppSettings = {
+    locale: isLocale(patch.locale) ? patch.locale : current.locale,
     map: { ...current.map, ...patch.map },
     immersive: {
       ...current.immersive,

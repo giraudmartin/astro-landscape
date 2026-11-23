@@ -11,6 +11,7 @@ import {
   nextBasemapMode,
   type BasemapMode,
 } from './basemapMode'
+import { useT } from './i18n'
 
 type MapControlsStackProps = {
   mapRef: RefObject<MapLibreMap | null>
@@ -56,6 +57,7 @@ export function MapControlsStack({
   framingsOpen,
   onFramingsOpenChange,
 }: MapControlsStackProps) {
+  const t = useT()
   const [locating, setLocating] = useState(false)
   const [clicked, setClicked] = useState(false)
   const clickTimerRef = useRef<number | null>(null)
@@ -99,7 +101,7 @@ export function MapControlsStack({
             return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
           }}
         />
-        <div className="map-quick-actions" aria-label="Contrôles carte">
+        <div className="map-quick-actions" aria-label={t('map.controlsAria')}>
           <button
             type="button"
             className={
@@ -110,8 +112,8 @@ export function MapControlsStack({
             data-map-address-search-toggle=""
             aria-pressed={addressSearchOpen}
             aria-expanded={addressSearchOpen}
-            aria-label="Rechercher un lieu"
-            title="Rechercher un lieu"
+            aria-label={t('map.searchPlace')}
+            title={t('map.searchPlace')}
             onClick={() => onAddressSearchOpenChange(!addressSearchOpen)}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -128,8 +130,8 @@ export function MapControlsStack({
                 : 'map-quick-actions__button'
             }
             aria-pressed={threeDimensional}
-            aria-label="Vue 3D"
-            title="Vue 3D"
+            aria-label={t('map.view3d')}
+            title={t('map.view3d')}
             onClick={() => onThreeDimensionalChange(!threeDimensional)}
           >
             <span className="map-quick-actions__3d" aria-hidden="true">
@@ -151,13 +153,13 @@ export function MapControlsStack({
             disabled={basemapApplying}
             aria-label={
               basemapApplying
-                ? `Passage en ${label}…`
-                : `${label} — cliquer pour changer`
+                ? t('map.basemap.switching', { label })
+                : t('map.basemap.clickToChange', { label })
             }
             title={
               basemapApplying
-                ? `Chargement — ${label}`
-                : `${label} (satellite → sat+plan → plan)`
+                ? t('map.basemap.loading', { label })
+                : t('map.basemap.cycleTitle', { label })
             }
             onClick={() => onBasemapModeChange(nextBasemapMode(basemapMode))}
           >
@@ -171,8 +173,8 @@ export function MapControlsStack({
           <button
             type="button"
             className="map-quick-actions__button"
-            aria-label="Ma position"
-            title="Ma position"
+            aria-label={t('map.myLocation')}
+            title={t('map.myLocation')}
             aria-busy={locating}
             data-clicked={clicked ? 'true' : undefined}
             onClick={handleMyLocation}

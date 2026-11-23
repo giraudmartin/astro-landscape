@@ -1,13 +1,16 @@
 import { useId, type CSSProperties } from 'react'
+import { useT } from './i18n'
 import {
   bortleColorCss,
+  bortleLabel,
   clampBortle,
 } from './lightPollution/bortleFromRadiance'
 import { ChevronDownIcon } from './psIcons'
 
 type SpotBortleCardProps = {
   bortle: number
-  label: string
+  /** @deprecated Ignored — label is derived from ortle in the active locale. */
+  label?: string
   lat: number
   lon: number
   elevM: number
@@ -32,15 +35,17 @@ function formatLon(lon: number): string {
  */
 export function SpotBortleCard({
   bortle,
-  label,
   lat,
   lon,
   elevM,
   skyBrightnessMag,
-  sourceHint = 'estimé · satellite',
+  sourceHint,
   onOpenSkyBrightness,
 }: SpotBortleCardProps) {
+  const t = useT()
   const n = clampBortle(bortle)
+  const label = bortleLabel(n)
+  const sourceText = sourceHint ?? t('bortle.card.defaultSourceHint')
   const detailsId = useId()
   const tone = bortleColorCss(n)
   const sqm =
@@ -63,7 +68,7 @@ export function SpotBortleCard({
             <span className="spot-bortle-card__number">{n}</span>
           </div>
           <div className="spot-bortle-card__head-text">
-            <div className="spot-bortle-card__tag">Bortle estimé</div>
+            <div className="spot-bortle-card__tag">{t('bortle.card.tag')}</div>
             <div className="spot-bortle-card__quality">{label}</div>
             {sqm ? (
               <div className="spot-bortle-card__sqm">{sqm} mag/arcsec²</div>
@@ -76,22 +81,23 @@ export function SpotBortleCard({
         </summary>
         <div id={detailsId} className="spot-bortle-card__details">
           <div className="spot-bortle-card__detail-row">
-            <span>Latitude</span>
+            <span>{t('bortle.card.lat')}</span>
             <span>{formatLat(lat)}</span>
           </div>
           <div className="spot-bortle-card__detail-row">
-            <span>Longitude</span>
+            <span>{t('bortle.card.lon')}</span>
             <span>{formatLon(lon)}</span>
           </div>
           <div className="spot-bortle-card__detail-row">
-            <span>Altitude</span>
+            <span>{t('bortle.card.alt')}</span>
             <span>{Math.round(elevM)} m</span>
           </div>
-          <div className="spot-bortle-card__source">Source : {sourceHint}</div>
+          <div className="spot-bortle-card__source">
+            {t('bortle.card.source', { hint: sourceText })}
+          </div>
           {elevM >= 900 ? (
             <div className="spot-bortle-card__source">
-              Site élevé : correction DEM approximative (ridges). Un écart
-              résiduel vs LPM reste possible (~0,2–0,4&nbsp;mag).
+              {t('bortle.card.highSiteNote')}
             </div>
           ) : null}
         </div>
@@ -105,9 +111,9 @@ export function SpotBortleCard({
               event.stopPropagation()
               onOpenSkyBrightness()
             }}
-            title="Voir la pollution lumineuse (fisheye / panoramique)"
+            title={t('bortle.card.openSkyTitle')}
           >
-            Voir la pollution lumineuse
+            {t('bortle.card.openSky')}
           </button>
         </div>
       ) : null}

@@ -165,8 +165,8 @@ export function subscribeNetworkBytes(listener: Listener): () => void {
   }
 }
 
-export function formatMegabytes(bytes: number): string {
+export function formatMegabytes(bytes: number, unit = 'Mo'): string {
   const mb = bytes / (1024 * 1024)
-  if (mb < 10) return `${mb.toFixed(1)} Mo`
-  return `${Math.round(mb)} Mo`
+  if (mb < 10) return `${mb.toFixed(1)} ${unit}`
+  return `${Math.round(mb)} ${unit}`
 }

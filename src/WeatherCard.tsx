@@ -1,5 +1,6 @@
 /** Ported from Photo Sightline WeatherCard — French copy, same chrome. */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { intlLocale, useLocale, useT } from './i18n'
 import { ChevronDownIcon } from './psIcons'
 import {
   fetchWeatherForecast,
@@ -19,38 +20,7 @@ type WeatherCardProps = {
   embedded?: boolean
 }
 
-const LABELS = {
-  title: 'Météo',
-  aria: 'Prévisions météo',
-  expand: 'Développer la météo',
-  collapse: 'Réduire la météo',
-  needSpot: 'Sélectionne un spot photographe pour charger la météo.',
-  loading: 'Chargement des prévisions…',
-  unavailable:
-    'Pas de météo pour cette date (Open-Meteo ne couvre que les jours récents et les prévisions proches).',
-  empty: 'Aucune prévision disponible pour cette date.',
-  cloudCover: 'couverture nuageuse',
-  wind: 'Vent',
-  cloudForecast: 'Prévision nuageuse',
-  next6h: '6 h suivantes',
-  cloudLayers: 'Couches nuageuses',
-  coverage: 'Couverture',
-  high: 'Haut',
-  mid: 'Moyen',
-  low: 'Bas',
-  precipitation: 'PRÉCIPITATIONS',
-  visibility: 'VISIBILITÉ',
-  footer: 'Open-Meteo · Données de prévision',
-  clearSky: 'Ciel dégagé',
-  partlyCloudy: 'Partiellement nuageux',
-  overcast: 'Couvert',
-  foggy: 'Brouillard',
-  drizzle: 'Bruine',
-  rain: 'Pluie',
-  snow: 'Neige',
-  thunderstorm: 'Orage',
-  codeUnavailable: 'Indisponible',
-} as const
+type TFn = ReturnType<typeof useT>
 
 function nextDate(date: string): string {
   const value = new Date(`${date}T12:00:00Z`)
@@ -58,16 +28,18 @@ function nextDate(date: string): string {
   return value.toISOString().slice(0, 10)
 }
 
-function weatherLabel(code: number): string {
-  if (code === 0) return LABELS.clearSky
-  if ([1, 2].includes(code)) return LABELS.partlyCloudy
-  if (code === 3) return LABELS.overcast
-  if ([45, 48].includes(code)) return LABELS.foggy
-  if ([51, 53, 55, 56, 57].includes(code)) return LABELS.drizzle
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return LABELS.rain
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return LABELS.snow
-  if ([95, 96, 99].includes(code)) return LABELS.thunderstorm
-  return LABELS.codeUnavailable
+function weatherLabel(code: number, t: TFn): string {
+  if (code === 0) return t('weather.code.clearSky')
+  if ([1, 2].includes(code)) return t('weather.code.partlyCloudy')
+  if (code === 3) return t('weather.code.overcast')
+  if ([45, 48].includes(code)) return t('weather.code.foggy')
+  if ([51, 53, 55, 56, 57].includes(code)) return t('weather.code.drizzle')
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+    return t('weather.code.rain')
+  }
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return t('weather.code.snow')
+  if ([95, 96, 99].includes(code)) return t('weather.code.thunderstorm')
+  return t('weather.code.unavailable')
 }
 
 function CloudSunIcon({ className }: { className?: string }) {
@@ -199,8 +171,12 @@ function initialWeatherCollapsed(): boolean {
   return window.matchMedia('(max-width: 720px)').matches
 }
 
-function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat('fr-FR', options).format(value)
+function formatNumber(
+  value: number,
+  locale: string,
+  options?: Intl.NumberFormatOptions,
+): string {
+  return new Intl.NumberFormat(locale, options).format(value)
 }
 
 export function WeatherCard({
@@ -210,6 +186,10 @@ export function WeatherCard({
   onHourSelect,
   embedded = false,
 }: WeatherCardProps) {
+  const { locale: appLocale, t } = useLocale()
+  const locale = intlLocale(appLocale)
+  const fmt = (value: number, options?: Intl.NumberFormatOptions) =>
+    formatNumber(value, locale, options)
   const [collapsed, setCollapsed] = useState(() =>
     embedded ? false : initialWeatherCollapsed(),
   )
@@ -274,7 +254,7 @@ export function WeatherCard({
     state === 'error' || (state === 'ready' && forecast != null && !current)
 
   const dateTime = current
-    ? `${current.time.slice(8, 10)} ${new Intl.DateTimeFormat('fr-FR', {
+    ? `${current.time.slice(8, 10)} ${new Intl.DateTimeFormat(locale, {
         month: 'short',
       })
         .format(new Date(`${current.time.slice(0, 10)}T12:00:00Z`))
@@ -290,17 +270,17 @@ export function WeatherCard({
       ]
         .filter(Boolean)
         .join(' ')}
-      aria-label={LABELS.aria}
+      aria-label={t('weather.aria')}
     >
       {embedded ? null : (
         <button
           type="button"
           className="weather-card__header"
-          aria-label={isCollapsed ? LABELS.expand : LABELS.collapse}
+          aria-label={isCollapsed ? t('weather.expand') : t('weather.collapse')}
           aria-expanded={!isCollapsed}
           onClick={() => setCollapsed((value) => !value)}
         >
-          <span className="weather-card__title">{LABELS.title}</span>
+          <span className="weather-card__title">{t('weather.title')}</span>
           <ChevronDownIcon className="weather-card__collapse" size={14} />
         </button>
       )}
@@ -316,15 +296,15 @@ export function WeatherCard({
           <div className="weather-card__stack">
             {!location ? (
               <div className="weather-card__panel weather-card__message">
-                {LABELS.needSpot}
+                {t('weather.needSpot')}
               </div>
             ) : state === 'loading' ? (
               <div className="weather-card__panel weather-card__message">
-                {LABELS.loading}
+                {t('weather.loading')}
               </div>
             ) : showUnavailable ? (
               <div className="weather-card__panel weather-card__message">
-                {LABELS.unavailable}
+                {t('weather.unavailable')}
               </div>
             ) : current ? (
               <>
@@ -332,21 +312,21 @@ export function WeatherCard({
                   <div className="weather-card__summary-heading">
                     <span>{dateTime}</span>
                     <span className="weather-card__status">
-                      {weatherLabel(current.weatherCode)}
+                      {weatherLabel(current.weatherCode, t)}
                     </span>
                   </div>
                   <div className="weather-card__main-summary">
                     <div>
                       <div className="weather-card__coverline">
                         <strong>
-                          {formatNumber(Math.round(current.cloudCover))}%
+                          {fmt(Math.round(current.cloudCover))}%
                         </strong>
-                        <span>{LABELS.cloudCover}</span>
+                        <span>{t('weather.cloudCover')}</span>
                       </div>
                       <div className="weather-card__description">
-                        {formatNumber(Math.round(current.temperatureC))}°C ·{' '}
-                        {LABELS.wind}{' '}
-                        {formatNumber(Math.round(current.windSpeedKmh))} km/h
+                        {fmt(Math.round(current.temperatureC))}°C ·{' '}
+                        {t('weather.wind')}{' '}
+                        {fmt(Math.round(current.windSpeedKmh))} km/h
                       </div>
                     </div>
                     <WeatherGlyph
@@ -358,8 +338,8 @@ export function WeatherCard({
                 </div>
                 <div className="weather-card__panel">
                   <div className="weather-card__panel-heading">
-                    <strong>{LABELS.cloudForecast}</strong>
-                    <span>{LABELS.next6h}</span>
+                    <strong>{t('weather.cloudForecast')}</strong>
+                    <span>{t('weather.next6h')}</span>
                   </div>
                   <div className="weather-card__forecast">
                     {hours.map((hour) => {
@@ -385,7 +365,7 @@ export function WeatherCard({
                             time={hour.time}
                           />
                           <span>
-                            {formatNumber(Math.round(hour.cloudCover))}%
+                            {fmt(Math.round(hour.cloudCover))}%
                           </span>
                         </button>
                       )
@@ -394,24 +374,24 @@ export function WeatherCard({
                 </div>
                 <div className="weather-card__panel">
                   <div className="weather-card__panel-heading">
-                    <strong>{LABELS.cloudLayers}</strong>
-                    <span>{LABELS.coverage}</span>
+                    <strong>{t('weather.cloudLayers')}</strong>
+                    <span>{t('weather.coverage')}</span>
                   </div>
                   <div className="weather-card__layers">
                     {(
                       [
                         {
-                          name: LABELS.high,
+                          name: t('weather.high'),
                           value: current.cloudCoverHigh,
                           color: 'var(--weather-layer-high)',
                         },
                         {
-                          name: LABELS.mid,
+                          name: t('weather.mid'),
                           value: current.cloudCoverMid,
                           color: 'var(--weather-layer-mid)',
                         },
                         {
-                          name: LABELS.low,
+                          name: t('weather.low'),
                           value: current.cloudCoverLow,
                           color: 'var(--weather-layer-low)',
                         },
@@ -428,7 +408,7 @@ export function WeatherCard({
                           />
                         </i>
                         <span>
-                          {formatNumber(Math.round(layer.value))}%
+                          {fmt(Math.round(layer.value))}%
                         </span>
                       </div>
                     ))}
@@ -436,14 +416,14 @@ export function WeatherCard({
                 </div>
                 <div className="weather-card__metrics">
                   <div>
-                    <span>{LABELS.precipitation}</span>
+                    <span>{t('weather.precipitation')}</span>
                     <strong>
                       {current.precipitationMm > 0 ? (
                         <CloudRainIcon />
                       ) : (
                         <CloudIcon />
                       )}
-                      {formatNumber(current.precipitationMm, {
+                      {fmt(current.precipitationMm, {
                         minimumFractionDigits: 1,
                         maximumFractionDigits: 1,
                       })}{' '}
@@ -451,13 +431,13 @@ export function WeatherCard({
                     </strong>
                   </div>
                   <div>
-                    <span>{LABELS.visibility}</span>
+                    <span>{t('weather.visibility')}</span>
                     <strong>
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
                         <circle cx="12" cy="12" r="3" />
                       </svg>
-                      {formatNumber(
+                      {fmt(
                         Math.round(current.visibilityMeters / 1000),
                       )}{' '}
                       km
@@ -465,7 +445,7 @@ export function WeatherCard({
                   </div>
                 </div>
                 <div className="weather-card__footer">
-                  <span>{LABELS.footer}</span>
+                  <span>{t('weather.footer')}</span>
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="10" />
                     <path d="M12 11v5m0-8h.01" />
@@ -474,7 +454,7 @@ export function WeatherCard({
               </>
             ) : (
               <div className="weather-card__panel weather-card__message">
-                {LABELS.empty}
+                {t('weather.empty')}
               </div>
             )}
           </div>

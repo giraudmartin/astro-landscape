@@ -1,9 +1,12 @@
 import { useMemo } from 'react'
 import {
   buildObjectLiveInfo,
-  TYPE_LABEL_FR,
+  celestialObjectDisplayName,
+  horizonNote,
+  typeLabel,
   type CelestialObject,
 } from './celestialObjects'
+import { useT } from './i18n'
 
 type CelestialTargetCardProps = {
   object: CelestialObject
@@ -38,7 +41,7 @@ function catalogIdLine(object: CelestialObject): string | null {
   if (hip != null) parts.push(`HIP ${hip}`)
   if (iau && object.type === 'constellation') parts.push(iau)
   const extras = object.aliases
-    .filter((a) => a !== object.name)
+    .filter((a) => a !== object.name && a !== celestialObjectDisplayName(object))
     .slice(0, 3)
   for (const a of extras) {
     if (!parts.includes(a)) parts.push(a)
@@ -48,16 +51,17 @@ function catalogIdLine(object: CelestialObject): string | null {
 
 function visibilityStatusLabel(
   status: ReturnType<typeof buildObjectLiveInfo>['visibility']['status'],
+  t: ReturnType<typeof useT>,
 ): string {
   switch (status) {
     case 'circumpolar':
-      return 'Circumpolaire — ne se couche pas'
+      return t('celestial.target.status.circumpolar')
     case 'never_rises':
-      return 'Jamais au-dessus de l’horizon'
+      return t('celestial.target.status.never')
     case 'unknown':
-      return 'Horaires indisponibles'
+      return t('celestial.target.status.unknown')
     default:
-      return 'Lever / coucher (horizon astronomique)'
+      return t('celestial.target.status.riseSet')
   }
 }
 
@@ -96,6 +100,7 @@ export function CelestialTargetCard({
   onCenter,
   onClose,
 }: CelestialTargetCardProps) {
+  const t = useT()
   const info = useMemo(
     () =>
       buildObjectLiveInfo(object, date, playheadUtcMs, lat, lon, elevationM),
@@ -110,19 +115,19 @@ export function CelestialTargetCard({
   const canAim = canCenter && info.position != null && !pitchClamped
 
   return (
-    <aside className="celestial-target" aria-label="Objet sélectionné">
+    <aside className="celestial-target" aria-label={t('celestial.target.aria')}>
       <header className="celestial-target__header">
         <div className="celestial-target__titles">
           <p className="celestial-target__type">
-            {TYPE_LABEL_FR[object.type]}
+            {typeLabel(object.type)}
           </p>
-          <h2 className="celestial-target__name">{object.name}</h2>
+          <h2 className="celestial-target__name">{celestialObjectDisplayName(object)}</h2>
           {ids ? <p className="celestial-target__ids">{ids}</p> : null}
         </div>
         <button
           type="button"
           className="celestial-target__close"
-          aria-label="Fermer la fiche"
+          aria-label={t('celestial.target.close')}
           onClick={onClose}
         >
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -140,42 +145,42 @@ export function CelestialTargetCard({
       <dl className="celestial-target__grid">
         {object.mag != null ? (
           <div>
-            <dt>Magnitude</dt>
+            <dt>{t('celestial.target.mag')}</dt>
             <dd>{object.mag.toFixed(1)}</dd>
           </div>
         ) : null}
         {info.constellationLabel ? (
           <div>
-            <dt>Constellation</dt>
+            <dt>{t('celestial.target.constellation')}</dt>
             <dd>{info.constellationLabel}</dd>
           </div>
         ) : null}
         {info.position ? (
           <>
             <div>
-              <dt>Azimut</dt>
+              <dt>{t('celestial.target.azimuth')}</dt>
               <dd>{formatAz(info.position.azimuthDeg)}</dd>
             </div>
             <div>
-              <dt>Altitude</dt>
+              <dt>{t('celestial.target.altitude')}</dt>
               <dd>{formatDeg(info.position.altitudeDeg)}</dd>
             </div>
           </>
         ) : (
           <div className="celestial-target__span">
-            <dt>Position</dt>
-            <dd>Indisponible</dd>
+            <dt>{t('celestial.target.position')}</dt>
+            <dd>{t('celestial.target.unavailable')}</dd>
           </div>
         )}
       </dl>
 
-      <section className="celestial-target__vis" aria-label="Visibilité">
+      <section className="celestial-target__vis" aria-label={t('celestial.target.visAria')}>
         <p className="celestial-target__vis-status">
-          {visibilityStatusLabel(info.visibility.status)}
+          {visibilityStatusLabel(info.visibility.status, t)}
         </p>
         <div className="celestial-target__vis-times">
           <div>
-            <span>Lever</span>
+            <span>{t('celestial.target.rise')}</span>
             <strong>
               {info.visibility.rise?.datetimeLocal ??
                 (info.visibility.status === 'circumpolar'
@@ -186,11 +191,11 @@ export function CelestialTargetCard({
             </strong>
           </div>
           <div>
-            <span>Culmination</span>
+            <span>{t('celestial.target.culmination')}</span>
             <strong>{info.visibility.culmination?.datetimeLocal ?? '—'}</strong>
           </div>
           <div>
-            <span>Coucher</span>
+            <span>{t('celestial.target.set')}</span>
             <strong>
               {info.visibility.set?.datetimeLocal ??
                 (info.visibility.status === 'circumpolar' ? '—' : '—')}
@@ -199,23 +204,21 @@ export function CelestialTargetCard({
         </div>
         {object.type === 'constellation' ? (
           <p className="celestial-target__note">
-            Horaires pour le point de référence de la constellation, pas pour
-            toute sa surface.
+            {t('celestial.target.constNote')}
           </p>
         ) : null}
-        <p className="celestial-target__note">{info.visibility.horizonNote}</p>
+        <p className="celestial-target__note">{horizonNote()}</p>
         {info.visibility.multiplePassages ? (
           <p className="celestial-target__note">
-            Plusieurs passages possibles ce jour — premier franchissement
-            affiché.
+            {t('celestial.target.multiPass')}
           </p>
         ) : null}
       </section>
 
       {belowHorizon ? (
         <p className="celestial-target__warn" role="status">
-          Sous l’horizon à l’instant sélectionné
-          {pitchClamped ? ' (hors plage de pointage caméra ±85°)' : ''}.
+          {t('celestial.target.belowHorizon')}
+          {pitchClamped ? ` ${t('celestial.target.pitchClamp')}` : ''}.
         </p>
       ) : null}
 
@@ -231,13 +234,13 @@ export function CelestialTargetCard({
           aria-pressed={targetLocked}
           title={
             targetLocked
-              ? 'Déverrouiller la cible (ou déplacer la vue)'
-              : 'Verrouiller la cible — suit la timeline'
+              ? t('celestial.target.unlockTitle')
+              : t('celestial.target.lockTitle')
           }
           aria-label={
             targetLocked
-              ? 'Déverrouiller la cible'
-              : 'Verrouiller la cible sur la timeline'
+              ? t('celestial.target.unlock')
+              : t('celestial.target.lock')
           }
           onClick={onToggleTargetLock}
         >
@@ -249,7 +252,7 @@ export function CelestialTargetCard({
           disabled={!canAim}
           onClick={onCenter}
         >
-          Centrer sur la cible
+          {t('celestial.target.center')}
         </button>
       </div>
     </aside>

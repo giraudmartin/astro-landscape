@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useT } from './i18n'
 import { CompactCloseIcon } from './psIcons'
 
 type FloatPos = { x: number; y: number }
@@ -99,6 +100,7 @@ export function ViewfinderFloatPanel({
   hostSelector = '.immersive',
   triggerRef,
 }: ViewfinderFloatPanelProps) {
+  const t = useT()
   const [floatPos, setFloatPos] = useState<FloatPos>(() =>
     readFloatPos(storageKey, defaultPos),
   )
@@ -216,7 +218,7 @@ export function ViewfinderFloatPanel({
         <button
           type="button"
           className="vf-sky-panel__close"
-          aria-label={`Fermer ${title}`}
+          aria-label={t('viewfinder.float.close', { title })}
           onClick={onClose}
         >
           <CompactCloseIcon size={16} />

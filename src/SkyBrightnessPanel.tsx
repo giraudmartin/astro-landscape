@@ -7,8 +7,10 @@ import {
   type CSSProperties,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useT } from './i18n'
 import {
   bortleColorCss,
+  bortleLabel,
   clampBortle,
 } from './lightPollution/bortleFromRadiance'
 import {
@@ -57,35 +59,37 @@ function formatPlace(lat: number, lon: number, elevM: number): string {
   return `${Math.abs(lat).toFixed(4)}° ${ns} · ${Math.abs(lon).toFixed(4)}° ${ew} · ${Math.round(elevM)} m`
 }
 
-function sourceLabel(sample: LightPollutionSample): string {
+type TFn = ReturnType<typeof useT>
+
+function sourceLabel(sample: LightPollutionSample, t: TFn): string {
   if (sample.source === 'viirs-cog') {
-    return 'Estimation satellite · VIIRS EOG'
+    return t('bortle.sky.source.viirs')
   }
-  return 'Estimation satellite · Black Marble'
+  return t('bortle.sky.source.blackMarble')
 }
 
-function chartNoteForMode(mode: ViewMode): string {
+function chartNoteForMode(mode: ViewMode, t: TFn): string {
   if (mode === 'fisheye') {
-    return 'Le zénith est au centre, l’horizon sur le bord du disque.'
+    return t('bortle.sky.noteFisheye')
   }
-  return 'L’azimut va de gauche à droite ; la hauteur va de l’horizon (bas) au zénith (haut).'
+  return t('bortle.sky.notePano')
 }
 
 /**
  * Short blurb from field geometry — never invent a hardcoded sky quality sentence.
  */
-function assessmentBlurb(field: SkyBrightnessField): string {
+function assessmentBlurb(field: SkyBrightnessField, t: TFn): string {
   const lobe = field.zenithMag - field.minMag
   if (!Number.isFinite(lobe) || lobe < 0.12) {
-    return 'Peu de contraste entre le zénith et l’horizon sur cet aperçu.'
+    return t('bortle.sky.assess.flat')
   }
   if (field.minAltDeg <= 15) {
-    return 'Pic près de l’horizon (direction VIIRS), avec un voile diffus vers le haut.'
+    return t('bortle.sky.assess.horizon')
   }
   if (field.minAltDeg >= 60) {
-    return 'La zone la plus lumineuse se situe haut dans le ciel sur cet aperçu.'
+    return t('bortle.sky.assess.high')
   }
-  return 'La zone la plus lumineuse se situe à mi-hauteur sur cet aperçu.'
+  return t('bortle.sky.assess.mid')
 }
 
 function drawCardinalsFisheye(
@@ -305,6 +309,7 @@ export function SkyBrightnessPanel({
   elevM,
   sample,
 }: SkyBrightnessPanelProps) {
+  const t = useT()
   const titleId = useId()
   const closeRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
@@ -312,7 +317,7 @@ export function SkyBrightnessPanel({
   const [mode, setMode] = useState<ViewMode>('fisheye')
   const [profile, setProfile] = useState<HorizonGlowProfile | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -343,7 +348,7 @@ export function SkyBrightnessPanel({
     if (!open) return
     let cancelled = false
     setLoading(true)
-    setError(null)
+    setError(false)
     void buildHorizonGlowProfile(lat, lon, { observerElevM: elevM })
       .then((p) => {
         if (cancelled) return
@@ -352,7 +357,7 @@ export function SkyBrightnessPanel({
       })
       .catch(() => {
         if (cancelled) return
-        setError('Impossible de calculer le dôme.')
+        setError(true)
         setLoading(false)
       })
     return () => {
@@ -390,7 +395,7 @@ export function SkyBrightnessPanel({
 
   const bortle = clampBortle(sample.bortle)
   const bortleTone = bortleColorCss(bortle)
-  const quality = sample.bortleLabel
+  const quality = bortleLabel(bortle)
   const place = formatPlace(lat, lon, elevM)
   const brightest =
     field &&
@@ -422,7 +427,7 @@ export function SkyBrightnessPanel({
         <header className="sky-brightness-panel__header">
           <div className="sky-brightness-panel__titles">
             <h2 id={titleId} className="sky-brightness-panel__title">
-              Pollution lumineuse
+              {t('bortle.sky.title')}
             </h2>
             <p className="sky-brightness-panel__sub">{place}</p>
           </div>
@@ -430,14 +435,16 @@ export function SkyBrightnessPanel({
             className="sky-brightness-panel__bortle"
             aria-label={`Bortle ${bortle}, ${quality}`}
           >
-            <span className="sky-brightness-panel__bortle-label">Bortle</span>
+            <span className="sky-brightness-panel__bortle-label">
+              {t('bortle.sky.bortleWord')}
+            </span>
             <span className="sky-brightness-panel__bortle-value">{bortle}</span>
           </div>
           <button
             ref={closeRef}
             type="button"
             className="settings-panel__close"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
             onClick={onClose}
           >
             <CloseIcon />
@@ -450,7 +457,7 @@ export function SkyBrightnessPanel({
               <div
                 className="sky-brightness-panel__modes"
                 role="radiogroup"
-                aria-label="Projection"
+                aria-label={t('bortle.sky.projectionAria')}
               >
                 <button
                   type="button"
@@ -463,7 +470,7 @@ export function SkyBrightnessPanel({
                   }
                   onClick={() => setMode('fisheye')}
                 >
-                  Fisheye
+                  {t('bortle.sky.modeFisheye')}
                 </button>
                 <button
                   type="button"
@@ -476,21 +483,25 @@ export function SkyBrightnessPanel({
                   }
                   onClick={() => setMode('panoramic')}
                 >
-                  Panoramique
+                  {t('bortle.sky.modePanoramic')}
                 </button>
               </div>
               {loading ? (
-                <p className="sky-brightness-panel__status">Calcul du dôme…</p>
+                <p className="sky-brightness-panel__status">
+                  {t('bortle.sky.computing')}
+                </p>
               ) : error ? (
-                <p className="sky-brightness-panel__status is-error">{error}</p>
+                <p className="sky-brightness-panel__status is-error">
+                  {t('bortle.sky.errCompute')}
+                </p>
               ) : (
                 <canvas
                   ref={canvasRef}
                   className="sky-brightness-panel__canvas"
                   aria-label={
                     mode === 'fisheye'
-                      ? 'Carte fisheye de luminosité du ciel'
-                      : 'Carte panoramique de luminosité du ciel'
+                      ? t('bortle.sky.canvasFisheye')
+                      : t('bortle.sky.canvasPano')
                   }
                 />
               )}
@@ -499,8 +510,8 @@ export function SkyBrightnessPanel({
             {legend ? (
               <div className="sky-brightness-panel__legend" aria-hidden="true">
                 <div className="sky-brightness-panel__legend-top">
-                  <span>Plus lumineux</span>
-                  <span>Plus sombre</span>
+                  <span>{t('bortle.sky.legendBrighter')}</span>
+                  <span>{t('bortle.sky.legendDarker')}</span>
                 </div>
                 <div
                   className="sky-brightness-panel__legend-ramp"
@@ -515,18 +526,16 @@ export function SkyBrightnessPanel({
             ) : null}
 
             <p className="sky-brightness-panel__chart-note">
-              {chartNoteForMode(mode)}
+              {chartNoteForMode(mode, t)}
             </p>
             <p className="sky-brightness-panel__disclaimer" role="note">
-              Zénith : First Rig / VIIRS (+ DEM near-field si site élevé).
-              Dômes : Duriscoe all-sky + flou dôme (pas Falchi). Estimation
-              scout — pas une mesure SQM au sol.
+              {t('bortle.sky.disclaimer')}
             </p>
           </div>
 
           <aside className="sky-brightness-panel__side">
             <div className="sky-brightness-panel__side-title">
-              À cet emplacement
+              {t('bortle.sky.sideTitle')}
             </div>
             <div className="sky-brightness-panel__assessment">
               <h3 className="sky-brightness-panel__quality">
@@ -538,19 +547,19 @@ export function SkyBrightnessPanel({
               </h3>
               <p>
                 {field
-                  ? assessmentBlurb(field)
+                  ? assessmentBlurb(field, t)
                   : loading
-                    ? 'Calcul des mesures en cours…'
+                    ? t('bortle.sky.assess.loading')
                     : error
-                      ? 'Mesures indisponibles pour cet aperçu.'
-                      : 'Aucune mesure disponible.'}
+                      ? t('bortle.sky.assess.error')
+                      : t('bortle.sky.assess.empty')}
               </p>
             </div>
 
             <div className="sky-brightness-panel__metrics">
               <div className="sky-brightness-panel__metric">
                 <span className="sky-brightness-panel__metric-label">
-                  Au zénith
+                  {t('bortle.sky.metric.zenith')}
                 </span>
                 {field && Number.isFinite(field.zenithMag) ? (
                   <>
@@ -563,7 +572,7 @@ export function SkyBrightnessPanel({
               </div>
               <div className="sky-brightness-panel__metric">
                 <span className="sky-brightness-panel__metric-label">
-                  Moyenne du ciel
+                  {t('bortle.sky.metric.mean')}
                 </span>
                 {field && Number.isFinite(field.meanMag) ? (
                   <>
@@ -576,15 +585,17 @@ export function SkyBrightnessPanel({
               </div>
               <div className="sky-brightness-panel__metric">
                 <span className="sky-brightness-panel__metric-label">
-                  Zone la plus lumineuse
+                  {t('bortle.sky.metric.brightest')}
                 </span>
                 {brightest ? (
                   <>
                     <strong>{formatMag(brightest.mag)}</strong>
                     <small>mag/arcsec²</small>
                     <div className="sky-brightness-panel__metric-dir">
-                      Azimut {brightest.azDeg.toFixed(0)}° · Hauteur{' '}
-                      {brightest.altDeg.toFixed(0)}°
+                      {t('bortle.sky.metric.dir', {
+                        az: brightest.azDeg.toFixed(0),
+                        alt: brightest.altDeg.toFixed(0),
+                      })}
                     </div>
                   </>
                 ) : (
@@ -594,16 +605,16 @@ export function SkyBrightnessPanel({
             </div>
 
             <p className="sky-brightness-panel__guide">
-              <strong>Comment lire les valeurs ?</strong>
+              <strong>{t('bortle.sky.guideTitle')}</strong>
               <br />
-              Plus la valeur est élevée, plus le ciel est sombre.
+              {t('bortle.sky.guideBody')}
             </p>
           </aside>
         </div>
 
         <footer className="sky-brightness-panel__footer">
           <span className="sky-brightness-panel__source">
-            {sourceLabel(sample)}
+            {sourceLabel(sample, t)}
           </span>
         </footer>
       </div>

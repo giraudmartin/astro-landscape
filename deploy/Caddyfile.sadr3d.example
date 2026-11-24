@@ -1,0 +1,61 @@
+# Example Caddy site blocks for both Sadr3D products on the same OVH VPS.
+# Inspect the live /etc/caddy/Caddyfile first (alpha may still be bound to the
+# bare IP). Merge these host blocks, then:
+#   sudo caddy validate --config /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# DNS (registrar):
+#   horizon.sadr3d.com  A     51.75.124.117
+#   sphere.sadr3d.com   A     51.75.124.117
+#   (optional) AAAA → 2001:41d0:305:2100::1:9b44
+#
+# Horizon API: production web build should set VITE_API_URL to the public API
+# origin (same host via reverse_proxy, or https://horizon.sadr3d.com if you
+# proxy / to the API paths the front already calls). Adjust to match the
+# existing alpha Caddyfile — do not blindly replace a working IP site.
+
+horizon.sadr3d.com {
+	encode gzip zstd
+
+	# Prefer mirroring whatever reverse_proxy rules already work on the IP site.
+	handle /health {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /access/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /visibility* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /moon* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /spots* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		root * /var/www/photo-sightline
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+sphere.sadr3d.com {
+	encode gzip zstd
+
+	# Persistent VIIRS COG (~64 Mo) — outside the rsync --delete web root.
+	# URL matches app default: /light-pollution/viirs-vnl-2024-500m.cog.tif
+	# Caddy file_server supports Range → 206 Partial Content.
+	handle /light-pollution/* {
+		root * /home/ubuntu/sadr3d-sphere/data
+		file_server
+	}
+
+	handle {
+		root * /var/www/sadr3d-sphere
+		# Single-page app today; fallback ready if client routes appear later.
+		try_files {path} /index.html
+		file_server
+	}
+}

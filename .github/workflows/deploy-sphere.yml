@@ -1,0 +1,43 @@
+# Deploy Sadr3D Sphere to the OVH VPS on every push to main.
+# Secrets (repo → Settings → Secrets and variables → Actions):
+#   ALPHA_VPS_HOST      e.g. 51.75.124.117  (same VPS as Horizon)
+#   ALPHA_VPS_USER      e.g. ubuntu
+#   ALPHA_VPS_SSH_KEY   private ed25519 key (full PEM)
+# One-shot server setup: docs/DEPLOY_OVH.md
+# This workflow deploys Sphere only — it does not touch Horizon / PostGIS.
+
+name: Deploy Sphere
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-sphere
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH deploy Sphere to VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ALPHA_VPS_HOST }}
+          username: ${{ secrets.ALPHA_VPS_USER }}
+          key: ${{ secrets.ALPHA_VPS_SSH_KEY }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            REPO_DIR=/home/ubuntu/sadr3d-sphere/astro-landscape
+            if [[ ! -d "${REPO_DIR}/.git" ]]; then
+              echo "Repo missing at ${REPO_DIR} — run one-shot setup in docs/DEPLOY_OVH.md" >&2
+              exit 1
+            fi
+            cd "${REPO_DIR}"
+            git fetch origin main
+            git reset --hard origin/main
+            bash scripts/deploy-sphere.sh

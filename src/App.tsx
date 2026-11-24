@@ -358,6 +358,7 @@ export default function App() {
   }, [personalFramings])
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return
     installThreeGameTestHooks()
     const api: QaAppApi = {
       enterImmersive: (opts) => {

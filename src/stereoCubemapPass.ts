@@ -168,6 +168,7 @@ function makeFaceTarget(size: number): THREE.WebGLRenderTarget {
 }
 
 function wantsAtlasDebug(): boolean {
+  if (!import.meta.env.DEV) return false
   if (typeof window === 'undefined') return false
   return /(?:\?|&)stereoDebug=atlas(?:&|$)/.test(window.location.search)
 }

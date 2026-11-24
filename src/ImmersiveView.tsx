@@ -1918,43 +1918,45 @@ export function ImmersiveView({
         applyCamera()
       },
     }
-    ;(
-      window as unknown as {
-        __astroSetLook?: (yaw: number, pitch: number) => void
-        __astroSetStageFov?: (vfovDeg: number) => void
-        __astroTerrainDebug?: () => unknown
-      }
-    ).__astroSetLook = (y, p) => apiRef.current?.setLook(y, p)
-    ;(
-      window as unknown as {
-        __astroSetStageFov?: (vfovDeg: number) => void
-      }
-    ).__astroSetStageFov = (vfovDeg) => {
-      apiRef.current?.setStageFov(vfovDeg)
-    }
-    ;(
-      window as unknown as {
-        __astroTerrainDebug?: () => unknown
-      }
-    ).__astroTerrainDebug = () =>
-      landscapeMats.map((m) => {
-        const map = 'map' in m ? (m.map as THREE.Texture | null) : null
-        const img = map?.image as
-          | { width?: number; height?: number }
-          | undefined
-        return {
-          sea: !!m.userData.isSea,
-          ortho: !!m.userData.isOrthoTerrain,
-          mapW: img?.width ?? null,
-          mapH: img?.height ?? null,
-          flipY: map?.flipY ?? null,
-          nearW: m.userData.atlasWeights?.near?.value ?? null,
-          ultraW: m.userData.atlasWeights?.ultra?.value ?? null,
-          stel: !!m.userData.stelProjector,
-          band: m.userData.radiusBand ?? null,
-          color: 'color' in m ? m.color.getHexString() : null,
+    if (import.meta.env.DEV) {
+      ;(
+        window as unknown as {
+          __astroSetLook?: (yaw: number, pitch: number) => void
+          __astroSetStageFov?: (vfovDeg: number) => void
+          __astroTerrainDebug?: () => unknown
         }
-      })
+      ).__astroSetLook = (y, p) => apiRef.current?.setLook(y, p)
+      ;(
+        window as unknown as {
+          __astroSetStageFov?: (vfovDeg: number) => void
+        }
+      ).__astroSetStageFov = (vfovDeg) => {
+        apiRef.current?.setStageFov(vfovDeg)
+      }
+      ;(
+        window as unknown as {
+          __astroTerrainDebug?: () => unknown
+        }
+      ).__astroTerrainDebug = () =>
+        landscapeMats.map((m) => {
+          const map = 'map' in m ? (m.map as THREE.Texture | null) : null
+          const img = map?.image as
+            | { width?: number; height?: number }
+            | undefined
+          return {
+            sea: !!m.userData.isSea,
+            ortho: !!m.userData.isOrthoTerrain,
+            mapW: img?.width ?? null,
+            mapH: img?.height ?? null,
+            flipY: map?.flipY ?? null,
+            nearW: m.userData.atlasWeights?.near?.value ?? null,
+            ultraW: m.userData.atlasWeights?.ultra?.value ?? null,
+            stel: !!m.userData.stelProjector,
+            band: m.userData.radiusBand ?? null,
+            color: 'color' in m ? m.color.getHexString() : null,
+          }
+        })
+    }
     function syncEyeUniform() {
       const uniform = landscapeMat?.userData.eyeHeight as
         | { value: number }
@@ -2111,6 +2113,7 @@ export function ImmersiveView({
       }
 
       const urlAtlas =
+        import.meta.env.DEV &&
         typeof window !== 'undefined' &&
         /(?:\?|&)stereoDebug=atlas(?:&|$)/.test(window.location.search)
       const useCubemap =
@@ -2208,6 +2211,16 @@ export function ImmersiveView({
 
     return () => {
       disposed = true
+      if (import.meta.env.DEV) {
+        const w = window as unknown as {
+          __astroSetLook?: unknown
+          __astroSetStageFov?: unknown
+          __astroTerrainDebug?: unknown
+        }
+        delete w.__astroSetLook
+        delete w.__astroSetStageFov
+        delete w.__astroTerrainDebug
+      }
       if (lookAnimRef.current != null) {
         window.cancelAnimationFrame(lookAnimRef.current)
         lookAnimRef.current = null
@@ -2345,6 +2358,7 @@ export function ImmersiveView({
   frameRollForPreviewRef.current = frameRollDeg
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return
     const api: QaImmersiveApi = {
       setLook: (yaw, pitch, rollDeg = 0) =>
         apiRef.current?.setLook(yaw, pitch, rollDeg),
@@ -2633,7 +2647,7 @@ export function ImmersiveView({
           </div>
         </div>
       ) : null}
-      {localHalo.viirsGround && localHaloProbe ? (
+      {import.meta.env.DEV && localHalo.viirsGround && localHaloProbe ? (
         <div className="local-halo-probe" role="status">
           {localHaloProbe.split('\n').map((line, i) => (
             <div
@@ -2647,10 +2661,12 @@ export function ImmersiveView({
       ) : null}
       <div className="moon-preview-pitch-stack">
         <ViewPitchHud pitchDeg={pitchDeg} />
-        <RenderDiagnosticCard
-          liveRef={renderDiagLiveRef}
-          getContext={() => ({ ...diagContextRef.current })}
-        />
+        {import.meta.env.DEV ? (
+          <RenderDiagnosticCard
+            liveRef={renderDiagLiveRef}
+            getContext={() => ({ ...diagContextRef.current })}
+          />
+        ) : null}
       </div>
 
       <div

@@ -22,6 +22,8 @@ export const fr = {
     closeSettings: 'Fermer les réglages',
     on: 'ON',
     off: 'OFF',
+    brandBy: 'par {brand}',
+    brandMarkAria: '{product} par {brand}, version {version}',
     weekdaysShort: ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'],
     weekdaysMed: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
   },
@@ -69,8 +71,8 @@ export const fr = {
     },
     about: {
       tagline: 'Astrophotographe & développeur',
-      p1: 'J’ai conçu Astro Landscape pour préparer des photos de paysage nocturne : repérer un spot, lire le relief et la pollution lumineuse, cadrer au viseur, puis vérifier le ciel immersif avant de sortir.',
-      p2: 'Même famille d’outils que Photo Sightline (alignements Lune / Soleil avec le paysage). Ici l’accent est sur le ciel profond, le Bortle estimé et la composition terrain.',
+      p1: 'J’ai conçu Sadr3D Sphere pour préparer des photos de paysage nocturne : repérer un spot, lire le relief et la pollution lumineuse, cadrer au viseur, puis vérifier le ciel immersif avant de sortir.',
+      p2: 'Même famille d’outils que Sadr3D Horizon (alignements Lune / Soleil avec le paysage). Ici l’accent est sur le ciel profond, le Bortle estimé et la composition terrain.',
     },
     attributions: {
       hint: 'Sources de données et contenus tiers utilisés par l’app (cartes, catalogues, météo, licences).',
@@ -91,7 +93,7 @@ export const fr = {
       hint: 'Résumé de ce que l’app lit, stocke et envoie. Pas de compte ni d’analytics.',
       local: {
         title: 'Données locales',
-        body: 'Spots, cadrages, réglages et positions de panneaux sont stockés dans le navigateur (localStorage / IndexedDB). Rien n’est envoyé à un compte Astro Landscape — il n’y en a pas.',
+        body: 'Spots, cadrages, réglages et positions de panneaux sont stockés dans le navigateur (localStorage / IndexedDB). Rien n’est envoyé à un compte Sadr3D Sphere — il n’y en a pas.',
       },
       geo: {
         title: 'Géolocalisation',

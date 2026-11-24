@@ -1,6 +1,6 @@
 # Celestial catalog attribution
 
-Compiled for Photo Sightline / Astro Landscape search.
+Compiled for Sadr3D Horizon / Sadr3D Sphere search.
 
 | File | Source | License |
 |------|--------|---------|

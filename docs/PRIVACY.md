@@ -2,7 +2,7 @@
 
 Keep in sync with `src/privacy.ts` (Settings → Confidentialité).
 
-Astro Landscape is a client-side planning app. There is **no user account** and **no first-party analytics**.
+Sadr3D Sphere is a client-side planning app. There is **no user account** and **no first-party analytics**.
 
 ## What stays on your device
 
@@ -12,7 +12,7 @@ Astro Landscape is a client-side planning app. There is **no user account** and 
 ## Geolocation
 
 - GPS is requested only when you use **Me localiser**.
-- The coordinates are used locally to center the map; they are not uploaded to an Astro Landscape backend (there is none).
+- The coordinates are used locally to center the map; they are not uploaded to a Sadr3D Sphere backend (there is none).
 
 ## Network requests to third parties
 

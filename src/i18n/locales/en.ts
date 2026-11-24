@@ -20,6 +20,8 @@ export const en = {
     closeSettings: 'Close settings',
     on: 'ON',
     off: 'OFF',
+    brandBy: 'by {brand}',
+    brandMarkAria: '{product} by {brand}, version {version}',
     weekdaysShort: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
     weekdaysMed: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   },
@@ -67,8 +69,8 @@ export const en = {
     },
     about: {
       tagline: 'Astrophotographer & developer',
-      p1: 'I built Astro Landscape to plan night landscape photos: scout a spot, read the terrain and light pollution, frame in the viewfinder, then check the immersive sky before heading out.',
-      p2: 'Same family of tools as Photo Sightline (Moon / Sun alignments with the landscape). Here the focus is on deep sky, the estimated Bortle class and terrain composition.',
+      p1: 'I built Sadr3D Sphere to plan night landscape photos: scout a spot, read the terrain and light pollution, frame in the viewfinder, then check the immersive sky before heading out.',
+      p2: 'Same family of tools as Sadr3D Horizon (Moon / Sun alignments with the landscape). Here the focus is on deep sky, the estimated Bortle class and terrain composition.',
     },
     attributions: {
       hint: 'Data sources and third-party content used by the app (maps, catalogs, weather, licenses).',
@@ -89,7 +91,7 @@ export const en = {
       hint: 'Summary of what the app reads, stores and sends. No account, no analytics.',
       local: {
         title: 'Local data',
-        body: 'Spots, framings, settings and panel positions are stored in your browser (localStorage / IndexedDB). Nothing is sent to an Astro Landscape account — there is none.',
+        body: 'Spots, framings, settings and panel positions are stored in your browser (localStorage / IndexedDB). Nothing is sent to a Sadr3D Sphere account — there is none.',
       },
       geo: {
         title: 'Geolocation',

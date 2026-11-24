@@ -45,11 +45,7 @@ import {
   setPlMapOverlayOpacity,
 } from './lightPollution/plMapOverlay'
 import { PlMapOverlayLegend } from './PlMapOverlayLegend'
-import {
-  APP_COPYRIGHT,
-  APP_NAME,
-  APP_VERSION,
-} from './appMeta'
+import { AppBrandMark } from './AppBrandMark'
 import { MapControlsStack } from './MapControlsStack'
 import { MapSettingsPanel } from './MapSettingsPanel'
 import {
@@ -1505,15 +1501,7 @@ export function MapCanvas({
         onFramingsOpenChange={onFramingsOpenChange}
       />
       <MapSettingsPanel />
-      <p
-        className="app-brand-mark"
-        aria-label={`${APP_NAME} version ${APP_VERSION}`}
-      >
-        <span>
-          {APP_NAME} · v{APP_VERSION}
-        </span>
-        <span>{APP_COPYRIGHT}</span>
-      </p>
+      <AppBrandMark />
       {plHeatmapEnabled && !plHeatmapLoading ? <PlMapOverlayLegend /> : null}
     </div>
   )

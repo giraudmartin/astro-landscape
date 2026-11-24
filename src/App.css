@@ -8927,13 +8927,15 @@ button.ov-capsule:hover {
   }
 
   .settings-anchor {
-    left: 12px;
-    bottom: 120px;
+    left: auto;
+    right: 12px;
+    bottom: 16px;
   }
 
   .app-brand-mark {
     left: 12px;
-    bottom: 72px;
+    right: auto;
+    bottom: 84px;
   }
 
   .map-card {
@@ -9307,13 +9309,15 @@ button.ov-capsule:hover {
   }
 
   .settings-anchor {
-    left: 10px;
-    bottom: 132px;
+    left: auto;
+    right: 10px;
+    bottom: 16px;
   }
 
   .app-brand-mark {
     left: 10px;
-    bottom: 84px;
+    right: auto;
+    bottom: 96px;
   }
 
   .map-card {
@@ -9766,14 +9770,16 @@ button.ov-capsule:hover {
   }
 
   .settings-anchor {
-    left: max(14px, env(safe-area-inset-left, 0px));
+    left: auto;
+    right: max(14px, env(safe-area-inset-right, 0px));
     bottom: max(138px, calc(130px + env(safe-area-inset-bottom, 0px)));
     z-index: 30;
   }
 
   .app-brand-mark {
     left: max(14px, env(safe-area-inset-left, 0px));
-    bottom: max(90px, calc(82px + env(safe-area-inset-bottom, 0px)));
+    right: auto;
+    bottom: max(102px, calc(94px + env(safe-area-inset-bottom, 0px)));
   }
 
   /* Full-bleed bottom sheet over the map (PS phone rails). */
@@ -9837,33 +9843,62 @@ button.ov-capsule:hover {
   }
 }
 
-/* —— App brand / version (bottom-left, Photo Sightline) —— */
+/* —— App brand (bottom-left) · Settings FABs (bottom-right) —— */
 .app-brand-mark {
   position: absolute;
   z-index: 2;
   left: 16px;
-  bottom: 8px;
+  right: auto;
+  bottom: 20px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  align-items: flex-start;
+  gap: 3px;
   margin: 0;
-  padding: 3px 7px;
-  border-radius: 5px;
-  background: rgba(17, 19, 26, 0.78);
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.62rem;
-  letter-spacing: 0.02em;
-  line-height: 1.25;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(210, 214, 222, 0.92);
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
   pointer-events: none;
   user-select: none;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 0 10px rgba(0, 0, 0, 0.35);
 }
 
-/* —— Settings FAB (bottom-left, Photo Sightline) —— */
+.app-brand-mark__product {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.app-brand-mark__by {
+  color: rgba(210, 214, 222, 0.92);
+  font-size: 11px;
+  font-weight: 450;
+}
+
+.app-brand-mark__meta {
+  margin-top: 0;
+  color: rgba(210, 214, 222, 0.52);
+  font-size: 10px;
+  font-weight: 450;
+  letter-spacing: 0.01em;
+}
+
+/* —— Settings + bug FABs (bottom-right) —— */
 .settings-anchor {
   position: absolute;
   z-index: 4;
-  left: 16px;
-  bottom: 56px;
+  right: 16px;
+  left: auto;
+  bottom: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;

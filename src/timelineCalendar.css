@@ -154,8 +154,9 @@
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(22px) saturate(1.08);
+  /* webkit first — Vite/lightningcss was dropping unprefixed when it came last */
   -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  backdrop-filter: blur(22px) saturate(1.08);
   font-family: var(--font-ui);
   pointer-events: auto;
   container-type: inline-size;
@@ -334,7 +335,8 @@
   z-index: 90;
   width: min(340px, calc(100% - 24px));
   max-height: calc(100vh - 24px);
-  overflow-y: auto;
+  /* Keep overflow off the glass layer — scrolling here killed blur in prod build. */
+  overflow: hidden;
   padding: 14px 14px 12px;
   display: flex;
   flex-direction: column;
@@ -345,9 +347,16 @@
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(22px) saturate(1.08);
+  /* Same order as other chrome that survives minify with both prefixes. */
   -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  backdrop-filter: blur(22px) saturate(1.08);
   font-family: var(--font-ui);
+  scrollbar-width: thin;
+}
+
+.moon-calendar-popover .moon-cal {
+  min-height: 0;
+  overflow-y: auto;
   scrollbar-width: thin;
 }
 

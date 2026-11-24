@@ -3725,6 +3725,51 @@ html.is-rail-resizing .rail-resize-handle::after {
   stroke-width: 2;
 }
 
+.personal-spot-marker--cluster {
+  width: 34px;
+  height: 34px;
+}
+
+.personal-spot-marker--cluster .personal-spot-marker__center {
+  box-sizing: border-box;
+  display: block;
+  width: 34px;
+  height: 34px;
+  border-width: 2px;
+  border-color: rgba(196, 209, 221, 0.55);
+}
+
+.personal-spot-marker--cluster:hover .personal-spot-marker__center {
+  border-color: rgba(229, 242, 255, 0.85);
+}
+
+.personal-spot-marker__count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
+  text-align: center;
+  color: #fff;
+  /* Cap/alphabetic trim so the glyph ink — not the em box — is centered. */
+  text-box: trim-both cap alphabetic;
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
+  pointer-events: none;
+  user-select: none;
+}
+
 .personal-spot-marker__label {
   position: absolute;
   top: calc(50% + 26px);

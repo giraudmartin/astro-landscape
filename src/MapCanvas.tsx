@@ -74,6 +74,7 @@ import {
   type SpotActionMarkerController,
 } from './spotActionMarker'
 import { streetViewUrlAt } from './streetView'
+import { useT } from './i18n'
 
 setWorkerUrl(maplibreWorkerUrl)
 
@@ -360,6 +361,7 @@ export function MapCanvas({
   markerMenuOpen,
   onMarkerMenuOpenChange,
 }: MapCanvasProps) {
+  const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<Map | null>(null)
   const markerRef = useRef<Marker | null>(null)
@@ -1370,6 +1372,9 @@ export function MapCanvas({
         },
         spot,
         personalMarkersRef.current,
+        {
+          clusterAriaLabel: (count) => t('spots.countAria', { n: count }),
+        },
       )
     }
 
@@ -1378,12 +1383,19 @@ export function MapCanvas({
     sync()
     map.on('load', sync)
     map.on('style.load', sync)
+    // Re-cluster when screen-space distances change (zoom / pitch / bearing).
+    map.on('zoomend', sync)
+    map.on('pitchend', sync)
+    map.on('rotateend', sync)
 
     return () => {
       map.off('load', sync)
       map.off('style.load', sync)
+      map.off('zoomend', sync)
+      map.off('pitchend', sync)
+      map.off('rotateend', sync)
     }
-  }, [personalSpots, personalSpotFolders, selectedPersonalSpotId, spot])
+  }, [personalSpots, personalSpotFolders, selectedPersonalSpotId, spot, t])
 
   useEffect(() => {
     const ui = markerUiRef.current

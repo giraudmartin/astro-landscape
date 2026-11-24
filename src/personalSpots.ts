@@ -338,7 +338,146 @@ export function createPersonalSpotMarkerElement(
   return el
 }
 
-export type PersonalMarkerEntry = { marker: Marker; spot: PersonalSpot }
+/** Screen-pixel radius: markers are 46.4px; cluster when centers nearly overlap. */
+export const PERSONAL_SPOT_CLUSTER_RADIUS_PX = 52
+
+export type PersonalSpotClusterLeaf = {
+  kind: 'leaf'
+  spot: PersonalSpot
+}
+
+export type PersonalSpotClusterGroup = {
+  kind: 'cluster'
+  id: string
+  lat: number
+  lon: number
+  spots: PersonalSpot[]
+}
+
+export type PersonalSpotClusterItem =
+  | PersonalSpotClusterLeaf
+  | PersonalSpotClusterGroup
+
+type ProjectedSpot = {
+  spot: PersonalSpot
+  x: number
+  y: number
+}
+
+/**
+ * Greedy screen-space clustering. Selected / active-pin spots must already be
+ * filtered out so they stay on the spot-action-marker and never join a cluster.
+ */
+export function clusterPersonalSpots(
+  spots: PersonalSpot[],
+  project: (lngLat: [number, number]) => { x: number; y: number },
+  radiusPx: number = PERSONAL_SPOT_CLUSTER_RADIUS_PX,
+): PersonalSpotClusterItem[] {
+  if (spots.length === 0) return []
+  const radiusSq = radiusPx * radiusPx
+  const projected: ProjectedSpot[] = spots.map((spot) => {
+    const point = project([spot.lon, spot.lat])
+    return { spot, x: point.x, y: point.y }
+  })
+  const used = new Array(projected.length).fill(false)
+  const items: PersonalSpotClusterItem[] = []
+
+  for (let i = 0; i < projected.length; i += 1) {
+    if (used[i]) continue
+    const seed = projected[i]!
+    const members: ProjectedSpot[] = [seed]
+    used[i] = true
+    let grew = true
+    while (grew) {
+      grew = false
+      for (let j = 0; j < projected.length; j += 1) {
+        if (used[j]) continue
+        const candidate = projected[j]!
+        const near = members.some((member) => {
+          const dx = candidate.x - member.x
+          const dy = candidate.y - member.y
+          return dx * dx + dy * dy <= radiusSq
+        })
+        if (!near) continue
+        used[j] = true
+        members.push(candidate)
+        grew = true
+      }
+    }
+    if (members.length === 1) {
+      items.push({ kind: 'leaf', spot: seed.spot })
+      continue
+    }
+    let sumLat = 0
+    let sumLon = 0
+    const clusteredSpots = members.map((member) => {
+      sumLat += member.spot.lat
+      sumLon += member.spot.lon
+      return member.spot
+    })
+    items.push({
+      kind: 'cluster',
+      id: `cluster:${clusteredSpots
+        .map((spot) => spot.id)
+        .sort()
+        .join('+')}`,
+      lat: sumLat / clusteredSpots.length,
+      lon: sumLon / clusteredSpots.length,
+      spots: clusteredSpots,
+    })
+  }
+  return items
+}
+
+export function createPersonalSpotClusterElement(
+  count: number,
+  ariaLabel: string,
+): HTMLDivElement {
+  const el = document.createElement('div')
+  el.className = 'personal-spot-marker personal-spot-marker--cluster'
+  el.style.width = '34px'
+  el.style.height = '34px'
+  el.style.position = 'absolute'
+  const safeCount = Number.isFinite(count) ? Math.max(2, Math.round(count)) : 2
+  el.innerHTML =
+    `<span class="personal-spot-marker__center" title="${escapeHtml(String(safeCount))}">` +
+    `<span class="personal-spot-marker__count">${escapeHtml(String(safeCount))}</span>` +
+    '</span>'
+  el.setAttribute('role', 'button')
+  el.setAttribute('aria-label', ariaLabel)
+  el.title = ariaLabel
+  return el
+}
+
+export function expandPersonalSpotCluster(
+  map: MapLibreMap,
+  spots: PersonalSpot[],
+): void {
+  if (spots.length === 0) return
+  const bounds = new maplibregl.LngLatBounds()
+  for (const spot of spots) bounds.extend([spot.lon, spot.lat])
+  const ne = bounds.getNorthEast()
+  const sw = bounds.getSouthWest()
+  const coincident =
+    Math.abs(ne.lat - sw.lat) < 1e-6 && Math.abs(ne.lng - sw.lng) < 1e-6
+  if (coincident) {
+    map.easeTo({
+      center: [spots[0]!.lon, spots[0]!.lat],
+      zoom: Math.min(map.getZoom() + 1.5, 18),
+      duration: 400,
+    })
+    return
+  }
+  map.fitBounds(bounds, {
+    padding: { top: 88, right: 64, bottom: 88, left: 64 },
+    maxZoom: 17,
+    duration: 450,
+  })
+}
+
+export type PersonalMarkerEntry =
+  | { kind: 'leaf'; marker: Marker; spot: PersonalSpot }
+  | { kind: 'cluster'; marker: Marker; id: string; spots: PersonalSpot[] }
 
 export function renderPersonalSpotMarkers(
   map: MapLibreMap,
@@ -348,8 +487,12 @@ export function renderPersonalSpotMarkers(
   /** Hide the marker under the working pin when coords match. */
   activeLocation?: { lat: number; lon: number } | null,
   entries = new Map<string, PersonalMarkerEntry>(),
+  options?: {
+    clusterAriaLabel?: (count: number) => string
+  },
 ): Marker[] {
-  // Active / working pin is green camera — skip that location's map marker.
+  // Active / working pin is green camera — skip that location's map marker so
+  // it never joins a cluster and we avoid doubles with the spot-action pin.
   const visible = spots.filter((spot) => {
     if (spot.id === selectedId) return false
     if (
@@ -361,38 +504,90 @@ export function renderPersonalSpotMarkers(
     }
     return true
   })
-  const visibleIds = new Set(visible.map(spot => spot.id))
+  const items = clusterPersonalSpots(visible, (lngLat) => map.project(lngLat))
+  const clusterAriaLabel =
+    options?.clusterAriaLabel ?? ((count: number) => `${count} spots`)
+  const nextKeys = new Set(
+    items.map((item) => (item.kind === 'leaf' ? item.spot.id : item.id)),
+  )
   for (const [id, entry] of entries) {
-    if (visibleIds.has(id)) continue
+    if (nextKeys.has(id)) continue
     entry.marker.remove()
     entries.delete(id)
   }
-  return visible.map((spot) => {
-    const previous = entries.get(spot.id)
-    if (previous && previous.spot.name === spot.name) {
-      if (previous.spot.lon !== spot.lon || previous.spot.lat !== spot.lat) {
-        previous.marker.setLngLat([spot.lon, spot.lat])
+
+  return items.map((item) => {
+    if (item.kind === 'leaf') {
+      const spot = item.spot
+      const previous = entries.get(spot.id)
+      if (
+        previous?.kind === 'leaf' &&
+        previous.spot.name === spot.name
+      ) {
+        if (
+          previous.spot.lon !== spot.lon ||
+          previous.spot.lat !== spot.lat
+        ) {
+          previous.marker.setLngLat([spot.lon, spot.lat])
+        }
+        previous.spot = spot
+        return previous.marker
       }
-      previous.spot = spot
+      previous?.marker.remove()
+      const marker = new maplibregl.Marker({
+        element: createPersonalSpotMarkerElement(spot),
+        anchor: 'center',
+        offset: [0, 0],
+      })
+        .setLngLat([spot.lon, spot.lat])
+        .addTo(map)
+      const entry: PersonalMarkerEntry = { kind: 'leaf', spot, marker }
+      entries.set(spot.id, entry)
+      const el = marker.getElement()
+      // Left-click only selects. Right-click must reach the map to place a pin.
+      el.addEventListener('click', (event) => {
+        if (event.button !== 0) return
+        event.preventDefault()
+        event.stopPropagation()
+        const current = entries.get(spot.id)
+        if (current?.kind !== 'leaf') return
+        onSelect(current.spot)
+      })
+      return marker
+    }
+
+    const count = item.spots.length
+    const previous = entries.get(item.id)
+    if (previous?.kind === 'cluster') {
+      previous.marker.setLngLat([item.lon, item.lat])
+      previous.spots = item.spots
       return previous.marker
     }
     previous?.marker.remove()
     const marker = new maplibregl.Marker({
-      element: createPersonalSpotMarkerElement(spot),
+      element: createPersonalSpotClusterElement(
+        count,
+        clusterAriaLabel(count),
+      ),
       anchor: 'center',
       offset: [0, 0],
     })
-      .setLngLat([spot.lon, spot.lat])
+      .setLngLat([item.lon, item.lat])
       .addTo(map)
-    const entry = { spot, marker }
-    entries.set(spot.id, entry)
-    const el = marker.getElement()
-    // Left-click only selects. Right-click must reach the map to place a pin.
-    el.addEventListener('click', (event) => {
+    const entry: PersonalMarkerEntry = {
+      kind: 'cluster',
+      id: item.id,
+      spots: item.spots,
+      marker,
+    }
+    entries.set(item.id, entry)
+    marker.getElement().addEventListener('click', (event) => {
       if (event.button !== 0) return
       event.preventDefault()
       event.stopPropagation()
-      onSelect(entry.spot)
+      const current = entries.get(item.id)
+      if (current?.kind !== 'cluster') return
+      expandPersonalSpotCluster(map, current.spots)
     })
     return marker
   })

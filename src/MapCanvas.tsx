@@ -44,7 +44,6 @@ import {
   PL_MAP_OVERLAY_TILE_URL,
   setPlMapOverlayOpacity,
 } from './lightPollution/plMapOverlay'
-import { PlMapOverlayLegend } from './PlMapOverlayLegend'
 import { AppBrandMark } from './AppBrandMark'
 import { MapControlsStack } from './MapControlsStack'
 import { MapSettingsPanel } from './MapSettingsPanel'
@@ -137,6 +136,8 @@ type MapCanvasProps = {
   basemapMode: BasemapMode
   plHeatmapEnabled: boolean
   plHeatmapOpacity: number
+  plLegendOpen: boolean
+  onPlLegendOpenChange: (next: boolean) => void
   addressSearchOpen: boolean
   spot: SpotState | null
   onModeChange: (
@@ -332,6 +333,8 @@ export function MapCanvas({
   basemapMode,
   plHeatmapEnabled,
   plHeatmapOpacity,
+  plLegendOpen,
+  onPlLegendOpenChange,
   addressSearchOpen,
   spot,
   onModeChange,
@@ -681,6 +684,9 @@ export function MapCanvas({
           console.error('[basemap]', error)
         })
         .finally(() => {
+          // Stale apply from the map StrictMode just removed — the live map
+          // has its own apply. isStyleLoaded on the dead map warns and throws.
+          if (mapRef.current !== map) return
           // Hillshade paint is reset by basemap — restore playhead night/day.
           applyPlMapOverlay(map, {
             enabled: plHeatmapEnabledRef.current,
@@ -1011,12 +1017,13 @@ export function MapCanvas({
     }
 
     // Mobile has no right-click: long-press on the map canvas places the pin.
-    // Slightly longer + more wobble budget so pan intent cancels cleanly without
-    // fighting thumbs that drift a few px while holding still.
-    const LONG_PRESS_MS = 450
-    const LONG_PRESS_MOVE_PX = 22
+    // Strict: any real finger travel OR MapLibre pan/zoom/rotate cancels —
+    // only a still hold places a marker.
+    const LONG_PRESS_MS = 480
+    const LONG_PRESS_MOVE_PX = 10
     let longPressTimer: number | null = null
-    let longPressStart: { x: number; y: number } | null = null
+    let longPressStart: { x: number; y: number; pointerId: number } | null =
+      null
 
     const clearLongPressTimer = () => {
       if (longPressTimer != null) {
@@ -1030,13 +1037,20 @@ export function MapCanvas({
       if (event.pointerType === 'mouse') return
       if (event.button !== 0) return
       if (personalSpotPickingRef.current) return
+      clearLongPressTimer()
       const canvas = map.getCanvas()
       const rect = canvas.getBoundingClientRect()
       const x = event.clientX - rect.left
       const y = event.clientY - rect.top
-      longPressStart = { x: event.clientX, y: event.clientY }
-      clearLongPressTimer()
+      const pointerId = event.pointerId
+      longPressStart = {
+        x: event.clientX,
+        y: event.clientY,
+        pointerId,
+      }
       longPressTimer = window.setTimeout(() => {
+        // Still holding the same finger with no cancel → place.
+        if (!longPressStart || longPressStart.pointerId !== pointerId) return
         longPressTimer = null
         longPressStart = null
         const lngLat = map.unproject([x, y])
@@ -1054,6 +1068,7 @@ export function MapCanvas({
 
     const onCanvasPointerMove = (event: PointerEvent) => {
       if (!longPressStart || longPressTimer == null) return
+      if (event.pointerId !== longPressStart.pointerId) return
       const dx = event.clientX - longPressStart.x
       const dy = event.clientY - longPressStart.y
       if (dx * dx + dy * dy > LONG_PRESS_MOVE_PX * LONG_PRESS_MOVE_PX) {
@@ -1061,18 +1076,36 @@ export function MapCanvas({
       }
     }
 
-    const onCanvasPointerEnd = () => {
+    const onCanvasPointerEnd = (event: PointerEvent) => {
+      if (
+        longPressStart &&
+        event.pointerId != null &&
+        event.pointerId !== longPressStart.pointerId
+      ) {
+        return
+      }
+      clearLongPressTimer()
+    }
+
+    // MapLibre often captures the pointer once a drag starts — canvas
+    // pointermove may stop firing, so cancel on camera gesture start too.
+    const onMapGestureStart = () => {
       clearLongPressTimer()
     }
 
     map.on('click', onMapClick)
     map.on('contextmenu', onMapContextMenu)
+    map.on('dragstart', onMapGestureStart)
+    map.on('zoomstart', onMapGestureStart)
+    map.on('rotatestart', onMapGestureStart)
+    map.on('pitchstart', onMapGestureStart)
     {
       const canvas = map.getCanvas()
       canvas.addEventListener('pointerdown', onCanvasPointerDown)
-      canvas.addEventListener('pointermove', onCanvasPointerMove)
-      canvas.addEventListener('pointerup', onCanvasPointerEnd)
-      canvas.addEventListener('pointercancel', onCanvasPointerEnd)
+      // Window move: still cancel if the finger slides after MapLibre capture.
+      window.addEventListener('pointermove', onCanvasPointerMove)
+      window.addEventListener('pointerup', onCanvasPointerEnd)
+      window.addEventListener('pointercancel', onCanvasPointerEnd)
       canvas.addEventListener('lostpointercapture', onCanvasPointerEnd)
     }
 
@@ -1121,12 +1154,16 @@ export function MapCanvas({
       clearLongPressTimer()
       map.off('click', onMapClick)
       map.off('contextmenu', onMapContextMenu)
+      map.off('dragstart', onMapGestureStart)
+      map.off('zoomstart', onMapGestureStart)
+      map.off('rotatestart', onMapGestureStart)
+      map.off('pitchstart', onMapGestureStart)
       {
         const canvas = map.getCanvas()
         canvas.removeEventListener('pointerdown', onCanvasPointerDown)
-        canvas.removeEventListener('pointermove', onCanvasPointerMove)
-        canvas.removeEventListener('pointerup', onCanvasPointerEnd)
-        canvas.removeEventListener('pointercancel', onCanvasPointerEnd)
+        window.removeEventListener('pointermove', onCanvasPointerMove)
+        window.removeEventListener('pointerup', onCanvasPointerEnd)
+        window.removeEventListener('pointercancel', onCanvasPointerEnd)
         canvas.removeEventListener('lostpointercapture', onCanvasPointerEnd)
       }
       apiRef.current = null
@@ -1505,6 +1542,8 @@ export function MapCanvas({
         onPlHeatmapEnabledChange={requestPlHeatmapEnabled}
         onPlHeatmapOpacityChange={requestPlHeatmapOpacity}
         onPlHeatmapOpacityCommit={commitPlHeatmapOpacity}
+        plLegendOpen={plLegendOpen}
+        onPlLegendOpenChange={onPlLegendOpenChange}
         addressSearchOpen={addressSearchOpen}
         onAddressSearchOpenChange={onAddressSearchOpenChange}
         onAddressSelect={(result) => apiRef.current?.flyToAddress(result)}
@@ -1516,7 +1555,6 @@ export function MapCanvas({
       />
       <MapSettingsPanel />
       <AppBrandMark />
-      {plHeatmapEnabled && !plHeatmapLoading ? <PlMapOverlayLegend /> : null}
     </div>
   )
 }

@@ -39,6 +39,8 @@ type TimelineDockProps = {
   playheadUtcMs: number
   /** When true, clock/day are UTC (no spot yet). */
   clockIsUtc?: boolean
+  /** PL Bortle legend is docking in this slot — slide the timeline away. */
+  coveredByLegend?: boolean
   onDateChange: (date: string) => void
   onScrubbingChange: (active: boolean) => void
   onPlayheadChange: (utcMs: number) => void
@@ -60,6 +62,7 @@ export function TimelineDock({
   date,
   playheadUtcMs,
   clockIsUtc = false,
+  coveredByLegend = false,
   onDateChange,
   onPlayheadChange,
   onScrubbingChange,
@@ -183,12 +186,21 @@ export function TimelineDock({
 
   if (collapsed) {
     return (
-      <div className="moon-timeline-dock__collapsed map-quick-actions">
+      <div
+        className={[
+          'moon-timeline-dock__collapsed map-quick-actions',
+          coveredByLegend ? 'is-legend-covered' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        aria-hidden={coveredByLegend}
+      >
         <button
           type="button"
           className="map-quick-actions__button"
           aria-label={t('timeline.show')}
           title={t('timeline.show')}
+          tabIndex={coveredByLegend ? -1 : undefined}
           onClick={() => setCollapsed(false)}
         >
           <ClockIcon />
@@ -205,12 +217,16 @@ export function TimelineDock({
             ? 'moon-timeline-dock moon-timeline-dock--advanced'
             : 'moon-timeline-dock',
           swipeCollapse.isDragging ? 'is-dragging' : '',
+          coveredByLegend ? 'is-legend-covered' : '',
         ]
           .filter(Boolean)
           .join(' ')}
         role="region"
         aria-label={t('timeline.region')}
-        style={isPhone ? swipeCollapse.sheetStyle : undefined}
+        aria-hidden={coveredByLegend}
+        style={
+          isPhone && !coveredByLegend ? swipeCollapse.sheetStyle : undefined
+        }
       >
         {isPhone ? (
           <button
@@ -294,7 +310,7 @@ export function TimelineDock({
               {formatDockDate(date, isPhone)}
             </button>
             <span className="moon-timeline-dock__time">
-              {editingClock ? (
+              {editingClock && !isPhone ? (
                 <input
                   autoFocus
                   className="moon-timeline-dock__time-input"
@@ -313,6 +329,17 @@ export function TimelineDock({
                     }
                   }}
                 />
+              ) : isPhone ? (
+                <span
+                  className="moon-timeline-dock__time-main"
+                  title={
+                    clockIsUtc
+                      ? t('timeline.utcExact')
+                      : t('timeline.localExact')
+                  }
+                >
+                  {playheadClock.slice(0, 5)}
+                </span>
               ) : (
                 <button
                   type="button"

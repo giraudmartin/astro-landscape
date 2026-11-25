@@ -15,10 +15,13 @@ type SwipeDismiss = {
   isDragging: boolean
 }
 
-/** Swipe down on a handle to dismiss a mobile sheet/rail. */
+type SwipeDirection = 'up' | 'down'
+
+/** Swipe on a handle to dismiss a mobile sheet/rail (down) or top card (up). */
 export function useSwipeToDismiss(
   onClose: () => void,
   enabled: boolean,
+  direction: SwipeDirection = 'down',
 ): SwipeDismiss {
   const dragRef = useRef<{
     pointerId: number
@@ -47,8 +50,11 @@ export function useSwipeToDismiss(
   ): void => {
     const drag = dragRef.current
     if (!enabled || !drag || drag.pointerId !== event.pointerId) return
-    const delta = Math.max(0, event.clientY - drag.startY)
-    setOffsetY(delta)
+    const raw =
+      direction === 'up'
+        ? drag.startY - event.clientY
+        : event.clientY - drag.startY
+    setOffsetY(Math.max(0, raw))
   }
 
   const endDrag = (clientY: number): void => {
@@ -57,7 +63,8 @@ export function useSwipeToDismiss(
       reset()
       return
     }
-    const delta = clientY - drag.startY
+    const delta =
+      direction === 'up' ? drag.startY - clientY : clientY - drag.startY
     const dismiss =
       delta >
       Math.min(
@@ -78,6 +85,8 @@ export function useSwipeToDismiss(
     endDrag(event.clientY)
   }
 
+  const signedOffset = direction === 'up' ? -offsetY : offsetY
+
   return {
     onHandlePointerDown,
     onHandlePointerMove,
@@ -86,11 +95,19 @@ export function useSwipeToDismiss(
     sheetStyle:
       enabled && offsetY > 0
         ? {
-            transform: `translateY(${offsetY}px)`,
+            transform: `translateY(${signedOffset}px)`,
             transition: dragging ? 'none' : undefined,
+            ...(direction === 'up'
+              ? { opacity: Math.max(0.35, 1 - offsetY / 220) }
+              : {}),
           }
         : enabled
-          ? { transition: 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)' }
+          ? {
+              transition:
+                direction === 'up'
+                  ? 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease'
+                  : 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
+            }
           : {},
     isDragging: dragging,
   }

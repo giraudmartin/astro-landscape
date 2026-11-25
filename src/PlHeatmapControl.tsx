@@ -18,6 +18,9 @@ type PlHeatmapControlProps = {
   onOpacityChange: (next: number) => void
   /** Pointer/keyboard commit — flush persisted state. */
   onOpacityCommit?: (next: number) => void
+  /** Bortle legend panel visibility (info toggle on the PL bar). */
+  legendOpen?: boolean
+  onLegendOpenChange?: (next: boolean) => void
 }
 
 const OP_MIN = 0.15
@@ -54,6 +57,8 @@ export function PlHeatmapControl({
   onEnabledChange,
   onOpacityChange,
   onOpacityCommit,
+  legendOpen = false,
+  onLegendOpenChange,
 }: PlHeatmapControlProps) {
   const tr = useT()
   const trackRef = useRef<HTMLDivElement | null>(null)
@@ -224,6 +229,37 @@ export function PlHeatmapControl({
           </div>
         </div>
       </div>
+
+      {enabled && onLegendOpenChange ? (
+        <button
+          type="button"
+          className={
+            legendOpen
+              ? 'pl-heatmap-control__info is-active'
+              : 'pl-heatmap-control__info'
+          }
+          aria-pressed={legendOpen}
+          aria-label={
+            legendOpen ? tr('map.pl.legendHide') : tr('map.pl.legendShow')
+          }
+          title={
+            legendOpen ? tr('map.pl.legendHide') : tr('map.pl.legendShow')
+          }
+          onClick={() => onLegendOpenChange(!legendOpen)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 10.5v6.5" />
+            <circle
+              cx="12"
+              cy="7.25"
+              r="1.25"
+              fill="currentColor"
+              stroke="none"
+            />
+          </svg>
+        </button>
+      ) : null}
     </div>
   )
 }

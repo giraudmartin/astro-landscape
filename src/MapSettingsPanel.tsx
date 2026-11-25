@@ -11,6 +11,12 @@ import { APP_COPYRIGHT, APP_NAME, APP_VERSION } from './appMeta'
 import { loadAppSettings, patchAppSettings } from './appSettings'
 import { BugReportCard } from './BugReportCard'
 import { LOCALES, useLocale } from './i18n'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
+
+/** Open the map settings dialog (e.g. from the phone top drawer). */
+export const OPEN_MAP_SETTINGS_EVENT = 'astro-planner:open-map-settings'
+/** Open the bug-report card (e.g. from the phone top drawer). */
+export const OPEN_BUG_REPORT_EVENT = 'astro-planner:open-bug-report'
 import { APP_PRIVACY_POINTS } from './privacy'
 import { getApproxTerrainDownloadMb } from './terrainDownloadEstimate'
 import {
@@ -101,6 +107,7 @@ function CreditChevron() {
  */
 export function MapSettingsPanel() {
   const { locale, setLocale, t } = useLocale()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const [open, setOpen] = useState(false)
   const [section, setSection] = useState<SettingsSection>('about')
   const [bugReportOpen, setBugReportOpen] = useState(false)
@@ -117,6 +124,23 @@ export function MapSettingsPanel() {
   const contentRef = useRef<HTMLDivElement>(null)
   const langMenuRef = useRef<HTMLDivElement>(null)
   const qualityMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onOpenSettings = () => {
+      setBugReportOpen(false)
+      setOpen(true)
+    }
+    const onOpenBug = () => {
+      setOpen(false)
+      setBugReportOpen(true)
+    }
+    window.addEventListener(OPEN_MAP_SETTINGS_EVENT, onOpenSettings)
+    window.addEventListener(OPEN_BUG_REPORT_EVENT, onOpenBug)
+    return () => {
+      window.removeEventListener(OPEN_MAP_SETTINGS_EVENT, onOpenSettings)
+      window.removeEventListener(OPEN_BUG_REPORT_EVENT, onOpenBug)
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) {
@@ -532,42 +556,50 @@ export function MapSettingsPanel() {
       : null
 
   return (
-    <div className="settings-anchor">
-      <button
-        type="button"
-        className={
-          bugReportOpen
-            ? 'settings-anchor__toggle settings-anchor__toggle--active'
-            : 'settings-anchor__toggle'
-        }
-        aria-label={t('settings.bugReport')}
-        title={t('settings.bugReport')}
-        aria-expanded={bugReportOpen}
-        onClick={() => {
-          setOpen(false)
-          setBugReportOpen(true)
-        }}
-      >
-        <BugIcon />
-      </button>
-      <button
-        type="button"
-        className={
-          open
-            ? 'settings-anchor__toggle settings-anchor__toggle--active'
-            : 'settings-anchor__toggle'
-        }
-        aria-label={t('settings.title')}
-        title={t('settings.title')}
-        aria-expanded={open}
-        aria-controls="map-settings-panel"
-        onClick={() => {
-          setBugReportOpen(false)
-          setOpen((value) => !value)
-        }}
-      >
-        <SettingsIcon />
-      </button>
+    <div
+      className={
+        isPhone ? 'settings-anchor settings-anchor--phone-drawer' : 'settings-anchor'
+      }
+    >
+      {!isPhone ? (
+        <>
+          <button
+            type="button"
+            className={
+              bugReportOpen
+                ? 'settings-anchor__toggle settings-anchor__toggle--active'
+                : 'settings-anchor__toggle'
+            }
+            aria-label={t('settings.bugReport')}
+            title={t('settings.bugReport')}
+            aria-expanded={bugReportOpen}
+            onClick={() => {
+              setOpen(false)
+              setBugReportOpen(true)
+            }}
+          >
+            <BugIcon />
+          </button>
+          <button
+            type="button"
+            className={
+              open
+                ? 'settings-anchor__toggle settings-anchor__toggle--active'
+                : 'settings-anchor__toggle'
+            }
+            aria-label={t('settings.title')}
+            title={t('settings.title')}
+            aria-expanded={open}
+            aria-controls="map-settings-panel"
+            onClick={() => {
+              setBugReportOpen(false)
+              setOpen((value) => !value)
+            }}
+          >
+            <SettingsIcon />
+          </button>
+        </>
+      ) : null}
       {dialog}
       <BugReportCard
         open={bugReportOpen}

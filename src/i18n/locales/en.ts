@@ -140,6 +140,10 @@ export const en = {
     searchNear: 'Prioritizing near {lat}°, {lon}°',
     searchLoading: 'Searching…',
     searchError: 'Search error',
+    searchDismissHandle: 'Swipe down to close search',
+    zoomAria: 'Map zoom',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
     view3d: '3D view',
     myLocation: 'My location',
     basemap: {
@@ -164,6 +168,8 @@ export const en = {
       legendSubtitle: 'Light pollution',
       legendSource:
         'Data: {link} (~500 m, CC BY 4.0 · OpenLandMap/Zenodo) — Bortle false color, not World Atlas.',
+      legendHide: 'Hide Bortle legend',
+      legendShow: 'Show Bortle legend',
     },
     spotAction: {
       group: 'Spot actions',
@@ -181,6 +187,7 @@ export const en = {
       sectionOverview: 'Overview',
       sectionWeather: 'Weather',
       sectionBortle: 'Bortle',
+      sectionApp: 'App',
     },
     rail: {
       resize: 'Resize panel',

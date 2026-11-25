@@ -263,24 +263,50 @@ html.is-rail-resizing .my-events-rail {
   height: 100%;
 }
 
+/* Takes the timeline dock slot — slides up when `.is-open`. */
 .pl-map-legend {
-  position: absolute;
-  z-index: 2;
-  top: var(--map-control-stack-inset);
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
+  left: calc((100vw - var(--map-rail-width, 0px)) / 2);
+  bottom: 16px;
+  z-index: 31;
   box-sizing: border-box;
-  width: min(22.5rem, calc(100% - 7.25rem));
+  width: min(
+    var(--timeline-dock-max, 720px),
+    calc(100vw - var(--map-rail-width, 0px) - 24px)
+  );
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding: 0.55rem 0.7rem 0.6rem;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--r-md);
-  background: var(--surface-sheen), var(--surface-float-glass);
-  box-shadow: var(--ui-shadow);
-  backdrop-filter: blur(14px);
+  padding: 0.7rem 0.85rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 18px;
+  background: rgba(16, 16, 20, 0.72);
+  color: #f5f5f7;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  backdrop-filter: blur(22px) saturate(1.08);
+  font-family: var(--font-ui);
+  opacity: 0;
+  transform: translateX(-50%) translateY(18px);
   pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0.28s;
+}
+
+.pl-map-legend.is-open {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+  visibility: visible;
+  transition:
+    opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0s;
 }
 
 .pl-map-legend__head {
@@ -391,12 +417,6 @@ html.is-rail-resizing .my-events-rail {
 }
 
 @media (max-width: 640px) {
-  .pl-map-legend {
-    width: min(18.5rem, calc(100% - 5.5rem));
-    padding: 0.45rem 0.55rem 0.5rem;
-    gap: 0.35rem;
-  }
-
   .pl-map-legend__subtitle {
     display: none;
   }
@@ -1055,6 +1075,11 @@ html.is-rail-resizing .my-events-rail {
   transition: right var(--motion-panel) var(--motion-ease-out);
 }
 
+/* Phone map zoom — under the map pill (hidden on desktop). */
+.map-zoom-controls {
+  display: none;
+}
+
 .map-compass {
   --bearing: 0;
   --pitch: 0;
@@ -1175,6 +1200,7 @@ html.is-rail-resizing .my-events-rail {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  gap: 10px;
 }
 
 /* Standalone PL heatmap control — below the map button group. */
@@ -1361,6 +1387,57 @@ html.is-rail-resizing .my-events-rail {
 .pl-heatmap-control__track:hover .pl-heatmap-control__thumb,
 .pl-heatmap-control__track:active .pl-heatmap-control__thumb {
   transform: translate(-50%, -50%) scale(1.06);
+}
+
+.pl-heatmap-control__info {
+  display: grid;
+  place-items: center;
+  width: calc(var(--map-control-size) - 2px);
+  height: calc(var(--map-control-size) - 2px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  /* Stay white while PL is on — don't inherit the mint `--on` tint. */
+  color: #d9dde7;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pl-heatmap-control__info:hover {
+  color: #f0f2f7;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pl-heatmap-control__info.is-active {
+  color: var(--map-control-primary);
+}
+
+.pl-heatmap-control__info.is-active:hover {
+  color: var(--map-control-primary);
+  background: var(--map-control-primary-soft);
+}
+
+.pl-heatmap-control__info:active {
+  transform: scale(0.95);
+}
+
+.pl-heatmap-control__info svg {
+  /* Same optical size as PL sun / Mes spots / cadrages. */
+  width: calc(var(--map-control-size) * 0.36);
+  height: calc(var(--map-control-size) * 0.36);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pl-heatmap-control__info:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: -3px;
+  border-radius: 50%;
 }
 
 .map-address-search {
@@ -9715,6 +9792,41 @@ button.ov-capsule:hover {
   min-width: 0;
 }
 
+.mobile-top-drawer__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-top-drawer__action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8f5ee;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-top-drawer__action:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mobile-top-drawer__action:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
 .mobile-top-drawer__section-title {
   margin: 0;
   padding: 0 2px;
@@ -9884,7 +9996,9 @@ button.ov-capsule:hover {
      these base rules otherwise override bottom/z-index when declared later. */
 
   /* Full-bleed bottom sheet over the map (PS phone rails). */
-  .my-spots-rail {
+  .my-spots-rail,
+  .my-events-rail,
+  .framings-rail {
     position: fixed;
     inset: 0;
     z-index: 45;
@@ -9893,7 +10007,8 @@ button.ov-capsule:hover {
     background: transparent;
   }
 
-  .my-spots-rail__sheet {
+  .my-spots-rail__sheet,
+  .my-events-rail__sheet {
     pointer-events: auto;
     position: absolute;
     left: 0;
@@ -9911,8 +10026,14 @@ button.ov-capsule:hover {
     animation: none;
   }
 
-  .my-spots-rail__sheet.is-dragging {
+  .my-spots-rail__sheet.is-dragging,
+  .my-events-rail__sheet.is-dragging {
     transition: none !important;
+  }
+
+  /* Beat `.app > .framings-rail { z-index: 30 }` so the sheet clears map chrome. */
+  .app > .framings-rail {
+    z-index: 45;
   }
 
   .my-spots-rail__close,
@@ -9926,10 +10047,23 @@ button.ov-capsule:hover {
   html.info-drawer-open .map-controls-stack .my-spots-control,
   html.info-drawer-open .map-controls-stack .my-events-control,
   html.info-drawer-open .map-controls-stack .framings-control,
+  html.info-drawer-open .map-zoom-controls,
   html.info-drawer-open .settings-anchor,
   html.info-drawer-open .app-brand-mark,
   html.info-drawer-open .moon-timeline-dock,
-  html.info-drawer-open .moon-timeline-dock__collapsed {
+  html.info-drawer-open .moon-timeline-dock__collapsed,
+  html.address-search-open .map-compass,
+  html.address-search-open .map-quick-actions-cluster,
+  html.address-search-open .map-controls-stack .pl-heatmap-control,
+  html.address-search-open .map-controls-stack .my-spots-control,
+  html.address-search-open .map-controls-stack .my-events-control,
+  html.address-search-open .map-controls-stack .framings-control,
+  html.address-search-open .map-zoom-controls,
+  html.address-search-open .settings-anchor,
+  html.address-search-open .app-brand-mark,
+  html.address-search-open .moon-timeline-dock,
+  html.address-search-open .moon-timeline-dock__collapsed,
+  html.address-search-open .pl-map-legend {
     opacity: 0;
     pointer-events: none;
   }
@@ -10005,6 +10139,15 @@ button.ov-capsule:hover {
   align-items: center;
   gap: 10px;
   pointer-events: none;
+}
+
+/* Phone: FABs live in the top drawer — keep anchor for portals only. */
+.settings-anchor--phone-drawer {
+  inset: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  gap: 0;
 }
 
 .settings-anchor > * {
@@ -10559,6 +10702,91 @@ button.ov-capsule:hover {
     font-size: 9px;
   }
 
+  /* Manual map zoom — sits under search/3D/basemap/location pill. */
+  .map-zoom-controls {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    z-index: auto;
+    display: grid;
+    width: var(--map-control-size, 42px);
+    overflow: hidden;
+    border: 1px solid var(--ui-border);
+    border-radius: calc(var(--map-control-size, 42px) / 2);
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.035) 0%, transparent 42%),
+      rgba(14, 16, 22, 0.76);
+    box-shadow: var(--ui-shadow);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    pointer-events: auto;
+  }
+
+  .map-zoom-controls__btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: calc(var(--map-control-size, 42px) - 2px);
+    height: calc(var(--map-control-size, 42px) - 1px);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #d9dde7;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .map-zoom-controls__btn + .map-zoom-controls__btn::before {
+    position: absolute;
+    top: 0;
+    left: 20%;
+    right: 20%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    content: '';
+  }
+
+  .map-zoom-controls__btn svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+
+  .map-zoom-controls__btn:active:not(:disabled) {
+    color: var(--map-control-primary);
+    background: var(--map-control-primary-soft);
+  }
+
+  .map-zoom-controls__btn[data-clicked='true'] {
+    color: var(--map-control-primary);
+    background: var(--map-control-primary-soft);
+  }
+
+  .map-zoom-controls__btn[data-clicked='true'] svg {
+    animation: map-location-pulse 280ms ease-out both;
+  }
+
+  .map-zoom-controls__btn:focus-visible {
+    outline: 2px solid var(--ui-focus-ring);
+    outline-offset: -3px;
+    border-radius: 50%;
+  }
+
+  .map-zoom-controls__btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .map-zoom-controls__btn[data-clicked='true'] svg {
+      animation: none;
+    }
+  }
+
   .mobile-top-drawer__tab {
     min-width: 72px;
     min-height: 44px;
@@ -10586,36 +10814,149 @@ button.ov-capsule:hover {
     line-height: 1.4;
   }
 
-  /* Address search: full-bleed panel under the notch, not clipped beside FABs. */
-  .map-address-search {
-    position: fixed;
-    top: max(12px, env(safe-area-inset-top, 0px));
-    left: max(12px, env(safe-area-inset-left, 0px));
-    right: max(
-      68px,
-      calc(var(--map-control-size, 42px) + 28px + env(safe-area-inset-right, 0px))
-    );
+  /* PL legend: same full-bleed bottom slot as the phone timeline dock. */
+  .pl-map-legend {
+    top: auto;
+    bottom: var(--mobile-dock-bottom, max(10px, env(safe-area-inset-bottom, 0px)));
+    left: 6px;
+    right: 6px;
     width: auto;
     max-width: none;
-    z-index: 40;
-    padding: 12px;
-    gap: 8px;
+    padding: 0.55rem 0.7rem 0.65rem;
+    border-radius: 14px;
+    transform: translateY(18px);
   }
 
-  .map-address-search__input {
+  .pl-map-legend.is-open {
+    transform: translateY(0);
+  }
+
+  /* Address search: bottom sheet (slidable), mirrors the top drawer. */
+  .map-address-search-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 88;
+    pointer-events: none;
+    --mas-open-h: 62dvh;
+    --mas-offset: 62dvh;
+  }
+
+  .map-address-search-sheet.is-open {
+    pointer-events: auto;
+  }
+
+  .map-address-search-sheet__backdrop {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: #04080c;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .map-address-search-sheet__panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--mas-open-h);
+    transform: translateY(var(--mas-offset));
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid var(--ov-stroke);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background: var(--surface-float-glass, rgba(14, 18, 24, 0.94));
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(22px) saturate(1.08);
+    -webkit-backdrop-filter: blur(22px) saturate(1.08);
+    color: #f5f5f7;
+    pointer-events: auto;
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .map-address-search-sheet__panel.is-dragging {
+    transition: none;
+  }
+
+  .map-address-search-sheet__handle {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 12px 22px 8px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    cursor: grab;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .map-address-search-sheet__handle:active {
+    cursor: grabbing;
+  }
+
+  .map-address-search-sheet__handle-bar {
+    display: block;
+    width: 44px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.34);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  }
+
+  .map-address-search--sheet {
+    position: relative;
+    top: auto;
+    right: auto;
+    left: auto;
+    width: auto;
+    max-width: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 16px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    overflow: hidden;
+  }
+
+  .map-address-search--sheet .map-address-search__results {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map-address-search--sheet .map-address-search__list {
+    max-height: none;
+    flex: 1 1 auto;
+  }
+
+  .map-address-search--sheet .map-address-search__input {
     /* ≥16px avoids iOS Safari auto-zoom on focus. */
     font-size: 16px;
     padding: 12px 14px;
   }
 
-  .map-address-search__option {
+  .map-address-search--sheet .map-address-search__option {
     padding: 12px 12px;
     font-size: 0.88rem;
     min-height: 44px;
-  }
-
-  .map-address-search__list {
-    max-height: min(42dvh, 280px);
   }
 
   /* Immersive HUD — left capsule owns the top row; right tools stack vertically. */

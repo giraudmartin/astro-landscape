@@ -5,8 +5,13 @@ import { useT } from './i18n'
 const BORTLE_CLASSES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 const SOURCE_LINK_TOKEN = '\u0001'
 
+type PlMapOverlayLegendProps = {
+  /** When true, docks into the timeline slot with the open transition. */
+  open: boolean
+}
+
 /** Compact Bortle scale + class legend while the coloured PL overlay is on. */
-export function PlMapOverlayLegend() {
+export function PlMapOverlayLegend({ open }: PlMapOverlayLegendProps) {
   const t = useT()
   const gradient = BORTLE_MAP_STOPS.map(
     ([r, g, b]) => `rgb(${r},${g},${b})`,
@@ -17,7 +22,11 @@ export function PlMapOverlayLegend() {
   }).split(SOURCE_LINK_TOKEN)
 
   return (
-    <aside className="pl-map-legend" aria-label={t('map.pl.legendAria')}>
+    <aside
+      className={open ? 'pl-map-legend is-open' : 'pl-map-legend'}
+      aria-label={t('map.pl.legendAria')}
+      aria-hidden={!open}
+    >
       <header className="pl-map-legend__head">
         <span className="pl-map-legend__title">{t('map.pl.legendTitle')}</span>
         <span className="pl-map-legend__subtitle">
@@ -67,6 +76,7 @@ export function PlMapOverlayLegend() {
           href="https://doi.org/10.5281/zenodo.17294744"
           target="_blank"
           rel="noreferrer"
+          tabIndex={open ? undefined : -1}
         >
           EOG VIIRS VNL 2024
         </a>

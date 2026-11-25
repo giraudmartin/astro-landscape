@@ -9,6 +9,10 @@ import { ConfirmCard } from './ConfirmCard'
 import { FolderSaveCard } from './FolderSaveCard'
 import { MobileTopDrawer } from './MobileTopDrawer'
 import {
+  OPEN_BUG_REPORT_EVENT,
+  OPEN_MAP_SETTINGS_EVENT,
+} from './MapSettingsPanel'
+import {
   FramingsPanel,
   type FramingsEditorDraft,
 } from './FramingsPanel'
@@ -21,6 +25,7 @@ import {
 import { SpotBortleCard } from './SpotBortleCard'
 import { SkyBrightnessPanel } from './SkyBrightnessPanel'
 import { SpotSaveCard } from './SpotSaveCard'
+import { PlMapOverlayLegend } from './PlMapOverlayLegend'
 import { TimelineDock } from './TimelineDock'
 import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 import { WeatherCard } from './WeatherCard'
@@ -176,6 +181,7 @@ export default function App() {
   const [plHeatmapOpacity, setPlHeatmapOpacity] = useState(
     savedMap.plHeatmapOpacity,
   )
+  const [plLegendOpen, setPlLegendOpen] = useState(false)
   const [addressSearchOpen, setAddressSearchOpen] = useState(false)
   const [spot, setSpot] = useState<SpotState | null>(null)
   const [bortleSample, setBortleSample] = useState<LightPollutionSample | null>(
@@ -1113,6 +1119,8 @@ export default function App() {
           basemapMode={basemapMode}
           plHeatmapEnabled={plHeatmapEnabled}
           plHeatmapOpacity={plHeatmapOpacity}
+          plLegendOpen={plLegendOpen}
+          onPlLegendOpenChange={setPlLegendOpen}
           addressSearchOpen={addressSearchOpen}
           spot={spot}
           onModeChange={(next, opts) => {
@@ -1164,7 +1172,10 @@ export default function App() {
           }}
           onThreeDimensionalChange={setThreeDimensional}
           onBasemapModeChange={setBasemapMode}
-          onPlHeatmapEnabledChange={setPlHeatmapEnabled}
+          onPlHeatmapEnabledChange={(next) => {
+            setPlHeatmapEnabled(next)
+            if (!next) setPlLegendOpen(false)
+          }}
           onPlHeatmapOpacityChange={setPlHeatmapOpacity}
           onAddressSearchOpenChange={setAddressSearchOpen}
           skyUtcMs={scrubbingMapTime ? mapPreviewTime : playheadUtcMs}
@@ -1312,6 +1323,33 @@ export default function App() {
               {bortleCard}
             </section>
           ) : null}
+          <section className="mobile-top-drawer__section">
+            <h3 className="mobile-top-drawer__section-title">
+              {t('map.drawer.sectionApp')}
+            </h3>
+            <div className="mobile-top-drawer__actions">
+              <button
+                type="button"
+                className="mobile-top-drawer__action"
+                onClick={() => {
+                  setInfoDrawerOpen(false)
+                  window.dispatchEvent(new Event(OPEN_MAP_SETTINGS_EVENT))
+                }}
+              >
+                {t('settings.title')}
+              </button>
+              <button
+                type="button"
+                className="mobile-top-drawer__action"
+                onClick={() => {
+                  setInfoDrawerOpen(false)
+                  window.dispatchEvent(new Event(OPEN_BUG_REPORT_EVENT))
+                }}
+              >
+                {t('settings.bugReport')}
+              </button>
+            </div>
+          </section>
         </MobileTopDrawer>
       ) : null}
 
@@ -1502,11 +1540,14 @@ export default function App() {
           date={date}
           playheadUtcMs={playheadUtcMs}
           clockIsUtc={clockIsUtc}
+          coveredByLegend={plHeatmapEnabled && plLegendOpen}
           onScrubbingChange={setScrubbingMapTime}
           onDateChange={onDateChange}
           onPlayheadChange={onPlayheadChange}
         />
       ) : null}
+
+      {plHeatmapEnabled ? <PlMapOverlayLegend open={plLegendOpen} /> : null}
 
       <TerrainQualityDialog
         open={terrainQualityPromptOpen}

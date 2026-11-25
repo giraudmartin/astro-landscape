@@ -3,14 +3,21 @@ import {
   useId,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { searchAddresses, type AddressSearchResult } from './addressSearch'
 import { useT } from './i18n'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 
 const DEBOUNCE_MS = 420
 const MIN_QUERY_LENGTH = 3
+const SHEET_OPEN_VH = 0.62
+const SHEET_DISMISS_FRAC = 0.28
 
 type MapCenter = { lat: number; lon: number }
 
@@ -30,7 +37,9 @@ export function MapAddressSearch({
   getViewbox,
 }: MapAddressSearchProps) {
   const t = useT()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const listId = useId()
+  const titleId = useId()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -44,6 +53,58 @@ export function MapAddressSearch({
     'idle',
   )
 
+  const dragRef = useRef<{
+    pointerId: number
+    startY: number
+    startOffset: number
+    moved: boolean
+  } | null>(null)
+  const suppressClickRef = useRef(false)
+  const [viewportH, setViewportH] = useState(() =>
+    typeof window === 'undefined' ? 800 : window.innerHeight,
+  )
+  /** 0 = closed (off-screen), 1 = fully open. Phone sheet only. */
+  const [progress, setProgress] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  /** Keep the portal mounted through the close slide. */
+  const [sheetMounted, setSheetMounted] = useState(false)
+
+  useEffect(() => {
+    if (!isPhone) return
+    const onResize = (): void => setViewportH(window.innerHeight)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [isPhone])
+
+  useEffect(() => {
+    if (!isPhone || dragging) return
+    if (open) {
+      setSheetMounted(true)
+      const frame = window.requestAnimationFrame(() => setProgress(1))
+      return () => window.cancelAnimationFrame(frame)
+    }
+    setProgress(0)
+    const timer = window.setTimeout(() => setSheetMounted(false), 240)
+    return () => window.clearTimeout(timer)
+  }, [open, dragging, isPhone])
+
+  useEffect(() => {
+    if (!isPhone || !open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [isPhone, open])
+
+  useEffect(() => {
+    if (!isPhone) return
+    const root = document.documentElement
+    const active = open || sheetMounted
+    root.classList.toggle('address-search-open', active)
+    return () => root.classList.remove('address-search-open')
+  }, [isPhone, open, sheetMounted])
+
   useEffect(() => {
     if (!open) return
     const frame = window.requestAnimationFrame(() => {
@@ -53,7 +114,7 @@ export function MapAddressSearch({
   }, [open])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || isPhone) return
     const onPointerDown = (event: PointerEvent) => {
       const root = rootRef.current
       if (!root) return
@@ -73,7 +134,17 @@ export function MapAddressSearch({
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open, onOpenChange])
+  }, [open, onOpenChange, isPhone])
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onOpenChange(false)
+    }
+    if (!isPhone) return
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, onOpenChange, isPhone])
 
   useEffect(() => {
     if (!open) {
@@ -129,7 +200,7 @@ export function MapAddressSearch({
     return () => {
       window.clearTimeout(timer)
     }
-  }, [open, query])
+  }, [open, query]) // getMapCenter / viewbox read at request time
 
   const choose = (result: AddressSearchResult) => {
     onSelect(result)
@@ -152,17 +223,79 @@ export function MapAddressSearch({
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
       setActiveIndex((i) => Math.max(i - 1, -1))
-    } else if (event.key === 'Enter') {
-      // form submit handles it
     }
   }
 
-  if (!open) return null
+  const openHeight = Math.round(viewportH * SHEET_OPEN_VH)
+  const offsetY = openHeight * (1 - progress)
+
+  const endDrag = (clientY: number): void => {
+    const drag = dragRef.current
+    dragRef.current = null
+    setDragging(false)
+    if (!drag) return
+    const delta = clientY - drag.startY
+    if (drag.moved || Math.abs(delta) > 10) {
+      suppressClickRef.current = true
+    }
+    const nextProgress = Math.min(
+      1,
+      Math.max(0, drag.startOffset - delta / openHeight),
+    )
+    if (!drag.moved && Math.abs(delta) <= 10) {
+      setProgress(open ? 1 : 0)
+      return
+    }
+    const keepOpen =
+      open && nextProgress > 0.55 && delta < openHeight * SHEET_DISMISS_FRAC
+    const openIt = nextProgress > 0.45 || (delta < 0 && nextProgress > 0.2)
+    const next = open ? keepOpen : openIt
+    setProgress(next ? 1 : 0)
+    onOpenChange(next)
+  }
+
+  const onHandlePointerDown = (
+    event: ReactPointerEvent<HTMLElement>,
+  ): void => {
+    if (event.button !== 0) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startOffset: progress,
+      moved: false,
+    }
+    setDragging(true)
+  }
+
+  const onHandlePointerMove = (
+    event: ReactPointerEvent<HTMLElement>,
+  ): void => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const delta = event.clientY - drag.startY
+    if (Math.abs(delta) > 8) drag.moved = true
+    const next = Math.min(
+      1,
+      Math.max(0, drag.startOffset - delta / openHeight),
+    )
+    setProgress(next)
+  }
+
+  const onHandlePointerUp = (event: ReactPointerEvent<HTMLElement>): void => {
+    if (dragRef.current?.pointerId !== event.pointerId) return
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    } catch {
+      /* already released */
+    }
+    endDrag(event.clientY)
+  }
 
   const center = getMapCenter()
 
-  return (
-    <div ref={rootRef} className="map-address-search">
+  const searchBody: ReactNode = (
+    <>
       <form className="map-address-search__form" onSubmit={onSubmit}>
         <input
           ref={inputRef}
@@ -227,6 +360,91 @@ export function MapAddressSearch({
           </ul>
         </div>
       ) : null}
+    </>
+  )
+
+  if (isPhone) {
+    if (typeof document === 'undefined') return null
+    if (!sheetMounted) return null
+
+    return createPortal(
+      <div
+        className={
+          open || progress > 0.02
+            ? 'map-address-search-sheet is-open'
+            : 'map-address-search-sheet'
+        }
+        style={
+          {
+            '--mas-open-h': `${openHeight}px`,
+            '--mas-offset': `${offsetY}px`,
+          } as CSSProperties
+        }
+      >
+        {progress > 0.02 ? (
+          <button
+            type="button"
+            className="map-address-search-sheet__backdrop"
+            aria-label={t('common.close')}
+            style={{ opacity: Math.min(1, progress) * 0.45 }}
+            onClick={() => {
+              setProgress(0)
+              onOpenChange(false)
+            }}
+          />
+        ) : null}
+
+        <div
+          ref={rootRef}
+          className={
+            dragging
+              ? 'map-address-search-sheet__panel is-dragging'
+              : 'map-address-search-sheet__panel'
+          }
+          role="dialog"
+          aria-modal={open}
+          aria-labelledby={titleId}
+          aria-hidden={progress < 0.05}
+        >
+          <button
+            type="button"
+            className="map-address-search-sheet__handle"
+            aria-label={t('map.searchDismissHandle')}
+            onClick={() => {
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false
+                return
+              }
+              setProgress(0)
+              onOpenChange(false)
+            }}
+            onPointerDown={onHandlePointerDown}
+            onPointerMove={onHandlePointerMove}
+            onPointerUp={onHandlePointerUp}
+            onPointerCancel={onHandlePointerUp}
+          >
+            <span
+              className="map-address-search-sheet__handle-bar"
+              aria-hidden="true"
+            />
+          </button>
+          <h2 id={titleId} className="u-sr-only">
+            {t('map.searchPlace')}
+          </h2>
+          <div className="map-address-search map-address-search--sheet">
+            {searchBody}
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )
+  }
+
+  if (!open) return null
+
+  return (
+    <div ref={rootRef} className="map-address-search">
+      {searchBody}
     </div>
   )
 }

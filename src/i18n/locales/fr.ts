@@ -142,6 +142,10 @@ export const fr = {
     searchNear: 'Priorité près de {lat}°, {lon}°',
     searchLoading: 'Recherche…',
     searchError: 'Erreur de recherche',
+    searchDismissHandle: 'Glisser vers le bas pour fermer la recherche',
+    zoomAria: 'Zoom carte',
+    zoomIn: 'Zoomer la carte',
+    zoomOut: 'Dézoomer la carte',
     view3d: 'Vue 3D',
     myLocation: 'Ma position',
     basemap: {
@@ -166,6 +170,8 @@ export const fr = {
       legendSubtitle: 'Pollution lumineuse',
       legendSource:
         'Données : {link} (~500 m, CC BY 4.0 · OpenLandMap/Zenodo) — fausse couleur Bortle, pas World Atlas.',
+      legendHide: 'Masquer la légende Bortle',
+      legendShow: 'Afficher la légende Bortle',
     },
     spotAction: {
       group: 'Actions du spot',
@@ -183,6 +189,7 @@ export const fr = {
       sectionOverview: 'Overview',
       sectionWeather: 'Météo',
       sectionBortle: 'Bortle',
+      sectionApp: 'Application',
     },
     rail: {
       resize: 'Redimensionner le panneau',

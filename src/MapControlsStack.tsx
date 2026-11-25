@@ -4,6 +4,7 @@ import { MapAddressSearch } from './MapAddressSearch'
 import { MapCompass } from './MapCompass'
 import { FramingsToggle } from './FramingsPanel'
 import { MySpotsToggle } from './MySpotsCard'
+import { MapZoomControls } from './MapZoomControls'
 import { PlHeatmapControl } from './PlHeatmapControl'
 import type { AddressSearchResult } from './addressSearch'
 import {
@@ -28,6 +29,8 @@ type MapControlsStackProps = {
   onPlHeatmapEnabledChange: (next: boolean) => void
   onPlHeatmapOpacityChange: (next: number) => void
   onPlHeatmapOpacityCommit?: (next: number) => void
+  plLegendOpen: boolean
+  onPlLegendOpenChange: (next: boolean) => void
   addressSearchOpen: boolean
   onAddressSearchOpenChange: (open: boolean) => void
   onAddressSelect: (result: AddressSearchResult) => void
@@ -51,6 +54,8 @@ export function MapControlsStack({
   onPlHeatmapEnabledChange,
   onPlHeatmapOpacityChange,
   onPlHeatmapOpacityCommit,
+  plLegendOpen,
+  onPlLegendOpenChange,
   addressSearchOpen,
   onAddressSearchOpenChange,
   onAddressSelect,
@@ -189,6 +194,7 @@ export function MapControlsStack({
             </svg>
           </button>
         </div>
+        <MapZoomControls mapRef={mapRef} />
       </div>
 
       <PlHeatmapControl
@@ -198,6 +204,8 @@ export function MapControlsStack({
         onEnabledChange={onPlHeatmapEnabledChange}
         onOpacityChange={onPlHeatmapOpacityChange}
         onOpacityCommit={onPlHeatmapOpacityCommit}
+        legendOpen={plLegendOpen}
+        onLegendOpenChange={onPlLegendOpenChange}
       />
 
       <MySpotsToggle open={mySpotsOpen} onOpenChange={onMySpotsOpenChange} />

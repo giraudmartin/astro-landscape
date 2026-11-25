@@ -161,6 +161,22 @@
   pointer-events: auto;
   container-type: inline-size;
   container-name: timeline-dock;
+  transition:
+    opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0s;
+}
+
+.moon-timeline-dock.is-legend-covered,
+.moon-timeline-dock__collapsed.is-legend-covered {
+  opacity: 0;
+  transform: translateX(-50%) translateY(18px);
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0.28s;
 }
 
 .moon-timeline-dock__controls {
@@ -297,6 +313,10 @@
   z-index: 30;
   transform: translateX(-50%);
   pointer-events: auto;
+  transition:
+    opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0s;
 }
 
 .moon-timeline-dock__ephemeris {
@@ -1229,8 +1249,23 @@ button.moon-preview-timeline__mark--button:hover .moon-preview-timeline__mark-do
     will-change: transform;
   }
 
+  .moon-timeline-dock.is-legend-covered,
+  .moon-timeline-dock--advanced.is-legend-covered {
+    transform: translateY(18px);
+  }
+
+  .moon-timeline-dock__collapsed.is-legend-covered {
+    transform: translateX(-50%) translateY(18px);
+  }
+
   .moon-timeline-dock.is-dragging {
     transition: none !important;
+  }
+
+  /* Phone: time is read-only — scrub the strip instead of native time edit. */
+  .moon-timeline-dock__time-main {
+    cursor: default;
+    pointer-events: none;
   }
 
   .moon-timeline-dock__handle {
@@ -1440,9 +1475,13 @@ button.moon-preview-timeline__mark--button:hover .moon-preview-timeline__mark-do
 
   .moon-timeline-dock__collapsed {
     bottom: var(--mobile-dock-bottom, max(10px, env(safe-area-inset-bottom, 0px)));
-    left: auto;
-    right: max(14px, env(safe-area-inset-right, 0px));
-    transform: none;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  .moon-timeline-dock__collapsed.is-legend-covered {
+    transform: translateX(-50%) translateY(18px);
   }
 
   /* Calendar sits just above the dock (tracks compact / advanced height). */

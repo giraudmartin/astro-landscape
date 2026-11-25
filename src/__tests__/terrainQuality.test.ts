@@ -4,9 +4,11 @@ import {
   TERRAIN_DOWNLOAD_DEFAULT_MB,
 } from '../terrainDownloadEstimate'
 import {
+  DEFAULT_PHONE_TERRAIN_QUALITY,
   getTerrainQualityPreset,
   isSlowNetworkConnection,
   normalizeTerrainQuality,
+  resolveEffectiveTerrainQuality,
   shouldPromptTerrainQuality,
 } from '../terrainQuality'
 
@@ -69,6 +71,40 @@ describe('isSlowNetworkConnection', () => {
     )
     expect(isSlowNetworkConnection({ downlink: 0.8 })).toBe(true)
     expect(isSlowNetworkConnection(null)).toBe(false)
+  })
+})
+
+describe('resolveEffectiveTerrainQuality', () => {
+  it('uses low on phone until the user chooses', () => {
+    expect(DEFAULT_PHONE_TERRAIN_QUALITY).toBe('low')
+    expect(
+      resolveEffectiveTerrainQuality({
+        quality: 'high',
+        chosen: false,
+        isPhone: true,
+      }),
+    ).toBe('low')
+    expect(
+      resolveEffectiveTerrainQuality({
+        quality: 'standard',
+        chosen: false,
+        isPhone: true,
+      }),
+    ).toBe('low')
+    expect(
+      resolveEffectiveTerrainQuality({
+        quality: 'high',
+        chosen: true,
+        isPhone: true,
+      }),
+    ).toBe('high')
+    expect(
+      resolveEffectiveTerrainQuality({
+        quality: 'high',
+        chosen: false,
+        isPhone: false,
+      }),
+    ).toBe('high')
   })
 })
 

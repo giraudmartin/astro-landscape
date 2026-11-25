@@ -163,6 +163,14 @@ export function CalendarPopover({
     }
   }, [open, onClose, anchorRef])
 
+  // Phone CSS dims map chrome while the dock calendar is open.
+  useEffect(() => {
+    if (!open || placement !== 'above') return
+    const root = document.documentElement
+    root.classList.add('moon-calendar-open')
+    return () => root.classList.remove('moon-calendar-open')
+  }, [open, placement])
+
   if (!open || !pos) return null
 
   const style: CSSProperties = {

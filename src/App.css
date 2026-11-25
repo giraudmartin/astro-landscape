@@ -4342,6 +4342,8 @@ html.is-rail-resizing .immersive-host {
 .immersive__canvas {
   position: absolute;
   inset: 0;
+  /* Host receives touchstart/move for pinch — block browser page zoom. */
+  touch-action: none;
 }
 
 .immersive__canvas canvas {
@@ -9912,21 +9914,21 @@ button.ov-capsule:hover {
 
 .mobile-top-drawer:not(.is-open) .mobile-top-drawer__tab {
   top: max(0px, env(safe-area-inset-top, 0px));
-  padding: 4px 16px 10px;
-  background: rgba(14, 16, 22, 0.82);
-  border: 1px solid var(--ui-border);
+  padding: 3px 14px 7px;
+  background: rgba(14, 16, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-top: 0;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .mobile-top-drawer__tab-bar {
   display: block;
-  width: 36px;
-  height: 4px;
+  width: 28px;
+  height: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.34);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: none;
 }
 
 .mobile-rail-backdrop {
@@ -10788,19 +10790,21 @@ button.ov-capsule:hover {
   }
 
   .mobile-top-drawer__tab {
-    min-width: 72px;
-    min-height: 44px;
-    padding: 12px 22px 14px;
+    min-width: 52px;
+    /* Slim chrome; keep a tall enough hit area without a chunky plate. */
+    min-height: 28px;
+    padding: 6px 16px 8px;
+    border-radius: 0 0 10px 10px;
   }
 
   .mobile-top-drawer:not(.is-open) .mobile-top-drawer__tab {
     top: max(0px, env(safe-area-inset-top, 0px));
-    padding: 12px 22px 14px;
+    padding: 4px 14px 8px;
   }
 
   .mobile-top-drawer__tab-bar {
-    width: 44px;
-    height: 5px;
+    width: 30px;
+    height: 3px;
   }
 
   .mobile-rail-handle {

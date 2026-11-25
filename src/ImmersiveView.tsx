@@ -1826,6 +1826,29 @@ export function ImmersiveView({
       b: { x: number; y: number },
     ) => Math.hypot(a.x - b.x, a.y - b.y)
 
+    const beginPinchFromPoints = (
+      a: { x: number; y: number },
+      b: { x: number; y: number },
+    ): void => {
+      lookPointerId = null
+      pinchStartDist = pointerDist(a, b)
+      pinchStartFov = stageFov
+    }
+
+    const applyPinchFromPoints = (
+      a: { x: number; y: number },
+      b: { x: number; y: number },
+    ): void => {
+      if (pinchStartDist <= 0) return
+      const dist = pointerDist(a, b)
+      if (dist <= 1) return
+      // Spread → zoom in (narrower FOV).
+      const ratio = pinchStartDist / dist
+      stageFov = applyStageProjection(camera, pinchStartFov * ratio)
+      stageVfovLiveRef.current = stageFov
+      setStageVfovDeg(stageFov)
+    }
+
     const onPointerDown = (event: PointerEvent) => {
       if (!terrainUnlockedRef.current) return
       if (timelapsePreviewLookLockedRef.current) return
@@ -1833,17 +1856,23 @@ export function ImmersiveView({
         x: event.clientX,
         y: event.clientY,
       })
-      try {
-        host.setPointerCapture(event.pointerId)
-      } catch {
-        // ignore
+      // Capturing a touch pointer often swallows the 2nd finger on iOS/Android
+      // and kills pinch — mouse still needs capture for drag-off-canvas.
+      if (event.pointerType !== 'touch') {
+        try {
+          host.setPointerCapture(event.pointerId)
+        } catch {
+          // ignore
+        }
       }
       if (activePointers.size === 2) {
-        // Pinch zoom — release look tracking so a second finger can't jump yaw.
+        // Touch pinch is owned by TouchEvents (below) — pointer multi-touch
+        // on mobile often never arrives; on desktop trackpads it's rare.
         lookPointerId = null
-        const pts = [...activePointers.values()]
-        pinchStartDist = pointerDist(pts[0]!, pts[1]!)
-        pinchStartFov = stageFov
+        if (event.pointerType !== 'touch') {
+          const pts = [...activePointers.values()]
+          beginPinchFromPoints(pts[0]!, pts[1]!)
+        }
         return
       }
       if (activePointers.size === 1) {
@@ -1877,15 +1906,10 @@ export function ImmersiveView({
       if (!terrainUnlockedRef.current) return
       if (timelapsePreviewLookLockedRef.current) return
 
-      if (activePointers.size >= 2 && pinchStartDist > 0) {
-        const pts = [...activePointers.values()]
-        const dist = pointerDist(pts[0]!, pts[1]!)
-        if (dist > 1) {
-          // Spread → zoom in (narrower FOV). Clamp factor so FOV stays sane.
-          const ratio = pinchStartDist / dist
-          stageFov = applyStageProjection(camera, pinchStartFov * ratio)
-          stageVfovLiveRef.current = stageFov
-          setStageVfovDeg(stageFov)
+      if (activePointers.size >= 2) {
+        if (event.pointerType !== 'touch' && pinchStartDist > 0) {
+          const pts = [...activePointers.values()]
+          applyPinchFromPoints(pts[0]!, pts[1]!)
         }
         return
       }
@@ -1937,6 +1961,42 @@ export function ImmersiveView({
       stageFov = applyStageProjection(camera, stageFov * factor)
       stageVfovLiveRef.current = stageFov
       setStageVfovDeg(stageFov)
+    }
+
+    /**
+     * Native touch pinch — more reliable than PointerEvents multi-touch on
+     * mobile Safari / Chrome Android (capture + 2nd finger often never arrives).
+     */
+    const onTouchStart = (event: TouchEvent) => {
+      if (!terrainUnlockedRef.current) return
+      if (timelapsePreviewLookLockedRef.current) return
+      if (event.touches.length >= 2) {
+        event.preventDefault()
+        const a = event.touches[0]!
+        const b = event.touches[1]!
+        beginPinchFromPoints(
+          { x: a.clientX, y: a.clientY },
+          { x: b.clientX, y: b.clientY },
+        )
+      }
+    }
+    const onTouchMove = (event: TouchEvent) => {
+      if (!terrainUnlockedRef.current) return
+      if (timelapsePreviewLookLockedRef.current) return
+      if (event.touches.length >= 2 && pinchStartDist > 0) {
+        event.preventDefault()
+        const a = event.touches[0]!
+        const b = event.touches[1]!
+        applyPinchFromPoints(
+          { x: a.clientX, y: a.clientY },
+          { x: b.clientX, y: b.clientY },
+        )
+      }
+    }
+    const onTouchEnd = (event: TouchEvent) => {
+      if (event.touches.length < 2) {
+        pinchStartDist = 0
+      }
     }
 
     apiRef.current = {
@@ -2048,6 +2108,10 @@ export function ImmersiveView({
     host.addEventListener('pointerup', onPointerUp)
     host.addEventListener('pointercancel', onPointerUp)
     host.addEventListener('wheel', onWheel, { passive: false })
+    host.addEventListener('touchstart', onTouchStart, { passive: false })
+    host.addEventListener('touchmove', onTouchMove, { passive: false })
+    host.addEventListener('touchend', onTouchEnd)
+    host.addEventListener('touchcancel', onTouchEnd)
 
     const applyTerrainWireframe = (root: THREE.Object3D | null, on: boolean) => {
       if (!root) return
@@ -2297,6 +2361,10 @@ export function ImmersiveView({
       host.removeEventListener('pointerup', onPointerUp)
       host.removeEventListener('pointercancel', onPointerUp)
       host.removeEventListener('wheel', onWheel)
+      host.removeEventListener('touchstart', onTouchStart)
+      host.removeEventListener('touchmove', onTouchMove)
+      host.removeEventListener('touchend', onTouchEnd)
+      host.removeEventListener('touchcancel', onTouchEnd)
       apiRef.current = null
       nightSkyApiRef.current = null
       sky.geometry.dispose()

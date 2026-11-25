@@ -583,11 +583,9 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
       ),
     }),
     terrainQuality: normalizeTerrainQuality(row.terrainQuality),
-    terrainQualityChosen: readBoolean(
-      row.terrainQualityChosen,
-      // Legacy: a stored quality implies the user already chose.
-      row.terrainQuality != null,
-    ),
+    // Only an explicit true counts — a bare `terrainQuality` write (defaults /
+    // slow-link "standard" suggestion) must not block the phone low default.
+    terrainQualityChosen: row.terrainQualityChosen === true,
   }
 }
 

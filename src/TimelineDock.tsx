@@ -21,7 +21,6 @@ import {
 import { CalendarPopover } from './CalendarPopover'
 import { useLocale } from './i18n'
 import {
-  ClockIcon,
   CalendarIcon,
   ChevronDownIcon,
   AltitudeCurvesIcon,
@@ -53,6 +52,13 @@ function formatDockDate(isoDate: string, compact = false): string {
   // colliding with the day/zoom buttons in the crushed 3-column row.
   if (compact) return `${match[3]}/${match[2]}/${match[1]}`
   return `${match[3]} / ${match[2]} / ${match[1]}`
+}
+
+/** Collapsed pill: day/month only (`25/11`). */
+function formatDockDateShort(isoDate: string): string {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return isoDate
+  return `${match[3]}/${match[2]}`
 }
 
 export function TimelineDock({
@@ -185,10 +191,12 @@ export function TimelineDock({
   }
 
   if (collapsed) {
+    const timeHm = playheadClock.slice(0, 5)
+    const zoneLabel = clockIsUtc ? t('timeline.utc') : t('timeline.local')
     return (
       <div
         className={[
-          'moon-timeline-dock__collapsed map-quick-actions',
+          'moon-timeline-dock__collapsed',
           coveredByLegend ? 'is-legend-covered' : '',
         ]
           .filter(Boolean)
@@ -197,13 +205,21 @@ export function TimelineDock({
       >
         <button
           type="button"
-          className="map-quick-actions__button"
+          className="moon-timeline-dock__collapsed-pill"
           aria-label={t('timeline.show')}
           title={t('timeline.show')}
           tabIndex={coveredByLegend ? -1 : undefined}
           onClick={() => setCollapsed(false)}
         >
-          <ClockIcon />
+          <span className="moon-timeline-dock__collapsed-date">
+            {formatDockDateShort(date)}
+          </span>
+          <span className="moon-timeline-dock__collapsed-meta">
+            <span className="moon-timeline-dock__collapsed-time">{timeHm}</span>
+            <span className="moon-timeline-dock__collapsed-zone">
+              {zoneLabel}
+            </span>
+          </span>
         </button>
       </div>
     )

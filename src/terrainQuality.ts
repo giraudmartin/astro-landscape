@@ -24,6 +24,26 @@ export function emitTerrainQualityChange(quality: TerrainQuality): void {
 
 export const DEFAULT_TERRAIN_QUALITY: TerrainQuality = 'high'
 
+/**
+ * Phone Operate default when the user has never picked a quality.
+ * Keeps immersive DEM/ortho downloads small on cellular / limited GPU.
+ */
+export const DEFAULT_PHONE_TERRAIN_QUALITY: TerrainQuality = 'low'
+
+/**
+ * Effective quality for a session: honour an explicit choice, else phone → low,
+ * desktop → stored / high default.
+ */
+export function resolveEffectiveTerrainQuality(opts: {
+  quality: TerrainQuality
+  chosen: boolean
+  isPhone: boolean
+}): TerrainQuality {
+  if (opts.chosen) return opts.quality
+  if (opts.isPhone) return DEFAULT_PHONE_TERRAIN_QUALITY
+  return opts.quality
+}
+
 export type TerrainQualityPreset = {
   id: TerrainQuality
   /** Subtracted from demZoomForDistance (clamped ≥ 7). */

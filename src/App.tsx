@@ -39,6 +39,7 @@ import { TerrainQualityDialog } from './TerrainQualityDialog'
 import {
   DEFAULT_TERRAIN_QUALITY,
   emitTerrainQualityChange,
+  resolveEffectiveTerrainQuality,
   shouldPromptTerrainQuality,
   TERRAIN_QUALITY_CHANGE_EVENT,
   type TerrainQuality,
@@ -112,12 +113,45 @@ export default function App() {
   const [terrainQuality, setTerrainQuality] = useState<TerrainQuality>(
     savedImmersive.terrainQuality ?? DEFAULT_TERRAIN_QUALITY,
   )
+  const [terrainQualityChosen, setTerrainQualityChosen] = useState(
+    () => savedImmersive.terrainQualityChosen === true,
+  )
+  const effectiveTerrainQuality = resolveEffectiveTerrainQuality({
+    quality: terrainQuality,
+    chosen: terrainQualityChosen,
+    isPhone,
+  })
+
+  // One-shot: drop sticky desktop / slow-link "standard" so phone Operate
+  // actually lands on low. Later explicit picks (Settings / scène) are kept.
+  useEffect(() => {
+    if (!isPhone || typeof window === 'undefined') return
+    const key = 'astro-landscape.phone-terrain-low-v1'
+    try {
+      if (window.localStorage.getItem(key) === '1') return
+      window.localStorage.setItem(key, '1')
+    } catch {
+      /* private mode — still apply this session */
+    }
+    patchAppSettings({
+      immersive: { terrainQuality: 'low', terrainQualityChosen: false },
+    })
+    setTerrainQuality('low')
+    setTerrainQualityChosen(false)
+  }, [isPhone])
+
   const [terrainQualityPromptOpen, setTerrainQualityPromptOpen] =
     useState(false)
   const pendingImmersiveEnterRef = useRef<(() => void) | null>(null)
 
   const gateImmersiveEnter = useCallback(
     (enter: () => void, opts?: { flatTerrain?: boolean }) => {
+      // Phone Operate always lands on low without the slow-link picker
+      // (that dialog's "standard" suggestion was overriding the mobile default).
+      if (isPhone) {
+        enter()
+        return
+      }
       const chosen = loadAppSettings().immersive.terrainQualityChosen
       if (
         shouldPromptTerrainQuality({
@@ -131,7 +165,7 @@ export default function App() {
       }
       enter()
     },
-    [],
+    [isPhone],
   )
 
   const onTerrainQualityChoose = useCallback((quality: TerrainQuality) => {
@@ -139,6 +173,7 @@ export default function App() {
       immersive: { terrainQuality: quality, terrainQualityChosen: true },
     })
     setTerrainQuality(quality)
+    setTerrainQualityChosen(true)
     emitTerrainQualityChange(quality)
     setTerrainQualityPromptOpen(false)
     const enter = pendingImmersiveEnterRef.current
@@ -156,9 +191,12 @@ export default function App() {
         detail === 'low'
       ) {
         setTerrainQuality(detail)
+        setTerrainQualityChosen(true)
         return
       }
-      setTerrainQuality(loadAppSettings().immersive.terrainQuality)
+      const immersive = loadAppSettings().immersive
+      setTerrainQuality(immersive.terrainQuality)
+      setTerrainQualityChosen(Boolean(immersive.terrainQualityChosen))
     }
     window.addEventListener(TERRAIN_QUALITY_CHANGE_EVENT, onChange)
     return () =>
@@ -1247,7 +1285,7 @@ export default function App() {
             onTerrainReadyChange={setImmersiveTerrainReady}
             onTimelapsePreviewPlayingChange={setTimelapsePreviewPlaying}
             flatTerrain={flatTerrain}
-            terrainQuality={terrainQuality}
+            terrainQuality={effectiveTerrainQuality}
             framingsOpen={framingsOpen}
             onFramingsOpenChange={(open) => {
               setFramingsOpen(open)

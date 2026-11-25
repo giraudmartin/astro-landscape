@@ -2,6 +2,7 @@ import { useMemo, useState, type DragEvent, type MouseEvent } from 'react'
 import { useT } from './i18n'
 import { MobileRailChrome } from './MobileRailChrome'
 import type { PersonalSpot, PersonalSpotFolder } from './personalSpots'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 
 type MySpotsToggleProps = {
   open: boolean
@@ -333,6 +334,7 @@ export function MySpotsRail({
   onRailWidthChange,
 }: MySpotsRailProps) {
   const t = useT()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const [query, setQuery] = useState('')
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(
     () => new Set(),
@@ -482,7 +484,7 @@ export function MySpotsRail({
               </span>
             </h2>
             <p className="my-spots-rail__sub">
-              {t('spots.sub')}
+              {t(isPhone ? 'spots.subTouch' : 'spots.sub')}
               {searching && spots.length > 0 ? (
                 <> {t('spots.visibleCount', { n: matchingSpots.length })}</>
               ) : null}

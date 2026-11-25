@@ -1011,8 +1011,10 @@ export function MapCanvas({
     }
 
     // Mobile has no right-click: long-press on the map canvas places the pin.
-    const LONG_PRESS_MS = 480
-    const LONG_PRESS_MOVE_PX = 14
+    // Slightly longer + more wobble budget so pan intent cancels cleanly without
+    // fighting thumbs that drift a few px while holding still.
+    const LONG_PRESS_MS = 450
+    const LONG_PRESS_MOVE_PX = 22
     let longPressTimer: number | null = null
     let longPressStart: { x: number; y: number } | null = null
 

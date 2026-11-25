@@ -341,6 +341,8 @@ export const fr = {
   spots: {
     title: 'Mes spots',
     sub: 'Clic droit pose le pin actif (vert) · clic sur un spot le rend actif · range-les dans des dossiers.',
+    subTouch:
+      'Appui long pose le pin actif (vert) · touche un spot pour l’activer · range-les dans des dossiers.',
     visibleCount: '· {n} visible(s)',
     countAria: '{n} spots',
     empty: 'Aucun spot enregistré.',
@@ -370,6 +372,7 @@ export const fr = {
       nameLabel: 'Nom du spot',
       placeholder: 'Ex. Crête nord',
       moveHint: '· clic carte pour déplacer',
+      moveHintTouch: '· touche la carte pour déplacer',
     },
     folder: {
       createTitle: 'Nouveau dossier',
@@ -468,6 +471,7 @@ export const fr = {
     local: 'locale',
     calendar: 'Calendrier',
     collapse: 'Réduire la timeline',
+    collapseHandle: 'Glisser pour réduire la timeline',
     curvesAria: 'Courbes',
     legend: {
       sun: 'Soleil',
@@ -569,6 +573,9 @@ export const fr = {
       look: 'Drag pour regarder',
       arrows: 'Flèches : 1 m',
       focal: 'Focale = cadre photo seulement',
+      zoomTouch: 'Pincer pour zoomer',
+      lookTouch: 'Glisser pour regarder',
+      arrowsTouch: 'Pad : 1 m',
     },
     tlapse: {
       pause: 'Pause',

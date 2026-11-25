@@ -28,6 +28,8 @@ import {
 } from './psIcons'
 import { skyEventFromSunAltitude } from './skyLighting'
 import { EXPAND_TIMELINE_EVENT } from './ViewfinderCaptureCapsule'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
+import { useSwipeToDismiss } from './useSwipeToDismiss'
 
 type TimelineDockProps = {
   lat: number
@@ -42,9 +44,12 @@ type TimelineDockProps = {
   onPlayheadChange: (utcMs: number) => void
 }
 
-function formatDockDate(isoDate: string): string {
+function formatDockDate(isoDate: string, compact = false): string {
   const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!match) return isoDate
+  // Phone: no spaced slashes — "24 / 11 / 2026" was wrapping mid-token and
+  // colliding with the day/zoom buttons in the crushed 3-column row.
+  if (compact) return `${match[3]}/${match[2]}/${match[1]}`
   return `${match[3]} / ${match[2]} / ${match[1]}`
 }
 
@@ -60,6 +65,7 @@ export function TimelineDock({
   onScrubbingChange,
 }: TimelineDockProps) {
   const { locale: appLocale, t } = useLocale()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const [zoomIndex, setZoomIndex] = useState(
     () => loadAppSettings().timeline.zoomIndex,
   )
@@ -109,6 +115,8 @@ export function TimelineDock({
     setEditingClock(false)
     setCollapsed(true)
   }
+
+  const swipeCollapse = useSwipeToDismiss(collapseTimeline, isPhone)
 
   const calendarDays = useMemo(
     () => buildMonthCalendar(calYear, calMonth, lat, lon, elevationM),
@@ -192,14 +200,33 @@ export function TimelineDock({
   return (
     <>
       <div
-        className={
+        className={[
           advanced
             ? 'moon-timeline-dock moon-timeline-dock--advanced'
-            : 'moon-timeline-dock'
-        }
+            : 'moon-timeline-dock',
+          swipeCollapse.isDragging ? 'is-dragging' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         role="region"
         aria-label={t('timeline.region')}
+        style={isPhone ? swipeCollapse.sheetStyle : undefined}
       >
+        {isPhone ? (
+          <button
+            type="button"
+            className="moon-timeline-dock__handle"
+            aria-label={t('timeline.collapseHandle')}
+            title={t('timeline.collapse')}
+            onPointerDown={swipeCollapse.onHandlePointerDown}
+            onPointerMove={swipeCollapse.onHandlePointerMove}
+            onPointerUp={swipeCollapse.onHandlePointerUp}
+            onPointerCancel={swipeCollapse.onHandlePointerCancel}
+            onClick={collapseTimeline}
+          >
+            <span className="moon-timeline-dock__handle-bar" aria-hidden="true" />
+          </button>
+        ) : null}
         <div className="moon-timeline-dock__controls">
           <div className="moon-timeline-dock__controls-left">
             <button
@@ -235,16 +262,22 @@ export function TimelineDock({
             >
               ‹‹
             </button>
-            <button
-              type="button"
-              className="moon-timeline-dock__icon-btn"
-              aria-label={t('timeline.zoomOut')}
-              title={t('timeline.zoomWindow', { min: zoomMinutes })}
-              disabled={!canZoomOut}
-              onClick={() => setZoomIndex((z) => Math.min(z + 1, TIMELINE_VISIBLE_RADIUS_STEPS_MS.length - 1))}
-            >
-              −
-            </button>
+            {!isPhone ? (
+              <button
+                type="button"
+                className="moon-timeline-dock__icon-btn"
+                aria-label={t('timeline.zoomOut')}
+                title={t('timeline.zoomWindow', { min: zoomMinutes })}
+                disabled={!canZoomOut}
+                onClick={() =>
+                  setZoomIndex((z) =>
+                    Math.min(z + 1, TIMELINE_VISIBLE_RADIUS_STEPS_MS.length - 1),
+                  )
+                }
+              >
+                −
+              </button>
+            ) : null}
           </div>
 
           <div className="moon-timeline-dock__datetime">
@@ -258,7 +291,7 @@ export function TimelineDock({
                 }
               }}
             >
-              {formatDockDate(date)}
+              {formatDockDate(date, isPhone)}
             </button>
             <span className="moon-timeline-dock__time">
               {editingClock ? (
@@ -311,16 +344,18 @@ export function TimelineDock({
           </div>
 
           <div className="moon-timeline-dock__controls-right">
-            <button
-              type="button"
-              className="moon-timeline-dock__icon-btn"
-              aria-label={t('timeline.zoomIn')}
-              title={t('timeline.zoomWindow', { min: zoomMinutes })}
-              disabled={!canZoomIn}
-              onClick={() => setZoomIndex((z) => Math.max(z - 1, 0))}
-            >
-              +
-            </button>
+            {!isPhone ? (
+              <button
+                type="button"
+                className="moon-timeline-dock__icon-btn"
+                aria-label={t('timeline.zoomIn')}
+                title={t('timeline.zoomWindow', { min: zoomMinutes })}
+                disabled={!canZoomIn}
+                onClick={() => setZoomIndex((z) => Math.max(z - 1, 0))}
+              >
+                +
+              </button>
+            ) : null}
             <button
               type="button"
               className="moon-timeline-dock__icon-btn"
@@ -347,15 +382,17 @@ export function TimelineDock({
             >
               <CalendarIcon />
             </button>
-            <button
-              type="button"
-              className="moon-timeline-dock__icon-btn"
-              aria-label={t('timeline.collapse')}
-              title={t('timeline.collapse')}
-              onClick={collapseTimeline}
-            >
-              <ChevronDownIcon />
-            </button>
+            {!isPhone ? (
+              <button
+                type="button"
+                className="moon-timeline-dock__icon-btn"
+                aria-label={t('timeline.collapse')}
+                title={t('timeline.collapse')}
+                onClick={collapseTimeline}
+              >
+                <ChevronDownIcon />
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -367,6 +404,7 @@ export function TimelineDock({
             onScrubbingChange={onScrubbingChange}
             onPlayheadChange={onPlayheadChange}
             zoomIndex={zoomIndex}
+            onZoomIndexChange={setZoomIndex}
             jumpRequest={jumpRequest}
             onHorizonEventClick={onHorizon}
             advanced={advanced}

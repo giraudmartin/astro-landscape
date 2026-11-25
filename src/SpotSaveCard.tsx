@@ -1,4 +1,5 @@
 import { useT } from './i18n'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 
 type SpotSaveCardProps = {
   mode: 'save' | 'edit'
@@ -25,6 +26,7 @@ export function SpotSaveCard({
   onDelete,
 }: SpotSaveCardProps) {
   const t = useT()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const title =
     mode === 'save' ? t('spots.save.title') : t('spots.save.editTitle')
   const intro =
@@ -106,7 +108,11 @@ export function SpotSaveCard({
               {mapPass ? (
                 <span className="spot-save-card__coordinates-hint">
                   {' '}
-                  {t('spots.save.moveHint')}
+                  {t(
+                    isPhone
+                      ? 'spots.save.moveHintTouch'
+                      : 'spots.save.moveHint',
+                  )}
                 </span>
               ) : null}
             </p>

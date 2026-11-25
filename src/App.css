@@ -6443,21 +6443,87 @@ html[data-qa-hide-chrome='1'] .photo-frame {
 }
 
 @media (max-width: 720px) {
+  /* Phone capture capsule: one icon row — never wrap into Free/Photo/Pano mess. */
+  .vf-capture-capsule {
+    max-width: min(100%, calc(100vw - 56px));
+  }
+
   .vf-capture-capsule__bar {
-    flex-wrap: wrap;
-    width: min(100%, calc(100vw - 24px));
+    flex-wrap: nowrap;
+    width: max-content;
+    max-width: 100%;
+    gap: 2px;
+    padding: 3px 4px;
+    min-height: 40px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .vf-capture-capsule__bar::-webkit-scrollbar {
+    display: none;
   }
 
   .vf-capture-capsule__divider {
     display: none;
   }
 
-  .vf-capture-capsule .vf-camera-panel {
+  .vf-capture-capsule__detail,
+  .vf-capture-capsule__dot,
+  .vf-capture-capsule__mode > span,
+  .vf-capture-capsule__timelapse > span {
+    display: none;
+  }
+
+  .vf-capture-capsule__gear,
+  .vf-capture-capsule__mode,
+  .vf-capture-capsule__icon-btn,
+  .vf-capture-capsule__timelapse {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+    gap: 0;
+  }
+
+  .vf-capture-capsule__gear {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .vf-capture-capsule__finder {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .vf-capture-capsule__modes {
+    gap: 2px;
+  }
+
+  .vf-capture-capsule .vf-camera-panel,
+  .vf-capture-capsule .vf-camera-panel--pop {
     width: min(300px, calc(100vw - 24px));
   }
 
-  .vf-proj-control__trigger .vf-proj-control__muted {
+  .vf-capture-capsule .vf-camera-pop {
+    max-height: min(62dvh, calc(100dvh - var(--mobile-above-dock, 180px) - 72px));
+  }
+
+  /* Projection: icon only — hide label / Stereo / chevron that eat width. */
+  .vf-proj-control__trigger .vf-proj-control__muted,
+  .vf-proj-control__trigger .vf-proj-control__value,
+  .vf-proj-control__trigger .vf-proj-control__chevron,
+  .immersive__tool-capsule .vf-proj-control__trigger .vf-proj-control__muted,
+  .immersive__tool-capsule .vf-proj-control__trigger .vf-proj-control__value,
+  .immersive__tool-capsule .vf-proj-control__trigger .vf-proj-control__chevron {
     display: none;
+  }
+
+  .immersive__tool-capsule .vf-proj-control__trigger {
+    width: calc(var(--vf-chrome-control-h) - 8px);
+    min-width: calc(var(--vf-chrome-control-h) - 8px);
+    padding: 0;
+    justify-content: center;
+    gap: 0;
   }
 }
 
@@ -9474,7 +9540,7 @@ button.ov-capsule:hover {
     min-height: 36px;
     padding: 3px 5px;
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     max-width: min(100%, calc(100vw - 20px));
   }
 
@@ -9814,18 +9880,8 @@ button.ov-capsule:hover {
     height: var(--map-control-size);
   }
 
-  .settings-anchor {
-    left: auto;
-    right: max(14px, env(safe-area-inset-right, 0px));
-    bottom: max(138px, calc(130px + env(safe-area-inset-bottom, 0px)));
-    z-index: 30;
-  }
-
-  .app-brand-mark {
-    left: max(14px, env(safe-area-inset-left, 0px));
-    right: auto;
-    bottom: max(102px, calc(94px + env(safe-area-inset-bottom, 0px)));
-  }
+  /* Settings / brand phone lift lives in the terminal phone block —
+     these base rules otherwise override bottom/z-index when declared later. */
 
   /* Full-bleed bottom sheet over the map (PS phone rails). */
   .my-spots-rail {
@@ -10454,5 +10510,380 @@ button.ov-capsule:hover {
   font-size: 0.72rem;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.45);
+}
+
+/* —— Phone Operate terminal overrides (must win over earlier base rules) ——
+   Keep in sync with OPERATE_PHONE_MQ / earlier @media (max-width: 720px). */
+@media (max-width: 720px) {
+  :root {
+    /* Compact phone dock + grab handle. */
+    --mobile-above-dock: calc(
+      var(--mobile-dock-bottom, 10px) + 152px
+    );
+    /* Advanced curves dock (handle + controls + legend + 148px chart + eph). */
+    --mobile-above-dock-advanced: calc(
+      var(--mobile-dock-bottom, 10px) + 292px
+    );
+  }
+
+  /* Lift FABs when altitude curves expand the dock — no overlap. */
+  body:has(.moon-timeline-dock--advanced) {
+    --mobile-above-dock: var(--mobile-above-dock-advanced);
+  }
+
+  .settings-anchor {
+    left: auto;
+    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: var(--mobile-above-dock);
+    z-index: 32;
+  }
+
+  /* Phone: brand top-left, tight under the drawer tab / notch. */
+  .app-brand-mark {
+    top: max(6px, calc(env(safe-area-inset-top, 0px) + 18px));
+    bottom: auto;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: auto;
+    z-index: 28;
+  }
+
+  .app-brand-mark__product {
+    font-size: 15px;
+  }
+
+  .app-brand-mark__by {
+    font-size: 10px;
+  }
+
+  .app-brand-mark__meta {
+    font-size: 9px;
+  }
+
+  .mobile-top-drawer__tab {
+    min-width: 72px;
+    min-height: 44px;
+    padding: 12px 22px 14px;
+  }
+
+  .mobile-top-drawer:not(.is-open) .mobile-top-drawer__tab {
+    top: max(0px, env(safe-area-inset-top, 0px));
+    padding: 12px 22px 14px;
+  }
+
+  .mobile-top-drawer__tab-bar {
+    width: 44px;
+    height: 5px;
+  }
+
+  .mobile-rail-handle {
+    min-height: 28px;
+    padding: 12px 12px 8px;
+  }
+
+  .my-spots-rail__sub,
+  .framings-panel .my-spots-rail__sub {
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  /* Address search: full-bleed panel under the notch, not clipped beside FABs. */
+  .map-address-search {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(
+      68px,
+      calc(var(--map-control-size, 42px) + 28px + env(safe-area-inset-right, 0px))
+    );
+    width: auto;
+    max-width: none;
+    z-index: 40;
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .map-address-search__input {
+    /* ≥16px avoids iOS Safari auto-zoom on focus. */
+    font-size: 16px;
+    padding: 12px 14px;
+  }
+
+  .map-address-search__option {
+    padding: 12px 12px;
+    font-size: 0.88rem;
+    min-height: 44px;
+  }
+
+  .map-address-search__list {
+    max-height: min(42dvh, 280px);
+  }
+
+  /* Immersive HUD — left capsule owns the top row; right tools stack vertically. */
+  .immersive__chrome--right {
+    top: max(10px, env(safe-area-inset-top, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    z-index: 9;
+  }
+
+  .immersive__chrome--left {
+    top: max(10px, env(safe-area-inset-top, 0px));
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: auto;
+    max-width: calc(
+      100vw - 56px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)
+    );
+    z-index: 8;
+  }
+
+  /* Settings + projection stay one pill, icon-only, under the search row. */
+  .immersive__chrome--right .immersive__tool-capsule {
+    width: auto;
+  }
+
+  /* Search panel opens left of the stacked rail (dock is only 40px wide). */
+  .immersive__chrome--right .celestial-search {
+    left: auto;
+    right: 0;
+    width: min(300px, calc(100vw - 64px));
+  }
+
+  .immersive__chrome--right .celestial-target {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: auto;
+    width: min(280px, calc(100vw - 64px));
+  }
+
+  .moon-preview-hud-tools {
+    right: max(8px, env(safe-area-inset-right, 0px));
+    /* Below stacked right chrome (search / settings / framings / exit). */
+    top: max(210px, calc(env(safe-area-inset-top, 0px) + 200px));
+    transform: none;
+    gap: 10px;
+  }
+
+  .moon-preview-hud-tool {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .moon-preview-hud-tool__halpha {
+    font-size: 12px;
+  }
+
+  .moon-preview-hud-tool__atmo {
+    font-size: 10px;
+  }
+
+  .move-stack {
+    right: max(10px, env(safe-area-inset-right, 0px));
+    /* Clear the timeline dock + a breath of air above the grab handle. */
+    bottom: calc(var(--mobile-above-dock) + 12px);
+    width: calc(3 * 44px + 2 * 4px + 2 * 8px);
+    z-index: 12;
+  }
+
+  .move-pad {
+    grid-template-columns: repeat(3, 44px);
+    grid-template-rows: 40px 40px;
+    gap: 4px;
+  }
+
+  .eye-height__btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .eye-height__stepper {
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+  }
+
+  .moon-preview-pitch-stack {
+    top: 38%;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    transform: translateY(-50%);
+  }
+
+  .immersive__hint {
+    left: max(10px, env(safe-area-inset-left, 0px));
+    right: auto;
+    max-width: min(160px, calc(100vw - 176px));
+    bottom: calc(var(--mobile-above-dock) + 12px);
+    font-size: 0.62rem;
+    line-height: 1.2;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 2px;
+    pointer-events: none;
+  }
+
+  /* Phone: keep pinch + look only — skip pad/focal/DEM noise under the pitch tape. */
+  .immersive__hint > span:nth-child(n + 3) {
+    display: none;
+  }
+
+  .immersive__stage--rot1,
+  .immersive__stage--rot3 {
+    width: 100dvh;
+    height: 100dvw;
+  }
+
+  .vf-capture-capsule {
+    max-width: 100%;
+  }
+
+  .vf-capture-capsule__bar {
+    flex-wrap: nowrap;
+  }
+
+  .moon-preview-bearing-tape {
+    width: min(200px, calc(100vw - 176px));
+    margin-top: 6px;
+  }
+
+  .immersive__tool-capsule {
+    height: 40px;
+    min-height: 40px;
+    padding: 3px;
+  }
+
+  .immersive__chrome--right .vf-proj-control__muted,
+  .immersive__chrome--right .vf-proj-control__value,
+  .immersive__chrome--right .vf-proj-control__chevron {
+    display: none;
+  }
+
+  .immersive__framings-btn,
+  .immersive__exit,
+  .celestial-dock__toggle {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  /* Settings panel fills phone safely */
+  .settings-overlay {
+    padding: max(8px, env(safe-area-inset-top, 0px))
+      max(8px, env(safe-area-inset-right, 0px))
+      max(8px, env(safe-area-inset-bottom, 0px))
+      max(8px, env(safe-area-inset-left, 0px));
+    align-items: stretch;
+  }
+
+  .settings-panel {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 14px;
+  }
+
+  .settings-panel__shell {
+    flex-direction: column;
+  }
+
+  .settings-panel__nav {
+    flex: 0 0 auto;
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-panel__nav-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .settings-panel__close {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* Radial pin actions — larger spokes + veil for thumbs */
+  .spot-action-marker__veil {
+    width: 196px;
+    height: 196px;
+  }
+
+  .spot-action-marker__spoke--street {
+    --x: -84px;
+    --y: -48px;
+  }
+
+  .spot-action-marker__spoke--sky-flat {
+    --x: 0px;
+    --y: -96px;
+  }
+
+  .spot-action-marker__spoke--immersive {
+    --x: 84px;
+    --y: -48px;
+  }
+
+  .spot-action-marker__spoke--save {
+    --x: 0px;
+    --y: 96px;
+  }
+
+  .spot-action-marker__spoke button {
+    width: 52px;
+    height: 52px;
+  }
+
+  .spot-action-marker__center {
+    width: 52px;
+    height: 52px;
+  }
+
+  /* Spot save: bottom sheet so the map stays reachable above the card */
+  .spot-save-card-backdrop {
+    align-items: end;
+    justify-items: stretch;
+    padding: 0;
+    background: rgba(3, 5, 9, 0.35);
+  }
+
+  .spot-save-card-backdrop--map-pass {
+    inset: 0;
+    align-items: end;
+    justify-items: stretch;
+    padding: 0;
+    pointer-events: none;
+  }
+
+  .spot-save-card,
+  .map-card--spot-save {
+    width: 100%;
+    max-width: none;
+    border-radius: 18px 18px 0 0;
+    margin: 0;
+    max-height: min(72dvh, calc(100dvh - 80px));
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .spot-save-card__field input,
+  .spot-save-card__field textarea {
+    font-size: 16px;
+  }
+
+  .spot-save-card__close {
+    width: 40px;
+    height: 40px;
+  }
+
+  .spot-save-card__actions .control-panel__primary,
+  .spot-save-card__delete,
+  .spot-save-card__cancel {
+    min-height: 44px;
+  }
 }
 

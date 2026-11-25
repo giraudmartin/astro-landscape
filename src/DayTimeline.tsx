@@ -95,10 +95,29 @@ type DayTimelineProps = {
   onScrubbingChange?: (active: boolean) => void
   onPlayheadChange: (utcMs: number) => void
   zoomIndex: number
+  /** Pinch-to-zoom changes the film-strip zoom step. */
+  onZoomIndexChange?: (zoomIndex: number) => void
   jumpRequest?: number
   onHorizonEventClick?: (kind: HorizonKind) => void
   /** Expand the day-light band into an altitude chart. */
   advanced?: boolean
+}
+
+const TIMELINE_ZOOM_MAX_INDEX = TIMELINE_VISIBLE_RADIUS_STEPS_MS.length - 1
+/** Pinch distance ratio per zoom step (spread → zoom in → lower index). */
+const TIMELINE_PINCH_STEP_RATIO = 1.18
+
+function clampTimelineZoomIndex(index: number): number {
+  return Math.max(0, Math.min(TIMELINE_ZOOM_MAX_INDEX, index))
+}
+
+function pointerPairDistance(
+  pointers: Map<number, { x: number; y: number }>,
+): number | null {
+  if (pointers.size < 2) return null
+  const [a, b] = pointers.values()
+  if (!a || !b) return null
+  return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
 /**
@@ -113,6 +132,7 @@ export function DayTimeline({
   onPlayheadChange,
   onScrubbingChange,
   zoomIndex,
+  onZoomIndexChange,
   jumpRequest = 0,
   onHorizonEventClick,
   advanced = false,
@@ -126,9 +146,10 @@ export function DayTimeline({
   const [scrubbing, setScrubbing] = useState(false)
   const dragRef = useRef<{
     active: boolean
+    pointerId: number | null
     lastX: number
     utcMs: number
-  }>({ active: false, lastX: 0, utcMs: 0 })
+  }>({ active: false, pointerId: null, lastX: 0, utcMs: 0 })
   const scrubRef = useRef<{
     pxPerMs: number
     setUtcMs: (ms: number) => void
@@ -136,6 +157,17 @@ export function DayTimeline({
     pxPerMs: 0,
     setUtcMs: () => {},
   })
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>())
+  const pinchRef = useRef<{
+    startDist: number
+    startZoom: number
+    applied: number
+  } | null>(null)
+  const zoomRef = useRef({
+    zoomIndex,
+    onZoomIndexChange,
+  })
+  zoomRef.current = { zoomIndex, onZoomIndexChange }
 
   const radius =
     TIMELINE_VISIBLE_RADIUS_STEPS_MS[
@@ -280,29 +312,73 @@ export function DayTimeline({
   scrubRef.current = { pxPerMs, setUtcMs }
 
   useEffect(() => {
+    const endScrub = () => {
+      if (!dragRef.current.active) return
+      dragRef.current.active = false
+      dragRef.current.pointerId = null
+      onScrubbingChange?.(false)
+      setScrubbing(false)
+    }
+
     const onMove = (event: PointerEvent) => {
+      const pointers = pointersRef.current
+      if (pointers.has(event.pointerId)) {
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+      }
+
+      const pinch = pinchRef.current
+      if (pinch && pointers.size >= 2) {
+        const dist = pointerPairDistance(pointers)
+        if (!(dist && dist > 0 && pinch.startDist > 0)) return
+        const ratio = dist / pinch.startDist
+        const steps = Math.round(
+          Math.log(ratio) / Math.log(TIMELINE_PINCH_STEP_RATIO),
+        )
+        const next = clampTimelineZoomIndex(pinch.startZoom - steps)
+        if (next !== pinch.applied) {
+          pinch.applied = next
+          zoomRef.current.onZoomIndexChange?.(next)
+        }
+        return
+      }
+
       const drag = dragRef.current
       const scrub = scrubRef.current
       if (!drag.active || !(scrub.pxPerMs > 0)) return
+      if (drag.pointerId != null && event.pointerId !== drag.pointerId) return
       const dx = event.clientX - drag.lastX
       drag.lastX = event.clientX
       // PS: drag right → earlier (strip follows the finger under a fixed caret).
       drag.utcMs = drag.utcMs - dx / scrub.pxPerMs
       scrub.setUtcMs(drag.utcMs)
     }
-    const onUp = () => {
-      if (!dragRef.current.active) return
-      dragRef.current.active = false
-      onScrubbingChange?.(false)
-      setScrubbing(false)
+
+    const onUp = (event: PointerEvent) => {
+      const pointers = pointersRef.current
+      pointers.delete(event.pointerId)
+      if (pointers.size < 2) pinchRef.current = null
+      if (
+        dragRef.current.active &&
+        (dragRef.current.pointerId == null ||
+          dragRef.current.pointerId === event.pointerId)
+      ) {
+        endScrub()
+      }
     }
+
+    const onBlur = () => {
+      pointersRef.current.clear()
+      pinchRef.current = null
+      endScrub()
+    }
+
     window.addEventListener('pointermove', onMove)
-    window.addEventListener('blur', onUp)
+    window.addEventListener('blur', onBlur)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onUp)
     return () => {
-      if (dragRef.current.active) onUp()
-      window.removeEventListener('blur', onUp)
+      onBlur()
+      window.removeEventListener('blur', onBlur)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
@@ -335,22 +411,6 @@ export function DayTimeline({
         .filter(Boolean)
         .join(' ')}
     >
-      {advanced ? (
-        <ul className="moon-preview-timeline__legend" aria-label={t('timeline.curvesAria')}>
-          <li>
-            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--sun" />
-            {t('timeline.legend.sun')}
-          </li>
-          <li>
-            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--moon" />
-            {t('timeline.legend.moon')}
-          </li>
-          <li>
-            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--milkyway" />
-            {t('timeline.legend.milkyWay')}
-          </li>
-        </ul>
-      ) : null}
       <div
         ref={viewportRef}
         className="moon-preview-timeline__viewport"
@@ -360,14 +420,41 @@ export function DayTimeline({
         aria-label={t('timeline.region')}
         onPointerDown={(event) => {
           if (event.button !== 0) return
+          const pointers = pointersRef.current
+          pointers.set(event.pointerId, {
+            x: event.clientX,
+            y: event.clientY,
+          })
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+
+          if (pointers.size >= 2) {
+            // Second finger → pinch zoom; cancel one-finger scrub.
+            if (dragRef.current.active) {
+              dragRef.current.active = false
+              dragRef.current.pointerId = null
+              onScrubbingChange?.(false)
+              setScrubbing(false)
+            }
+            const dist = pointerPairDistance(pointers)
+            if (dist && dist > 0) {
+              const z = zoomRef.current.zoomIndex
+              pinchRef.current = {
+                startDist: dist,
+                startZoom: z,
+                applied: z,
+              }
+            }
+            return
+          }
+
           dragRef.current = {
             active: true,
+            pointerId: event.pointerId,
             lastX: event.clientX,
             utcMs: playheadUtcMs,
           }
           onScrubbingChange?.(true)
           setScrubbing(true)
-          event.currentTarget.setPointerCapture?.(event.pointerId)
         }}
         onKeyDown={(event) => {
           const step = event.shiftKey ? 15 * 60_000 : 60_000
@@ -578,6 +665,22 @@ export function DayTimeline({
           </>
         ) : null}
       </div>
+      {advanced ? (
+        <ul className="moon-preview-timeline__legend" aria-label={t('timeline.curvesAria')}>
+          <li>
+            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--sun" />
+            {t('timeline.legend.sun')}
+          </li>
+          <li>
+            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--moon" />
+            {t('timeline.legend.moon')}
+          </li>
+          <li>
+            <span className="moon-preview-timeline__legend-mark moon-preview-timeline__legend-mark--milkyway" />
+            {t('timeline.legend.milkyWay')}
+          </li>
+        </ul>
+      ) : null}
     </div>
   )
 }

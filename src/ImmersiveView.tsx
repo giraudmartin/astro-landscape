@@ -59,6 +59,7 @@ import {
 import { RenderDiagnosticCard } from './RenderDiagnosticCard'
 import { shuffleAstroLoaderTips } from './astroLoaderTips'
 import { useLocale } from './i18n'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 import {
   formatMegabytes,
   getNetworkBytesTotal,
@@ -324,6 +325,7 @@ export function ImmersiveView({
   framingApiRef,
 }: ImmersiveViewProps) {
   const { t, locale } = useLocale()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const onTerrainReadyChangeRef = useRef(onTerrainReadyChange)
   onTerrainReadyChangeRef.current = onTerrainReadyChange
   const activeRef = useRef(active)
@@ -1121,9 +1123,13 @@ export function ImmersiveView({
       LOOK_PITCH_MIN,
       Math.min(LOOK_PITCH_MAX, lookRef.current.pitch),
     )
-    let dragging = false
+    /** Single-finger look; pinch uses a separate activePointers map. */
+    let lookPointerId: number | null = null
     let lastX = 0
     let lastY = 0
+    const activePointers = new Map<number, { x: number; y: number }>()
+    let pinchStartDist = 0
+    let pinchStartFov = stageFov
     let raf = 0
     let disposed = false
 
@@ -1815,13 +1821,36 @@ export function ImmersiveView({
       setSize({ w, h })
     }
 
+    const pointerDist = (
+      a: { x: number; y: number },
+      b: { x: number; y: number },
+    ) => Math.hypot(a.x - b.x, a.y - b.y)
+
     const onPointerDown = (event: PointerEvent) => {
       if (!terrainUnlockedRef.current) return
       if (timelapsePreviewLookLockedRef.current) return
-      dragging = true
-      lastX = event.clientX
-      lastY = event.clientY
-      host.setPointerCapture(event.pointerId)
+      activePointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      })
+      try {
+        host.setPointerCapture(event.pointerId)
+      } catch {
+        // ignore
+      }
+      if (activePointers.size === 2) {
+        // Pinch zoom — release look tracking so a second finger can't jump yaw.
+        lookPointerId = null
+        const pts = [...activePointers.values()]
+        pinchStartDist = pointerDist(pts[0]!, pts[1]!)
+        pinchStartFov = stageFov
+        return
+      }
+      if (activePointers.size === 1) {
+        lookPointerId = event.pointerId
+        lastX = event.clientX
+        lastY = event.clientY
+      }
     }
     let lastHaloProbeMs = 0
     const updateLocalHaloProbe = (event: PointerEvent) => {
@@ -1837,9 +1866,31 @@ export function ImmersiveView({
     }
     const onPointerLeave = () => setLocalHaloProbe(null)
     const onPointerMove = (event: PointerEvent) => {
-      if (!dragging) updateLocalHaloProbe(event)
-      if (!dragging || !terrainUnlockedRef.current) return
+      if (!activePointers.has(event.pointerId)) {
+        if (lookPointerId == null) updateLocalHaloProbe(event)
+        return
+      }
+      activePointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      })
+      if (!terrainUnlockedRef.current) return
       if (timelapsePreviewLookLockedRef.current) return
+
+      if (activePointers.size >= 2 && pinchStartDist > 0) {
+        const pts = [...activePointers.values()]
+        const dist = pointerDist(pts[0]!, pts[1]!)
+        if (dist > 1) {
+          // Spread → zoom in (narrower FOV). Clamp factor so FOV stays sane.
+          const ratio = pinchStartDist / dist
+          stageFov = applyStageProjection(camera, pinchStartFov * ratio)
+          stageVfovLiveRef.current = stageFov
+          setStageVfovDeg(stageFov)
+        }
+        return
+      }
+
+      if (lookPointerId !== event.pointerId) return
       const dx = event.clientX - lastX
       const dy = event.clientY - lastY
       lastX = event.clientX
@@ -1859,7 +1910,19 @@ export function ImmersiveView({
       if (dx !== 0 || dy !== 0) unlockTargetFollowRef.current()
     }
     const onPointerUp = (event: PointerEvent) => {
-      dragging = false
+      activePointers.delete(event.pointerId)
+      if (lookPointerId === event.pointerId) lookPointerId = null
+      if (activePointers.size < 2) {
+        pinchStartDist = 0
+        // Resume look on the remaining finger without a jump.
+        if (activePointers.size === 1) {
+          const [id, pt] = [...activePointers.entries()][0]!
+          lookPointerId = id
+          lastX = pt.x
+          lastY = pt.y
+          pinchStartFov = stageFov
+        }
+      }
       try {
         host.releasePointerCapture(event.pointerId)
       } catch {
@@ -1872,6 +1935,7 @@ export function ImmersiveView({
       if (!terrainUnlockedRef.current) return
       const factor = event.deltaY > 0 ? 1.12 : 0.9
       stageFov = applyStageProjection(camera, stageFov * factor)
+      stageVfovLiveRef.current = stageFov
       setStageVfovDeg(stageFov)
     }
 
@@ -3307,9 +3371,15 @@ export function ImmersiveView({
       </div>
 
       <div className="immersive__hint">
-        <span>{t('immersive.hint.zoom')}</span>
-        <span>{t('immersive.hint.look')}</span>
-        <span>{t('immersive.hint.arrows')}</span>
+        <span>
+          {t(isPhone ? 'immersive.hint.zoomTouch' : 'immersive.hint.zoom')}
+        </span>
+        <span>
+          {t(isPhone ? 'immersive.hint.lookTouch' : 'immersive.hint.look')}
+        </span>
+        <span>
+          {t(isPhone ? 'immersive.hint.arrowsTouch' : 'immersive.hint.arrows')}
+        </span>
         <span>{t('immersive.hint.focal')}</span>
         {terrainLabel ? (
           <span>{t(terrainLabel.key, terrainLabel.params)}</span>

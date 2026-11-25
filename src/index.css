@@ -12,6 +12,11 @@ body,
   margin: 0;
 }
 
+html {
+  /* Kill iOS rubber-band / overscroll that fights map + immersive gestures. */
+  overscroll-behavior: none;
+}
+
 body {
   min-width: 320px;
   background: #07080c;
@@ -19,6 +24,9 @@ body {
   font-family: 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+  /* Prefer visual viewport height on mobile browsers with dynamic chrome. */
+  min-height: 100dvh;
 }
 
 button,

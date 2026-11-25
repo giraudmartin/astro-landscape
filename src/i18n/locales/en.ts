@@ -339,6 +339,8 @@ export const en = {
   spots: {
     title: 'My spots',
     sub: 'Right-click drops the active pin (green) · click a spot to make it active · organize them in folders.',
+    subTouch:
+      'Long-press drops the active pin (green) · tap a spot to make it active · organize them in folders.',
     visibleCount: '· {n} visible',
     countAria: '{n} spots',
     empty: 'No saved spots.',
@@ -368,6 +370,7 @@ export const en = {
       nameLabel: 'Spot name',
       placeholder: 'e.g. North ridge',
       moveHint: '· click the map to move',
+      moveHintTouch: '· tap the map to move',
     },
     folder: {
       createTitle: 'New folder',
@@ -461,6 +464,7 @@ export const en = {
     local: 'local',
     calendar: 'Calendar',
     collapse: 'Collapse timeline',
+    collapseHandle: 'Drag down to collapse the timeline',
     curvesAria: 'Curves',
     legend: {
       sun: 'Sun',
@@ -562,6 +566,9 @@ export const en = {
       look: 'Drag to look around',
       arrows: 'Arrows: 1 m',
       focal: 'Focal length = photo frame only',
+      zoomTouch: 'Pinch to zoom',
+      lookTouch: 'Drag to look around',
+      arrowsTouch: 'Pad: 1 m',
     },
     tlapse: {
       pause: 'Pause',

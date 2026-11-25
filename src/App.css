@@ -4570,6 +4570,7 @@ html.is-rail-resizing .immersive-host {
 }
 
 html[data-qa-hide-chrome='1'] .immersive__chrome,
+html[data-qa-hide-chrome='1'] .immersive__top-bar,
 html[data-qa-hide-chrome='1'] .immersive__hint,
 html[data-qa-hide-chrome='1'] .immersive__exit,
 html[data-qa-hide-chrome='1'] .immersive__loader,
@@ -4594,6 +4595,31 @@ html[data-qa-hide-chrome='1'] .photo-frame {
 
 .immersive__chrome > * {
   pointer-events: auto;
+}
+
+.immersive__top-bar {
+  position: absolute;
+  z-index: 7;
+  top: var(--vf-chrome-top);
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.immersive__top-bar > *,
+.immersive__top-bar__tools > * {
+  pointer-events: auto;
+}
+
+.immersive__top-bar__tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
 }
 
 .immersive__chrome--left {
@@ -4814,10 +4840,24 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   pointer-events: auto;
 }
 
+/* Desktop: pad above height (DOM has height first for phone proto order). */
+.move-stack .move-pad {
+  order: 1;
+}
+
+.move-stack .eye-height {
+  order: 2;
+}
+
 .eye-height {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  grid-template-areas:
+    'label label label'
+    'lower field raise';
+  column-gap: 4px;
+  row-gap: 4px;
+  align-items: center;
   box-sizing: border-box;
   width: 100%;
   padding: 6px 8px;
@@ -4832,17 +4872,24 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   line-height: 1.2;
 }
 
+.eye-height__stepper,
+.eye-height__info {
+  display: contents;
+}
+
 .eye-height__label {
+  grid-area: label;
   font-weight: 650;
   letter-spacing: 0.01em;
   color: rgba(232, 245, 238, 0.62);
 }
 
-.eye-height__stepper {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 28px;
-  align-items: center;
-  gap: 4px;
+.eye-height__btn--lower {
+  grid-area: lower;
+}
+
+.eye-height__btn--raise {
+  grid-area: raise;
 }
 
 .eye-height__btn {
@@ -4883,6 +4930,7 @@ html[data-qa-hide-chrome='1'] .photo-frame {
 }
 
 .eye-height__field {
+  grid-area: field;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -6090,6 +6138,21 @@ html[data-qa-hide-chrome='1'] .photo-frame {
 .vf-proj-control__option.is-active .vf-proj-control__option-copy small {
   color: rgba(232, 245, 238, 0.55);
   opacity: 1;
+}
+
+.vf-proj-control__menu-sep {
+  height: 1px;
+  margin: 2px 2px 0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.vf-proj-control__menu-label {
+  margin: 2px 4px 0;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(232, 245, 238, 0.42);
 }
 
 /* Sky settings — floating semi-transparent window */
@@ -10963,93 +11026,498 @@ button.ov-capsule:hover {
     min-height: 44px;
   }
 
-  /* Immersive HUD — left capsule owns the top row; right tools stack vertically. */
-  .immersive__chrome--right {
-    top: max(10px, env(safe-area-inset-top, 0px));
-    right: max(8px, env(safe-area-inset-right, 0px));
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-    z-index: 9;
-  }
-
-  .immersive__chrome--left {
-    top: max(10px, env(safe-area-inset-top, 0px));
-    left: max(8px, env(safe-area-inset-left, 0px));
-    right: auto;
-    max-width: calc(
-      100vw - 56px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)
-    );
-    z-index: 8;
-  }
-
-  /* Settings + projection stay one pill, icon-only, under the search row. */
-  .immersive__chrome--right .immersive__tool-capsule {
-    width: auto;
-  }
-
-  /* Search panel opens left of the stacked rail (dock is only 40px wide). */
-  .immersive__chrome--right .celestial-search {
+  /* Celestial search in the same phone bottom sheet chrome as map address. */
+  .celestial-search--sheet {
+    position: relative;
+    top: auto;
     left: auto;
-    right: 0;
-    width: min(300px, calc(100vw - 64px));
+    right: auto;
+    width: auto;
+    max-width: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 16px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    overflow: hidden;
   }
 
-  .immersive__chrome--right .celestial-target {
+  .celestial-search--sheet .celestial-search__form {
+    padding: 0;
+  }
+
+  .celestial-search--sheet .celestial-search__input {
+    font-size: 16px; /* iOS: avoid focus zoom */
+    padding: 12px 14px;
+  }
+
+  .celestial-search--sheet .celestial-search__results {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .celestial-search--sheet .celestial-search__list {
+    max-height: none;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+
+  .celestial-search--sheet .celestial-search__option {
+    padding: 12px 12px;
+    font-size: 0.88rem;
+    min-height: 44px;
+  }
+
+  /* Immersive phone: one top row — LED+focal · search · move · settings · framings · quit. */
+  .immersive {
+    --imm-phone-top: max(10px, env(safe-area-inset-top, 0px));
+    --imm-phone-bar-h: 40px;
+    --imm-phone-gap: 6px;
+    --imm-phone-capsule-band: 40px;
+  }
+
+  .immersive__top-bar {
+    top: var(--imm-phone-top);
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+    width: auto;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--imm-phone-gap);
+    z-index: 10;
+  }
+
+  .immersive__top-bar__tools {
+    display: flex;
+    align-items: center;
+    gap: var(--imm-phone-gap);
+    flex: 0 0 auto;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .immersive__top-bar .celestial-dock,
+  .immersive__top-bar .immersive__move-toggle,
+  .immersive__top-bar .vf-proj-control,
+  .immersive__top-bar .immersive__framings-btn,
+  .immersive__top-bar .immersive__exit {
+    flex: 0 0 auto;
+  }
+
+  .immersive__top-bar .celestial-search {
+    left: 0;
+    right: auto;
+    width: min(300px, calc(100vw - 24px));
+  }
+
+  .immersive__top-bar .celestial-target {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
     left: auto;
-    width: min(280px, calc(100vw - 64px));
+    width: min(280px, calc(100vw - 24px));
+  }
+
+  /* Collapsed: LED + focal grows to fill leftover width. */
+  .vf-capture-capsule.is-compact {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .vf-capture-capsule.is-compact .vf-capture-capsule__bar {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: var(--imm-phone-bar-h);
+    height: var(--imm-phone-bar-h);
+    padding: 0 12px;
+    gap: 8px;
+    border-radius: 12px;
+    justify-content: center;
+  }
+
+  .vf-capture-capsule.is-compact .moon-preview-dock__rec {
+    margin: 0;
+    flex: 0 0 auto;
+  }
+
+  .vf-capture-capsule.is-compact .vf-capture-capsule__gear {
+    flex: 0 1 auto;
+    justify-content: center;
+    min-width: 0;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    gap: 6px;
+    border-radius: 0;
+    background: transparent;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .vf-capture-capsule.is-compact .vf-capture-capsule__gear.is-active {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .vf-capture-capsule.is-compact .vf-capture-capsule__lens {
+    flex: 0 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 5px;
+    white-space: nowrap;
+  }
+
+  .vf-capture-capsule.is-compact .vf-capture-capsule__lens b {
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  /* Phone media hides detail/dot by default — force them back on compact. */
+  .vf-capture-capsule.is-compact .vf-capture-capsule__detail,
+  .vf-capture-capsule.is-compact .vf-capture-capsule__dot,
+  .vf-capture-capsule.is-compact .vf-capture-capsule__orient {
+    display: inline;
+  }
+
+  .vf-capture-capsule.is-compact .vf-capture-capsule__detail {
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  /* Expanded: full desktop-like capture bar; hide compass + other top chrome. */
+  .immersive:has(.vf-capture-capsule.is-expanded) .immersive__top-bar {
+    flex-wrap: nowrap;
+  }
+
+  .immersive:has(.vf-capture-capsule.is-expanded) .immersive__top-bar__tools,
+  .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-bearing-tape,
+  .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-bearing-tape__altitude,
+  .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-pitch-stack,
+  .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-pitch-tape,
+  .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-hud-tools,
+  .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-hud-credit,
+  .immersive:has(.vf-capture-capsule.is-expanded) .immersive__hint {
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__bar {
+    justify-content: flex-start;
+    height: auto;
+    min-height: var(--imm-phone-bar-h);
+    padding: 4px 10px;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Assombri quand la barre est ouverte / sélectionnée */
+    background: rgba(10, 11, 14, 0.94);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 10px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__divider {
+    display: block;
+    opacity: 0.55;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__gear {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    gap: 6px;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__gear.is-active {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.22);
+    border-radius: 8px;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__mode > span,
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__timelapse > span {
+    display: inline;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__mode,
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__timelapse,
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__icon-btn {
+    min-width: 0;
+    min-height: 32px;
+    height: 32px;
+    padding: 4px 8px;
+    gap: 6px;
+  }
+
+  /* Action cards: full screen width under the capture bar. */
+  .vf-capture-capsule.is-compact .vf-camera-panel,
+  .vf-capture-capsule.is-compact .vf-camera-panel--pop {
+    position: fixed;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+    top: calc(var(--imm-phone-top) + var(--imm-phone-bar-h) + 10px);
+    width: auto;
+    max-width: none;
+    z-index: 20;
+  }
+
+  .vf-capture-capsule.is-compact .vf-camera-pop {
+    width: 100%;
+    max-width: none;
+    max-height: min(
+      70dvh,
+      calc(100dvh - var(--mobile-above-dock, 180px) - 96px)
+    );
+    background: rgba(10, 11, 14, 0.96);
+    border-color: rgba(255, 255, 255, 0.16);
   }
 
   .moon-preview-hud-tools {
+    top: 50%;
     right: max(8px, env(safe-area-inset-right, 0px));
-    /* Below stacked right chrome (search / settings / framings / exit). */
-    top: max(210px, calc(env(safe-area-inset-top, 0px) + 200px));
-    transform: none;
-    gap: 10px;
+    transform: translateY(-50%);
+    gap: 8px;
+  }
+
+  .moon-preview-hud-tools__group {
+    gap: 3px;
+    padding: 3px;
+    border-radius: 9px;
   }
 
   .moon-preview-hud-tool {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .moon-preview-hud-tool svg {
+    width: 15px;
+    height: 15px;
   }
 
   .moon-preview-hud-tool__halpha {
-    font-size: 12px;
-  }
-
-  .moon-preview-hud-tool__atmo {
     font-size: 10px;
   }
 
-  .move-stack {
+  .moon-preview-hud-tool__atmo {
+    font-size: 9px;
+  }
+
+  /* Phone: move pad is opt-in via the top-bar toggle (replaces timeline). */
+  .immersive:not(.immersive--move-pad) .move-stack {
+    display: none;
+  }
+
+  /* Proto 01: one full-width bottom bar — height left, dpad right. */
+  .immersive.immersive--move-pad .move-stack {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    position: absolute;
+    left: max(10px, env(safe-area-inset-left, 0px));
     right: max(10px, env(safe-area-inset-right, 0px));
-    /* Clear the timeline dock + a breath of air above the grab handle. */
-    bottom: calc(var(--mobile-above-dock) + 12px);
-    width: calc(3 * 44px + 2 * 4px + 2 * 8px);
+    top: auto;
+    transform: none;
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    width: auto;
+    max-width: none;
     z-index: 12;
+    box-sizing: border-box;
+    padding: 12px 24px;
+    border: 1px solid var(--ov-stroke);
+    border-radius: 22px;
+    background: var(--vf-chrome-bg);
+    box-shadow: var(--vf-chrome-inset);
+    backdrop-filter: var(--vf-chrome-blur);
+    -webkit-backdrop-filter: var(--vf-chrome-blur);
   }
 
-  .move-pad {
-    grid-template-columns: repeat(3, 44px);
-    grid-template-rows: 40px 40px;
+  .immersive.immersive--move-pad .move-stack .eye-height,
+  .immersive.immersive--move-pad .move-stack .move-pad {
+    order: 0;
+  }
+
+  .immersive.immersive--move-pad .eye-height {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    width: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .immersive.immersive--move-pad .eye-height__stepper {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .immersive.immersive--move-pad .eye-height__info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
     gap: 4px;
+    width: 90px;
+    min-width: 0;
   }
 
-  .eye-height__btn {
-    width: 36px;
-    height: 36px;
+  .immersive.immersive--move-pad .eye-height__label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: rgba(232, 245, 238, 0.62);
   }
 
-  .eye-height__stepper {
-    grid-template-columns: 36px minmax(0, 1fr) 36px;
+  .immersive.immersive--move-pad .eye-height__btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    font-size: 18px;
+  }
+
+  .immersive.immersive--move-pad .eye-height__btn--lower,
+  .immersive.immersive--move-pad .eye-height__btn--raise {
+    grid-area: auto;
+  }
+
+  .immersive.immersive--move-pad .eye-height__field {
+    grid-area: auto;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    align-items: baseline;
+  }
+
+  .immersive.immersive--move-pad .eye-height__field:focus-within {
+    outline: none;
+  }
+
+  .immersive.immersive--move-pad .eye-height__input {
+    width: auto;
+    max-width: 4.8ch;
+    font-size: 23px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.5px;
+    text-align: left;
+    color: #e8f5ee;
+  }
+
+  .immersive.immersive--move-pad .eye-height__input:focus {
+    outline: 2px solid var(--ui-focus-ring, var(--ui-accent));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .immersive.immersive--move-pad .eye-height__unit {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(232, 245, 238, 0.55);
+  }
+
+  .immersive.immersive--move-pad .move-pad {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    grid-template-columns: repeat(3, 48px);
+    grid-template-rows: repeat(2, 48px);
+    gap: 5px;
+  }
+
+  .immersive.immersive--move-pad .move-pad__key {
+    width: 48px;
+    height: 48px;
+    border-radius: 13px;
+  }
+
+  .immersive__top-bar .immersive__move-toggle {
+    flex: 0 0 auto;
+    background: var(--vf-chrome-bg);
+    border: 1px solid var(--ov-stroke);
+    box-shadow: var(--vf-chrome-inset);
+    color: #e8f5ee;
+  }
+
+  .immersive__top-bar .immersive__move-toggle.is-active {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: var(--vf-chrome-bg-hover);
+    color: #e8f5ee;
+  }
+
+  @media (max-width: 400px) {
+    .immersive.immersive--move-pad .move-stack {
+      padding: 10px 12px;
+      gap: 10px;
+      border-radius: 18px;
+    }
+
+    .immersive.immersive--move-pad .eye-height {
+      gap: 8px;
+    }
+
+    .immersive.immersive--move-pad .eye-height__info {
+      width: 74px;
+    }
+
+    .immersive.immersive--move-pad .eye-height__btn {
+      width: 40px;
+      height: 42px;
+    }
+
+    .immersive.immersive--move-pad .move-pad {
+      grid-template-columns: repeat(3, 40px);
+      grid-template-rows: repeat(2, 44px);
+      gap: 4px;
+    }
+
+    .immersive.immersive--move-pad .move-pad__key {
+      width: 40px;
+      height: 44px;
+    }
+
+    .immersive.immersive--move-pad .eye-height__input {
+      font-size: 20px;
+    }
   }
 
   .moon-preview-pitch-stack {
-    top: 38%;
+    top: 50%;
     left: max(8px, env(safe-area-inset-left, 0px));
     transform: translateY(-50%);
   }
@@ -11087,29 +11555,73 @@ button.ov-capsule:hover {
     flex-wrap: nowrap;
   }
 
+  /* Compass under the single top bar. */
   .moon-preview-bearing-tape {
-    width: min(200px, calc(100vw - 176px));
-    margin-top: 6px;
+    top: calc(var(--imm-phone-top) + var(--imm-phone-bar-h) + 8px);
+    width: min(220px, calc(100vw - 88px));
+    margin-top: 0;
+    z-index: 7;
   }
 
-  .immersive__tool-capsule {
-    height: 40px;
-    min-height: 40px;
-    padding: 3px;
+  /* Terrain loader up: only the loader card — hide every other control. */
+  .immersive.immersive--loading .immersive__chrome,
+  .immersive.immersive--loading .immersive__top-bar,
+  .immersive.immersive--loading .immersive__hint,
+  .immersive.immersive--loading .immersive__exit,
+  .immersive.immersive--loading .move-stack,
+  .immersive.immersive--loading .moon-preview-bearing-tape,
+  .immersive.immersive--loading .moon-preview-pitch-stack,
+  .immersive.immersive--loading .moon-preview-pitch-tape,
+  .immersive.immersive--loading .moon-preview-hud-tools,
+  .immersive.immersive--loading .moon-preview-hud-credit,
+  .immersive.immersive--loading .photo-frame,
+  .immersive.immersive--loading .photo-frame__meta,
+  .immersive.immersive--loading .photo-frame__actions,
+  .immersive.immersive--loading .tlapse-hud {
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
   }
 
-  .immersive__chrome--right .vf-proj-control__muted,
-  .immersive__chrome--right .vf-proj-control__value,
-  .immersive__chrome--right .vf-proj-control__chevron {
-    display: none;
+  /* Equal size for icon buttons (LED+focal stays a compact pill). */
+  .immersive__top-bar .celestial-dock__toggle,
+  .immersive__top-bar .immersive__move-toggle,
+  .immersive__top-bar .vf-proj-control__trigger,
+  .immersive__top-bar .immersive__framings-btn,
+  .immersive__top-bar .immersive__exit {
+    box-sizing: border-box;
+    width: var(--imm-phone-bar-h);
+    min-width: var(--imm-phone-bar-h);
+    height: var(--imm-phone-bar-h);
+    min-height: var(--imm-phone-bar-h);
+    padding: 0;
+    border-radius: 12px;
   }
 
-  .immersive__framings-btn,
-  .immersive__exit,
-  .celestial-dock__toggle {
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
+  .immersive__top-bar .vf-proj-control {
+    width: var(--imm-phone-bar-h);
+    max-width: var(--imm-phone-bar-h);
+  }
+
+  .immersive__top-bar .vf-proj-control__trigger {
+    justify-content: center;
+    gap: 0;
+  }
+
+  .immersive__top-bar .celestial-dock {
+    width: var(--imm-phone-bar-h);
+    max-width: var(--imm-phone-bar-h);
+  }
+
+  .immersive.immersive--move-pad .immersive__hint {
+    bottom: calc(
+      max(10px, env(safe-area-inset-bottom, 0px)) + 140px
+    );
+  }
+
+  .immersive.immersive--move-pad .move-pad__key svg {
+    width: 16px;
+    height: 16px;
   }
 
   /* Settings panel fills phone safely */

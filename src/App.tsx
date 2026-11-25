@@ -389,6 +389,7 @@ export default function App() {
   const [immersiveTerrainReady, setImmersiveTerrainReady] = useState(false)
   /** Timelapse preview occupies the timeline slot — hide the dock. */
   const [timelapsePreviewPlaying, setTimelapsePreviewPlaying] = useState(false)
+  const [immersiveMovePadOpen, setImmersiveMovePadOpen] = useState(false)
 
   useEffect(() => {
     savePersonalSpotsState({
@@ -1138,7 +1139,9 @@ export default function App() {
     Math.abs(parkedImmersiveSpot.lon - spot.lon) < 1e-6
   const mountImmersive = immersive || keepImmersiveMounted
   const showTimeline =
-    (!immersive || immersiveTerrainReady) && !timelapsePreviewPlaying
+    (!immersive || immersiveTerrainReady) &&
+    !timelapsePreviewPlaying &&
+    !immersiveMovePadOpen
   const weatherLocation = spot
     ? { lat: spot.lat, lon: spot.lon }
     : null
@@ -1284,6 +1287,7 @@ export default function App() {
             onSelectCelestial={setSelectedCelestial}
             onTerrainReadyChange={setImmersiveTerrainReady}
             onTimelapsePreviewPlayingChange={setTimelapsePreviewPlaying}
+            onMovePadOpenChange={setImmersiveMovePadOpen}
             flatTerrain={flatTerrain}
             terrainQuality={effectiveTerrainQuality}
             framingsOpen={framingsOpen}
@@ -1303,6 +1307,7 @@ export default function App() {
               setImmersiveLook(null)
               setImmersiveTerrainReady(false)
               setTimelapsePreviewPlaying(false)
+              setImmersiveMovePadOpen(false)
               setMySpotsOpen(false)
               setFramingsOpen(false)
               setFramingsEditor(null)

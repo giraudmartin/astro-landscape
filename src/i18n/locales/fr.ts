@@ -532,6 +532,8 @@ export const fr = {
       down: 'Bas',
       left: 'Gauche',
       right: 'Droite',
+      toggle: 'Déplacement et élévation',
+      toggleHide: 'Masquer déplacement et élévation',
     },
     eye: {
       label: 'Élévation',
@@ -759,6 +761,8 @@ export const fr = {
       skyHint: 'Atmosphère, étoiles, pollution',
       weather: 'Météo',
       weatherHint: 'Nuages et couverture',
+      projection: 'Projection',
+      projectionHint: 'Stéréographique, équirectangulaire, rectiligne',
     },
     quality: {
       title: 'Qualité',

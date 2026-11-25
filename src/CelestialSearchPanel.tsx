@@ -4,8 +4,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import {
   buildSearchIndex,
   celestialObjectDisplayName,
@@ -16,6 +20,10 @@ import {
   type SearchHit,
 } from './celestialObjects'
 import { useT } from './i18n'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
+
+const SHEET_OPEN_VH = 0.62
+const SHEET_DISMISS_FRAC = 0.28
 
 type CelestialSearchPanelProps = {
   open: boolean
@@ -31,7 +39,9 @@ export function CelestialSearchPanel({
   selectedId,
 }: CelestialSearchPanelProps) {
   const t = useT()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const listId = useId()
+  const titleId = useId()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [query, setQuery] = useState('')
@@ -43,6 +53,48 @@ export function CelestialSearchPanel({
   )
   const [activeIndex, setActiveIndex] = useState(-1)
 
+  const dragRef = useRef<{
+    pointerId: number
+    startY: number
+    startOffset: number
+    moved: boolean
+  } | null>(null)
+  const suppressClickRef = useRef(false)
+  const [viewportH, setViewportH] = useState(() =>
+    typeof window === 'undefined' ? 800 : window.innerHeight,
+  )
+  const [progress, setProgress] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const [sheetMounted, setSheetMounted] = useState(false)
+
+  useEffect(() => {
+    if (!isPhone) return
+    const onResize = (): void => setViewportH(window.innerHeight)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [isPhone])
+
+  useEffect(() => {
+    if (!isPhone || dragging) return
+    if (open) {
+      setSheetMounted(true)
+      const frame = window.requestAnimationFrame(() => setProgress(1))
+      return () => window.cancelAnimationFrame(frame)
+    }
+    setProgress(0)
+    const timer = window.setTimeout(() => setSheetMounted(false), 240)
+    return () => window.clearTimeout(timer)
+  }, [open, dragging, isPhone])
+
+  useEffect(() => {
+    if (!isPhone || !open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [isPhone, open])
+
   useEffect(() => {
     if (!open) return
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus())
@@ -50,7 +102,7 @@ export function CelestialSearchPanel({
   }, [open])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || isPhone) return
     const onPointerDown = (event: PointerEvent) => {
       const root = rootRef.current
       if (!root) return
@@ -70,7 +122,7 @@ export function CelestialSearchPanel({
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open, onOpenChange])
+  }, [open, onOpenChange, isPhone])
 
   useEffect(() => {
     if (!open) {
@@ -130,10 +182,68 @@ export function CelestialSearchPanel({
     }
   }
 
-  if (!open) return null
+  const openHeight = viewportH * SHEET_OPEN_VH
+  const offsetY = (1 - progress) * openHeight
 
-  return (
-    <div ref={rootRef} className="celestial-search" role="search">
+  const endDrag = (clientY: number) => {
+    const drag = dragRef.current
+    dragRef.current = null
+    setDragging(false)
+    if (!drag) return
+    if (drag.moved) suppressClickRef.current = true
+    const delta = clientY - drag.startY
+    const next = Math.min(
+      1,
+      Math.max(0, drag.startOffset - delta / openHeight),
+    )
+    if (next < 1 - SHEET_DISMISS_FRAC) {
+      setProgress(0)
+      onOpenChange(false)
+      return
+    }
+    setProgress(1)
+  }
+
+  const onHandlePointerDown = (
+    event: ReactPointerEvent<HTMLElement>,
+  ): void => {
+    if (event.button !== 0) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startOffset: progress,
+      moved: false,
+    }
+    setDragging(true)
+  }
+
+  const onHandlePointerMove = (
+    event: ReactPointerEvent<HTMLElement>,
+  ): void => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const delta = event.clientY - drag.startY
+    if (Math.abs(delta) > 4) drag.moved = true
+    const next = Math.min(
+      1,
+      Math.max(0, drag.startOffset - delta / openHeight),
+    )
+    setProgress(next)
+  }
+
+  const onHandlePointerUp = (event: ReactPointerEvent<HTMLElement>): void => {
+    if (dragRef.current?.pointerId !== event.pointerId) return
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    } catch {
+      /* already released */
+    }
+    endDrag(event.clientY)
+  }
+
+  const searchBody: ReactNode = (
+    <>
       <form
         className="celestial-search__form"
         onSubmit={(event) => {
@@ -211,7 +321,7 @@ export function CelestialSearchPanel({
                     </span>
                     {hit.matchedOn &&
                     normalizeLoose(hit.matchedOn) !==
-                        normalizeLoose(hit.object.name) &&
+                      normalizeLoose(hit.object.name) &&
                     normalizeLoose(hit.matchedOn) !==
                       normalizeLoose(celestialObjectDisplayName(hit.object)) ? (
                       <span className="celestial-search__option-meta">
@@ -231,6 +341,91 @@ export function CelestialSearchPanel({
           </ul>
         </div>
       ) : null}
+    </>
+  )
+
+  if (isPhone) {
+    if (typeof document === 'undefined') return null
+    if (!sheetMounted) return null
+
+    return createPortal(
+      <div
+        className={
+          open || progress > 0.02
+            ? 'map-address-search-sheet is-open'
+            : 'map-address-search-sheet'
+        }
+        style={
+          {
+            '--mas-open-h': `${openHeight}px`,
+            '--mas-offset': `${offsetY}px`,
+          } as CSSProperties
+        }
+      >
+        {progress > 0.02 ? (
+          <button
+            type="button"
+            className="map-address-search-sheet__backdrop"
+            aria-label={t('common.close')}
+            style={{ opacity: Math.min(1, progress) * 0.45 }}
+            onClick={() => {
+              setProgress(0)
+              onOpenChange(false)
+            }}
+          />
+        ) : null}
+
+        <div
+          ref={rootRef}
+          className={
+            dragging
+              ? 'map-address-search-sheet__panel is-dragging'
+              : 'map-address-search-sheet__panel'
+          }
+          role="dialog"
+          aria-modal={open}
+          aria-labelledby={titleId}
+          aria-hidden={progress < 0.05}
+        >
+          <button
+            type="button"
+            className="map-address-search-sheet__handle"
+            aria-label={t('map.searchDismissHandle')}
+            onClick={() => {
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false
+                return
+              }
+              setProgress(0)
+              onOpenChange(false)
+            }}
+            onPointerDown={onHandlePointerDown}
+            onPointerMove={onHandlePointerMove}
+            onPointerUp={onHandlePointerUp}
+            onPointerCancel={onHandlePointerUp}
+          >
+            <span
+              className="map-address-search-sheet__handle-bar"
+              aria-hidden="true"
+            />
+          </button>
+          <h2 id={titleId} className="u-sr-only">
+            {t('immersive.searchCelestial')}
+          </h2>
+          <div className="celestial-search celestial-search--sheet">
+            {searchBody}
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )
+  }
+
+  if (!open) return null
+
+  return (
+    <div ref={rootRef} className="celestial-search" role="search">
+      {searchBody}
     </div>
   )
 }

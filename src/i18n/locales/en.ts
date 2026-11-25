@@ -525,6 +525,8 @@ export const en = {
       down: 'Down',
       left: 'Left',
       right: 'Right',
+      toggle: 'Move and height',
+      toggleHide: 'Hide move and height',
     },
     eye: {
       label: 'Height',
@@ -750,6 +752,8 @@ export const en = {
       skyHint: 'Atmosphere, stars, pollution',
       weather: 'Weather',
       weatherHint: 'Clouds and coverage',
+      projection: 'Projection',
+      projectionHint: 'Stereographic, equirectangular, rectilinear',
     },
     quality: {
       title: 'Quality',

@@ -66,6 +66,8 @@ type ViewfinderCaptureCapsuleProps = {
   /** True while the Timelapse settings sheet is open (cadrage save intent). */
   onTimelapseSettingsOpenChange?: (open: boolean) => void
   selectedCelestial: CelestialObject | null
+  /** Phone top bar: LED + focal pill; click expands the full desktop-like bar. */
+  compact?: boolean
 }
 
 /**
@@ -95,12 +97,20 @@ export function ViewfinderCaptureCapsule({
   timelapsePreviewPlaying = false,
   onTimelapseSettingsOpenChange,
   selectedCelestial,
+  compact = false,
 }: ViewfinderCaptureCapsuleProps) {
   const t = useT()
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null)
+  /** Phone: collapsed LED+focal pill → expanded desktop-like capture bar. */
+  const [barExpanded, setBarExpanded] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const frameModeRef = useRef(frameMode)
   frameModeRef.current = frameMode
+  const showFullBar = !compact || barExpanded
+
+  useEffect(() => {
+    if (!compact) setBarExpanded(false)
+  }, [compact])
 
   useEffect(() => {
     // Only notify on open — sticky Timelapse save kind lives in ImmersiveView.
@@ -110,7 +120,7 @@ export function ViewfinderCaptureCapsule({
   }, [settingsPanel, onTimelapseSettingsOpenChange])
 
   useEffect(() => {
-    if (!settingsPanel) return
+    if (!settingsPanel && !(compact && barExpanded)) return
     // Pano + Timelapse stay open while framing the view (live az/alt, preview).
     // Dismiss via X, Escape, or mode switch — not by dragging the stage.
     if (settingsPanel === 'timelapse' || settingsPanel === 'pano') return
@@ -119,10 +129,11 @@ export function ViewfinderCaptureCapsule({
       if (!target) return
       if (rootRef.current?.contains(target)) return
       setSettingsPanel(null)
+      if (compact) setBarExpanded(false)
     }
     window.addEventListener('pointerdown', onPointerDown, true)
     return () => window.removeEventListener('pointerdown', onPointerDown, true)
-  }, [settingsPanel])
+  }, [settingsPanel, compact, barExpanded])
 
   useEffect(() => {
     if (frameMode !== 'pano' && settingsPanel === 'pano') {
@@ -134,12 +145,13 @@ export function ViewfinderCaptureCapsule({
     const openFromHud = () => {
       // Timelapse always frames a single photo shot — leave Libre / Pano.
       if (frameModeRef.current !== 'dslr') onFrameModeChange('dslr')
+      if (compact) setBarExpanded(true)
       setSettingsPanel('timelapse')
     }
     window.addEventListener(OPEN_TIMELAPSE_SETTINGS_EVENT, openFromHud)
     return () =>
       window.removeEventListener(OPEN_TIMELAPSE_SETTINGS_EVENT, openFromHud)
-  }, [onFrameModeChange])
+  }, [onFrameModeChange, compact])
 
   const summary = `${Math.round(focalMm)} mm · ${SENSOR_FORMAT_SHORT[sensorFormat]} · ${
     orientation === 'landscape' ? t('common.landscape') : t('common.portrait')
@@ -149,19 +161,37 @@ export function ViewfinderCaptureCapsule({
     setSettingsPanel((current) => (current === panel ? null : panel))
   }
 
+  const openCameraFromPill = () => {
+    if (compact && !barExpanded) {
+      setBarExpanded(true)
+      setSettingsPanel('camera')
+      return
+    }
+    toggleSettings('camera')
+  }
+
   const applyFrameMode = (mode: ViewfinderFrameMode) => {
     onFrameModeChange(mode)
     setSettingsPanel(mode === 'pano' ? 'pano' : null)
+    if (compact) setBarExpanded(true)
   }
 
   const openTimelapse = () => {
     // Timelapse always frames a single photo shot — leave Libre / Pano.
     if (frameMode !== 'dslr') onFrameModeChange('dslr')
+    if (compact) setBarExpanded(true)
     toggleSettings('timelapse')
   }
 
   return (
-    <div ref={rootRef} className="vf-capture-capsule">
+    <div
+      ref={rootRef}
+      className={
+        compact
+          ? `vf-capture-capsule is-compact${barExpanded ? ' is-expanded' : ''}`
+          : 'vf-capture-capsule'
+      }
+    >
       <div
         className="vf-capture-capsule__bar"
         role="toolbar"
@@ -180,10 +210,12 @@ export function ViewfinderCaptureCapsule({
               ? 'vf-capture-capsule__gear is-active'
               : 'vf-capture-capsule__gear'
           }
-          aria-expanded={settingsPanel === 'camera'}
+          aria-expanded={
+            compact ? barExpanded || settingsPanel === 'camera' : settingsPanel === 'camera'
+          }
           aria-haspopup="dialog"
           title={t('viewfinder.capture.cameraSettings', { summary })}
-          onClick={() => toggleSettings('camera')}
+          onClick={openCameraFromPill}
         >
           <CameraBodyIcon size={16} />
           <span className="vf-capture-capsule__lens">
@@ -194,10 +226,13 @@ export function ViewfinderCaptureCapsule({
             <span className="vf-capture-capsule__detail">
               {SENSOR_FORMAT_SHORT[sensorFormat]}
             </span>
-            <span className="vf-capture-capsule__dot" aria-hidden="true">
+            <span
+              className="vf-capture-capsule__dot vf-capture-capsule__orient"
+              aria-hidden="true"
+            >
               ·
             </span>
-            <span className="vf-capture-capsule__detail">
+            <span className="vf-capture-capsule__detail vf-capture-capsule__orient">
               {orientation === 'landscape'
                 ? t('common.landscape')
                 : t('common.portrait')}
@@ -205,76 +240,80 @@ export function ViewfinderCaptureCapsule({
           </span>
         </button>
 
-        <div className="vf-capture-capsule__divider" aria-hidden="true" />
+        {showFullBar ? (
+          <>
+            <div className="vf-capture-capsule__divider" aria-hidden="true" />
 
-        <div className="vf-capture-capsule__finder">
-          <div
-            className="vf-capture-capsule__modes"
-            role="radiogroup"
-            aria-label={t('viewfinder.capture.frameAria')}
-          >
-            {VIEWFINDER_FRAME_MODES.map((mode) => {
-              const selected = frameMode === mode
-              const Icon = FRAME_MODE_ICONS[mode]
-              return (
+            <div className="vf-capture-capsule__finder">
+              <div
+                className="vf-capture-capsule__modes"
+                role="radiogroup"
+                aria-label={t('viewfinder.capture.frameAria')}
+              >
+                {VIEWFINDER_FRAME_MODES.map((mode) => {
+                  const selected = frameMode === mode
+                  const Icon = FRAME_MODE_ICONS[mode]
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      aria-label={viewfinderFrameModeTitle(mode)}
+                      title={viewfinderFrameModeTitle(mode)}
+                      className={
+                        selected
+                          ? 'vf-capture-capsule__mode is-active'
+                          : 'vf-capture-capsule__mode'
+                      }
+                      onClick={() => applyFrameMode(mode)}
+                    >
+                      <Icon size={16} />
+                      <span>{viewfinderFrameModeLabel(mode)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {frameMode === 'pano' ? (
                 <button
-                  key={mode}
                   type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  aria-label={viewfinderFrameModeTitle(mode)}
-                  title={viewfinderFrameModeTitle(mode)}
                   className={
-                    selected
-                      ? 'vf-capture-capsule__mode is-active'
-                      : 'vf-capture-capsule__mode'
+                    settingsPanel === 'pano'
+                      ? 'vf-capture-capsule__icon-btn is-active'
+                      : 'vf-capture-capsule__icon-btn'
                   }
-                  onClick={() => applyFrameMode(mode)}
+                  aria-expanded={settingsPanel === 'pano'}
+                  aria-haspopup="dialog"
+                  title={t('viewfinder.capture.panoSettings')}
+                  aria-label={t('viewfinder.capture.panoSettings')}
+                  onClick={() => toggleSettings('pano')}
                 >
-                  <Icon size={16} />
-                  <span>{viewfinderFrameModeLabel(mode)}</span>
+                  <SettingsSlidersIcon size={16} />
                 </button>
-              )
-            })}
-          </div>
+              ) : null}
+            </div>
 
-          {frameMode === 'pano' ? (
+            <div className="vf-capture-capsule__divider" aria-hidden="true" />
+
             <button
               type="button"
               className={
-                settingsPanel === 'pano'
-                  ? 'vf-capture-capsule__icon-btn is-active'
-                  : 'vf-capture-capsule__icon-btn'
+                settingsPanel === 'timelapse'
+                  ? 'vf-capture-capsule__timelapse is-active'
+                  : 'vf-capture-capsule__timelapse'
               }
-              aria-expanded={settingsPanel === 'pano'}
+              aria-expanded={settingsPanel === 'timelapse'}
               aria-haspopup="dialog"
-              title={t('viewfinder.capture.panoSettings')}
-              aria-label={t('viewfinder.capture.panoSettings')}
-              onClick={() => toggleSettings('pano')}
+              title={t('viewfinder.capture.tlapseSettings')}
+              aria-label={t('viewfinder.capture.tlapseSettings')}
+              onClick={openTimelapse}
             >
-              <SettingsSlidersIcon size={16} />
+              <TimelapseIcon size={16} />
+              <span>{t('viewfinder.capture.timelapse')}</span>
             </button>
-          ) : null}
-        </div>
-
-        <div className="vf-capture-capsule__divider" aria-hidden="true" />
-
-        <button
-          type="button"
-          className={
-            settingsPanel === 'timelapse'
-              ? 'vf-capture-capsule__timelapse is-active'
-              : 'vf-capture-capsule__timelapse'
-          }
-          aria-expanded={settingsPanel === 'timelapse'}
-          aria-haspopup="dialog"
-          title={t('viewfinder.capture.tlapseSettings')}
-          aria-label={t('viewfinder.capture.tlapseSettings')}
-          onClick={openTimelapse}
-        >
-          <TimelapseIcon size={16} />
-          <span>{t('viewfinder.capture.timelapse')}</span>
-        </button>
+          </>
+        ) : null}
       </div>
 
       <ViewfinderCameraPanel

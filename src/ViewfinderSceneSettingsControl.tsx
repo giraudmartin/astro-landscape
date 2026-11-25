@@ -15,6 +15,11 @@ import {
 import { ViewfinderQualityControl } from './ViewfinderQualityControl'
 import type { ViewfinderWeather } from './viewfinderWeather'
 import type { TerrainQuality } from './terrainQuality'
+import {
+  STAGE_PROJECTIONS,
+  stageProjectionMeta,
+  type StageProjection,
+} from './stelProjector'
 
 type ScenePanelId = 'landscape' | 'sky' | 'weather' | 'quality'
 
@@ -68,6 +73,13 @@ type ViewfinderSceneSettingsControlProps = {
     manual: ViewfinderWeather
     onWeatherChange: (next: ViewfinderWeather) => void
   }
+  /** When set, projection choices live inside the settings card (phone bar). */
+  projection?: {
+    value: StageProjection
+    onChange: (projection: StageProjection) => void
+  }
+  /** Icon-only trigger (no chevron) for the compact phone top bar. */
+  iconOnly?: boolean
 }
 
 const PANEL_IDS: ReadonlyArray<ScenePanelId> = [
@@ -87,6 +99,8 @@ export function ViewfinderSceneSettingsControl({
   landscape,
   sky,
   weather,
+  projection,
+  iconOnly = false,
 }: ViewfinderSceneSettingsControlProps) {
   const t = useT()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -155,7 +169,9 @@ export function ViewfinderSceneSettingsControl({
         onClick={() => setMenuOpen((value) => !value)}
       >
         <SettingsSlidersIcon size={16} />
-        <ChevronDownIcon className="vf-proj-control__chevron" size={12} />
+        {iconOnly ? null : (
+          <ChevronDownIcon className="vf-proj-control__chevron" size={12} />
+        )}
       </button>
 
       {menuOpen ? (
@@ -189,6 +205,45 @@ export function ViewfinderSceneSettingsControl({
               </button>
             )
           })}
+          {projection ? (
+            <>
+              <div
+                className="vf-proj-control__menu-sep"
+                role="separator"
+                aria-hidden="true"
+              />
+              <p className="vf-proj-control__menu-label">
+                {t('viewfinder.scene.projection')}
+              </p>
+              {STAGE_PROJECTIONS.map((mode) => {
+                const selected = projection.value === mode.id
+                const meta = stageProjectionMeta(mode.id)
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    className={
+                      selected
+                        ? 'vf-proj-control__option is-active'
+                        : 'vf-proj-control__option'
+                    }
+                    title={meta.title}
+                    onClick={() => {
+                      projection.onChange(mode.id)
+                      setMenuOpen(false)
+                    }}
+                  >
+                    <span className="vf-proj-control__option-copy">
+                      <b>{meta.label}</b>
+                      <small>{meta.title}</small>
+                    </span>
+                  </button>
+                )
+              })}
+            </>
+          ) : null}
         </div>
       ) : null}
 

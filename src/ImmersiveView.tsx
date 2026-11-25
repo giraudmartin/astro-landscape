@@ -56,7 +56,6 @@ import {
   createRenderDiagLive,
   type RenderDiagLive,
 } from './renderDiagnostic'
-import { RenderDiagnosticCard } from './RenderDiagnosticCard'
 import { shuffleAstroLoaderTips } from './astroLoaderTips'
 import { useLocale } from './i18n'
 import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
@@ -265,6 +264,8 @@ type ImmersiveViewProps = {
   onTerrainReadyChange?: (ready: boolean) => void
   /** So App can hide the timeline dock while playback mode is active. */
   onTimelapsePreviewPlayingChange?: (active: boolean) => void
+  /** Phone: move pad replaces the timeline dock while open. */
+  onMovePadOpenChange?: (open: boolean) => void
   /**
    * When false, the WebGL scene stays mounted (same-spot cache) but skips
    * rendering — used while the user is back on the orbit map.
@@ -316,6 +317,7 @@ export function ImmersiveView({
   onExit,
   onTerrainReadyChange,
   onTimelapsePreviewPlayingChange,
+  onMovePadOpenChange,
   active = true,
   flatTerrain = false,
   terrainQuality = DEFAULT_TERRAIN_QUALITY,
@@ -432,6 +434,7 @@ export function ImmersiveView({
   const [terrainUnlocked, setTerrainUnlocked] = useState(false)
   const terrainUnlockedRef = useRef(false)
   const [loaderVisible, setLoaderVisible] = useState(true)
+  const [movePadOpen, setMovePadOpen] = useState(false)
   const [loaderTip, setLoaderTip] = useState('')
   const [loaderTipKey, setLoaderTipKey] = useState(0)
   const loaderTipDeckRef = useRef<string[]>([])
@@ -806,20 +809,6 @@ export function ImmersiveView({
 
   const nightSkyApiRef = useRef<ReturnType<typeof createNightSky> | null>(null)
   const renderDiagLiveRef = useRef<RenderDiagLive>(createRenderDiagLive())
-  const diagContextRef = useRef({
-    projection,
-    stageVfovDeg,
-    yawDeg,
-    pitchDeg,
-    eyeHeightM,
-    cameraPos: { x: 0, y: 0, z: 0 },
-    logDepthBuffer: true as const,
-  })
-  diagContextRef.current.projection = projection
-  diagContextRef.current.stageVfovDeg = stageVfovDeg
-  diagContextRef.current.yawDeg = yawDeg
-  diagContextRef.current.pitchDeg = pitchDeg
-  diagContextRef.current.eyeHeightM = eyeHeightM
 
   const apiRef = useRef<{
     setLook: (yaw: number, pitch: number, rollDeg?: number) => void
@@ -1002,6 +991,14 @@ export function ImmersiveView({
   useEffect(() => {
     onTimelapsePreviewPlayingChange?.(timelapsePreviewActive)
   }, [timelapsePreviewActive, onTimelapsePreviewPlayingChange])
+
+  useEffect(() => {
+    onMovePadOpenChange?.(isPhone && movePadOpen)
+  }, [isPhone, movePadOpen, onMovePadOpenChange])
+
+  useEffect(() => {
+    if (!active || !isPhone) setMovePadOpen(false)
+  }, [active, isPhone])
 
   const endTimelapsePreview = () => {
     // Clear before exit() restores look — otherwise onLookChange would re-add it.
@@ -2234,12 +2231,6 @@ export function ImmersiveView({
         showTrajectories: skyTogglesRef.current.showTrajectories,
       })
 
-      diagContextRef.current.cameraPos = {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z,
-      }
-
       const urlAtlas =
         import.meta.env.DEV &&
         typeof window !== 'undefined' &&
@@ -2656,6 +2647,8 @@ export function ImmersiveView({
       className={[
         'immersive',
         terrainUnlocked ? '' : 'immersive--terrain-locked',
+        loaderVisible ? 'immersive--loading' : '',
+        isPhone && movePadOpen ? 'immersive--move-pad' : '',
         timelapsePreviewActive ? 'immersive--tlapse-playing' : '',
       ]
         .filter(Boolean)
@@ -2793,12 +2786,6 @@ export function ImmersiveView({
       ) : null}
       <div className="moon-preview-pitch-stack">
         <ViewPitchHud pitchDeg={pitchDeg} />
-        {import.meta.env.DEV ? (
-          <RenderDiagnosticCard
-            liveRef={renderDiagLiveRef}
-            getContext={() => ({ ...diagContextRef.current })}
-          />
-        ) : null}
       </div>
 
       <div
@@ -3017,8 +3004,9 @@ export function ImmersiveView({
         ) : null}
       </div>
 
-      <div className="immersive__chrome immersive__chrome--left">
+      <div className="immersive__top-bar">
         <ViewfinderCaptureCapsule
+          compact={isPhone}
           focalMm={focalMm}
           orientation={orientation}
           frameRollDeg={frameRollDeg}
@@ -3057,176 +3045,14 @@ export function ImmersiveView({
           onTimelapseSettingsOpenChange={onTimelapseSettingsOpenChange}
           selectedCelestial={selectedCelestial}
         />
-      </div>
-
-      {timelapsePreviewActive ? (
-        <TimelapsePreviewHud
-          phase={timelapsePreview.status.phase}
-          shotIndex={timelapsePreview.status.shotIndex}
-          shotCount={timelapsePreview.status.shotCount}
-          renderRollDeg={previewRenderRollDeg}
-          onPause={timelapsePreview.pause}
-          onResume={timelapsePreview.resume}
-          onStop={timelapsePreview.stop}
-          onReplay={timelapsePreview.replay}
-          onExit={endTimelapsePreview}
-          onSeek={timelapsePreview.seek}
-          onOpenSettings={() => {
-            endTimelapsePreview()
-            window.dispatchEvent(new Event(OPEN_TIMELAPSE_SETTINGS_EVENT))
-          }}
-          onRotateRender={() => {
-            setPreviewRenderRollDeg((deg) => (deg + 90) % 360)
-          }}
-        />
-      ) : null}
-
-      <div className="move-stack">
-        <div
-          className="move-pad"
-          role="group"
-          aria-label={t('immersive.move.group')}
-        >
-          {MOVE_DIRS.map((dir) => {
-            const down = keyHeld[dir] || pointerHeld[dir]
-            return (
-              <button
-                key={dir}
-                type="button"
-                className={
-                  down
-                    ? `move-pad__key move-pad__key--${dir} is-down`
-                    : `move-pad__key move-pad__key--${dir}`
-                }
-                aria-label={t(`immersive.move.${dir}`)}
-                aria-keyshortcuts={`Arrow${dir === 'up' ? 'Up' : dir === 'down' ? 'Down' : dir === 'left' ? 'Left' : 'Right'}`}
-                aria-pressed={down}
-                disabled={!terrainUnlocked}
-                onPointerDown={(event) => {
-                  if (!terrainUnlockedRef.current) return
-                  event.preventDefault()
-                  event.currentTarget.setPointerCapture(event.pointerId)
-                  setPointerHeld((held) => ({ ...held, [dir]: true }))
-                  apiRef.current?.step(dir)
-                  window.clearInterval(moveRepeatRef.current[dir])
-                  moveRepeatRef.current[dir] = window.setInterval(() => {
-                    apiRef.current?.step(dir)
-                  }, MOVE_STEP_MS)
-                }}
-                onPointerUp={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                    event.currentTarget.releasePointerCapture(event.pointerId)
-                  }
-                  setPointerHeld((held) => ({ ...held, [dir]: false }))
-                  window.clearInterval(moveRepeatRef.current[dir])
-                  delete moveRepeatRef.current[dir]
-                }}
-                onPointerCancel={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                    event.currentTarget.releasePointerCapture(event.pointerId)
-                  }
-                  setPointerHeld((held) => ({ ...held, [dir]: false }))
-                  window.clearInterval(moveRepeatRef.current[dir])
-                  delete moveRepeatRef.current[dir]
-                }}
-              >
-                <MoveArrow dir={dir} />
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="eye-height">
-          <span className="eye-height__label" id="eye-height-label">
-            {t('immersive.eye.label')}
-          </span>
-          <div
-            className="eye-height__stepper"
-            role="group"
-            aria-labelledby="eye-height-label"
-          >
-            <button
-              type="button"
-              className="eye-height__btn"
-              aria-label={t('immersive.eye.lower', {
-                cm: EYE_HEIGHT_STEP_M * 100,
-              })}
-              onClick={() => {
-                setEyeHeightDraft(null)
-                setEyeHeightM((h) =>
-                  clampEyeHeightM(
-                    Math.round((h - EYE_HEIGHT_STEP_M) * 100) / 100,
-                  ),
-                )
-              }}
-            >
-              −
-            </button>
-            <div className="eye-height__field">
-              <input
-                className="eye-height__input"
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                spellCheck={false}
-                value={
-                  eyeHeightDraft ?? formatEyeHeightDisplay(eyeHeightM)
-                }
-                aria-label={t('immersive.eye.aria')}
-                onChange={(event) => {
-                  setEyeHeightDraft(event.target.value)
-                }}
-                onBlur={() => {
-                  if (eyeHeightDraft == null) return
-                  const parsed = Number(
-                    eyeHeightDraft.trim().replace(',', '.'),
-                  )
-                  setEyeHeightDraft(null)
-                  if (!Number.isFinite(parsed)) return
-                  setEyeHeightM(clampEyeHeightM(parsed))
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.currentTarget.blur()
-                  } else if (event.key === 'Escape') {
-                    setEyeHeightDraft(null)
-                    event.currentTarget.blur()
-                  }
-                }}
-              />
-              <span className="eye-height__unit" aria-hidden="true">
-                m
-              </span>
-            </div>
-            <button
-              type="button"
-              className="eye-height__btn"
-              aria-label={t('immersive.eye.raise', {
-                cm: EYE_HEIGHT_STEP_M * 100,
-              })}
-              onClick={() => {
-                setEyeHeightDraft(null)
-                setEyeHeightM((h) =>
-                  clampEyeHeightM(
-                    Math.round((h + EYE_HEIGHT_STEP_M) * 100) / 100,
-                  ),
-                )
-              }}
-            >
-              +
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="immersive__chrome immersive__chrome--right">
+        <div className="immersive__top-bar__tools">
         <div className="celestial-dock">
           <button
             type="button"
             className={
               celestialSearchOpen || selectedCelestial
-                ? 'hud-btn celestial-dock__toggle is-active'
-                : 'hud-btn celestial-dock__toggle'
+                ? 'celestial-dock__toggle is-active'
+                : 'celestial-dock__toggle'
             }
             data-celestial-search-toggle=""
             aria-pressed={celestialSearchOpen}
@@ -3236,7 +3062,14 @@ export function ImmersiveView({
             onClick={() => setCelestialSearchOpen((v) => !v)}
           >
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-              <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <circle
+                cx="11"
+                cy="11"
+                r="6.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              />
               <path
                 d="m16 16 4.5 4.5"
                 fill="none"
@@ -3339,13 +3172,59 @@ export function ImmersiveView({
             />
           ) : null}
         </div>
-        <div
-          className="immersive__tool-capsule"
-          role="group"
-          aria-label={t('immersive.toolCapsuleAria')}
-        >
+        {isPhone ? (
+          <button
+            type="button"
+            className={
+              movePadOpen
+                ? 'celestial-dock__toggle immersive__move-toggle is-active'
+                : 'celestial-dock__toggle immersive__move-toggle'
+            }
+            aria-pressed={movePadOpen}
+            aria-label={
+              movePadOpen
+                ? t('immersive.move.toggleHide')
+                : t('immersive.move.toggle')
+            }
+            title={
+              movePadOpen
+                ? t('immersive.move.toggleHide')
+                : t('immersive.move.toggle')
+            }
+            onClick={() => {
+              setCelestialSearchOpen(false)
+              setMovePadOpen((v) => !v)
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 2v20" />
+              <path d="m15 19-3 3-3-3" />
+              <path d="m19 9 3 3-3 3" />
+              <path d="M2 12h20" />
+              <path d="m5 9-3 3 3 3" />
+              <path d="m9 5 3-3 3 3" />
+            </svg>
+          </button>
+        ) : null}
+        {isPhone ? (
           <ViewfinderSceneSettingsControl
+            iconOnly
             flatTerrain={flatTerrain}
+            projection={{
+              value: projection,
+              onChange: setProjection,
+            }}
             quality={{
               value: terrainQuality,
               onChange: (next) => {
@@ -3402,12 +3281,80 @@ export function ImmersiveView({
               onWeatherChange: setWeather,
             }}
           />
-          <span className="immersive__tool-capsule__divider" aria-hidden="true" />
-          <ViewfinderProjectionControl
-            projection={projection}
-            onProjectionChange={setProjection}
-          />
-        </div>
+        ) : (
+          <div
+            className="immersive__tool-capsule"
+            role="group"
+            aria-label={t('immersive.toolCapsuleAria')}
+          >
+            <ViewfinderSceneSettingsControl
+              flatTerrain={flatTerrain}
+              quality={{
+                value: terrainQuality,
+                onChange: (next) => {
+                  patchAppSettings({
+                    immersive: {
+                      terrainQuality: next,
+                      terrainQualityChosen: true,
+                    },
+                  })
+                  emitTerrainQualityChange(next)
+                },
+              }}
+              landscape={{
+                brightness: groundNightBrightness,
+                contrast: groundNightContrast,
+                temperature: groundNightTemperature,
+                tint: groundNightTint,
+                onBrightnessChange: setGroundNightBrightness,
+                onContrastChange: setGroundNightContrast,
+                onTemperatureChange: setGroundNightTemperature,
+                onTintChange: setGroundNightTint,
+              }}
+              sky={{
+                atmosphereAmount,
+                moonlightEnabled,
+                onMoonlightChange: setMoonlightEnabled,
+                showTrajectories,
+                onShowTrajectoriesChange: setShowTrajectories,
+                airglowAmount,
+                airglowHue,
+                airglowWaves,
+                zodiacalAmount,
+                lightPollutionAmount,
+                starMagDepth,
+                starZoomSpan,
+                starBrightness,
+                starGlow,
+                onAtmosphereAmountChange: setAtmosphereAmount,
+                onAirglowAmountChange: setAirglowAmount,
+                onAirglowHueChange: setAirglowHue,
+                onAirglowWavesChange: setAirglowWaves,
+                onZodiacalAmountChange: setZodiacalAmount,
+                onLightPollutionAmountChange: setLightPollutionAmount,
+                localHalo,
+                onLocalHaloChange: patchLocalHalo,
+                onStarMagDepthChange: setStarMagDepth,
+                onStarZoomSpanChange: setStarZoomSpan,
+                onStarBrightnessChange: setStarBrightness,
+                onStarGlowChange: setStarGlow,
+              }}
+              weather={{
+                manual: weatherSettings,
+                weather: weatherControls,
+                onWeatherChange: setWeather,
+              }}
+            />
+            <span
+              className="immersive__tool-capsule__divider"
+              aria-hidden="true"
+            />
+            <ViewfinderProjectionControl
+              projection={projection}
+              onProjectionChange={setProjection}
+            />
+          </div>
+        )}
         {onFramingsOpenChange ? (
           <button
             type="button"
@@ -3436,6 +3383,169 @@ export function ImmersiveView({
         >
           <CompactCloseIcon size={16} />
         </button>
+        </div>
+      </div>
+
+      {timelapsePreviewActive ? (
+        <TimelapsePreviewHud
+          phase={timelapsePreview.status.phase}
+          shotIndex={timelapsePreview.status.shotIndex}
+          shotCount={timelapsePreview.status.shotCount}
+          renderRollDeg={previewRenderRollDeg}
+          onPause={timelapsePreview.pause}
+          onResume={timelapsePreview.resume}
+          onStop={timelapsePreview.stop}
+          onReplay={timelapsePreview.replay}
+          onExit={endTimelapsePreview}
+          onSeek={timelapsePreview.seek}
+          onOpenSettings={() => {
+            endTimelapsePreview()
+            window.dispatchEvent(new Event(OPEN_TIMELAPSE_SETTINGS_EVENT))
+          }}
+          onRotateRender={() => {
+            setPreviewRenderRollDeg((deg) => (deg + 90) % 360)
+          }}
+        />
+      ) : null}
+
+      <div className="move-stack">
+        <div className="eye-height">
+          <div
+            className="eye-height__stepper"
+            role="group"
+            aria-labelledby="eye-height-label"
+          >
+            <button
+              type="button"
+              className="eye-height__btn eye-height__btn--raise"
+              aria-label={t('immersive.eye.raise', {
+                cm: EYE_HEIGHT_STEP_M * 100,
+              })}
+              onClick={() => {
+                setEyeHeightDraft(null)
+                setEyeHeightM((h) =>
+                  clampEyeHeightM(
+                    Math.round((h + EYE_HEIGHT_STEP_M) * 100) / 100,
+                  ),
+                )
+              }}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="eye-height__btn eye-height__btn--lower"
+              aria-label={t('immersive.eye.lower', {
+                cm: EYE_HEIGHT_STEP_M * 100,
+              })}
+              onClick={() => {
+                setEyeHeightDraft(null)
+                setEyeHeightM((h) =>
+                  clampEyeHeightM(
+                    Math.round((h - EYE_HEIGHT_STEP_M) * 100) / 100,
+                  ),
+                )
+              }}
+            >
+              −
+            </button>
+          </div>
+          <div className="eye-height__info">
+            <span className="eye-height__label" id="eye-height-label">
+              {t('immersive.eye.label')}
+            </span>
+            <div className="eye-height__field">
+              <input
+                className="eye-height__input"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                spellCheck={false}
+                value={
+                  eyeHeightDraft ?? formatEyeHeightDisplay(eyeHeightM)
+                }
+                aria-label={t('immersive.eye.aria')}
+                onChange={(event) => {
+                  setEyeHeightDraft(event.target.value)
+                }}
+                onBlur={() => {
+                  if (eyeHeightDraft == null) return
+                  const parsed = Number(
+                    eyeHeightDraft.trim().replace(',', '.'),
+                  )
+                  setEyeHeightDraft(null)
+                  if (!Number.isFinite(parsed)) return
+                  setEyeHeightM(clampEyeHeightM(parsed))
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.currentTarget.blur()
+                  } else if (event.key === 'Escape') {
+                    setEyeHeightDraft(null)
+                    event.currentTarget.blur()
+                  }
+                }}
+              />
+              <span className="eye-height__unit" aria-hidden="true">
+                m
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="move-pad"
+          role="group"
+          aria-label={t('immersive.move.group')}
+        >
+          {MOVE_DIRS.map((dir) => {
+            const down = keyHeld[dir] || pointerHeld[dir]
+            return (
+              <button
+                key={dir}
+                type="button"
+                className={
+                  down
+                    ? `move-pad__key move-pad__key--${dir} is-down`
+                    : `move-pad__key move-pad__key--${dir}`
+                }
+                aria-label={t(`immersive.move.${dir}`)}
+                aria-keyshortcuts={`Arrow${dir === 'up' ? 'Up' : dir === 'down' ? 'Down' : dir === 'left' ? 'Left' : 'Right'}`}
+                aria-pressed={down}
+                disabled={!terrainUnlocked}
+                onPointerDown={(event) => {
+                  if (!terrainUnlockedRef.current) return
+                  event.preventDefault()
+                  event.currentTarget.setPointerCapture(event.pointerId)
+                  setPointerHeld((held) => ({ ...held, [dir]: true }))
+                  apiRef.current?.step(dir)
+                  window.clearInterval(moveRepeatRef.current[dir])
+                  moveRepeatRef.current[dir] = window.setInterval(() => {
+                    apiRef.current?.step(dir)
+                  }, MOVE_STEP_MS)
+                }}
+                onPointerUp={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId)
+                  }
+                  setPointerHeld((held) => ({ ...held, [dir]: false }))
+                  window.clearInterval(moveRepeatRef.current[dir])
+                  delete moveRepeatRef.current[dir]
+                }}
+                onPointerCancel={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId)
+                  }
+                  setPointerHeld((held) => ({ ...held, [dir]: false }))
+                  window.clearInterval(moveRepeatRef.current[dir])
+                  delete moveRepeatRef.current[dir]
+                }}
+              >
+                <MoveArrow dir={dir} />
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <div className="immersive__hint">

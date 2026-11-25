@@ -27,7 +27,9 @@ npm run build
 echo "==> Publish web → ${WEB_DIST_DIR}"
 sudo mkdir -p "${WEB_DIST_DIR}"
 # --delete refreshes the SPA; COG lives outside this tree (Caddy handle).
-sudo rsync -a --delete \
+# --delay-updates writes into a temp name then renames, shrinking the window
+# where index.html already points at hashes not yet fully on disk.
+sudo rsync -a --delete --delay-updates \
   --exclude 'light-pollution/' \
   dist/ "${WEB_DIST_DIR}/"
 sudo chown -R caddy:caddy "${WEB_DIST_DIR}"

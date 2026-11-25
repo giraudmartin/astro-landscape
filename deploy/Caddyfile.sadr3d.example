@@ -13,6 +13,12 @@
 # origin (same host via reverse_proxy, or https://horizon.sadr3d.com if you
 # proxy / to the API paths the front already calls). Adjust to match the
 # existing alpha Caddyfile — do not blindly replace a working IP site.
+#
+# Cache policy (Sphere only — do not copy these headers onto Horizon blindly):
+#   index.html     → no-cache (always revalidate → fresh hashed bundles)
+#   /assets/*      → immutable year (Vite content hashes in filenames)
+#   sky/models/…   → 1 day + must-revalidate (fixed URLs, rarely change)
+#   COG            → 30 days (replaced rarely; Range requests still work)
 
 horizon.sadr3d.com {
 	encode gzip zstd
@@ -49,12 +55,27 @@ sphere.sadr3d.com {
 	# Caddy file_server supports Range → 206 Partial Content.
 	handle /light-pollution/* {
 		root * /home/ubuntu/sadr3d-sphere/data
+		header Cache-Control "public, max-age=2592000"
+		file_server
+	}
+
+	# Vite hashed JS/CSS/workers — no SPA fallback (missing hash → real 404).
+	handle /assets/* {
+		root * /var/www/sadr3d-sphere
+		header Cache-Control "public, max-age=31536000, immutable"
 		file_server
 	}
 
 	handle {
 		root * /var/www/sadr3d-sphere
-		# Single-page app today; fallback ready if client routes appear later.
+
+		@html path / /index.html
+		header @html Cache-Control "no-cache"
+
+		@static path /sky/* /models/* /vendor/* /catalogs/* /favicon.svg /icons.svg
+		header @static Cache-Control "public, max-age=86400, must-revalidate"
+
+		# SPA fallback for unknown paths (no client router today; keep for later).
 		try_files {path} /index.html
 		file_server
 	}

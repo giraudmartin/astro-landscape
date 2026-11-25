@@ -101,7 +101,37 @@ bash scripts/deploy-sphere.sh
 
 Or **Actions → Deploy Sphere → Run workflow**.
 
+## HTTP cache (Sphere)
+
+After a deploy, a normal page refresh must pick up the new SPA. That depends on
+Caddy headers on **`sphere.sadr3d.com` only** (do not change Horizon’s block):
+
+| Path | `Cache-Control` |
+|------|-----------------|
+| `/`, `/index.html` | `no-cache` (revalidate every navigation) |
+| `/assets/*` (Vite hashes) | `public, max-age=31536000, immutable` |
+| `/sky/*`, `/models/*`, `/vendor/*`, `/catalogs/*`, favicon/icons | `public, max-age=86400, must-revalidate` |
+| `/light-pollution/*` (COG) | `public, max-age=2592000` |
+
+Missing `/assets/*` must return **404**, not the SPA HTML (`try_files` must not
+apply under `/assets/`).
+
+When updating the live `/etc/caddy/Caddyfile`, merge only the Sphere block from
+[`deploy/Caddyfile.sadr3d.example`](../deploy/Caddyfile.sadr3d.example), then:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+bash scripts/check-sphere-cache.sh https://sphere.sadr3d.com
+```
+
 ## Smoke tests
+
+### Cache headers
+
+```bash
+bash scripts/check-sphere-cache.sh https://sphere.sadr3d.com
+```
 
 ### Range requests (COG)
 
@@ -116,7 +146,7 @@ Expect `HTTP/2 206` (or `HTTP/1.1 206 Partial Content`).
 1. Open `https://sphere.sadr3d.com` — map loads.  
 2. Enable PL heatmap — tiles paint (COG protocol).  
 3. Drop a spot — Bortle card shows a class (zenith sample from COG).  
-4. Hard-refresh / direct load of `/` — SPA loads (no React Router today; `try_files` still in place).
+4. Soft-refresh `/` after a deploy — HTML revalidates and loads the new hashed bundles (no manual cache clear).
 
 ### Local unchanged
 
@@ -127,7 +157,7 @@ npm run dev
 
 ## Notes
 
-- `rsync --delete` excludes `light-pollution/` under the web root; the real COG is only under `~/sadr3d-sphere/data/`.  
+- `rsync --delete --delay-updates` excludes `light-pollution/` under the web root; the real COG is only under `~/sadr3d-sphere/data/`.  
 - Horizon deploy (`deploy-alpha.sh`) is unchanged and must not point at Sphere paths.  
 - SPA: no client-side path router in Sphere today — only query flags.  
 - Hosting cost stays on the fixed VPS when traffic grows (bandwidth within OVH plan).

@@ -108,6 +108,16 @@ export function ViewfinderCaptureCapsule({
   frameModeRef.current = frameMode
   const showFullBar = !compact || barExpanded
 
+  const collapseChrome = () => {
+    setSettingsPanel(null)
+    setBarExpanded(false)
+  }
+
+  const openPanel = (panel: Exclude<SettingsPanel, null>) => {
+    if (compact) setBarExpanded(true)
+    setSettingsPanel(panel)
+  }
+
   useEffect(() => {
     if (!compact) setBarExpanded(false)
   }, [compact])
@@ -128,11 +138,18 @@ export function ViewfinderCaptureCapsule({
       const target = event.target as Node | null
       if (!target) return
       if (rootRef.current?.contains(target)) return
-      setSettingsPanel(null)
-      if (compact) setBarExpanded(false)
+      collapseChrome()
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      collapseChrome()
     }
     window.addEventListener('pointerdown', onPointerDown, true)
-    return () => window.removeEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('keydown', onKeyDown)
+    }
   }, [settingsPanel, compact, barExpanded])
 
   useEffect(() => {
@@ -145,8 +162,7 @@ export function ViewfinderCaptureCapsule({
     const openFromHud = () => {
       // Timelapse always frames a single photo shot — leave Libre / Pano.
       if (frameModeRef.current !== 'dslr') onFrameModeChange('dslr')
-      if (compact) setBarExpanded(true)
-      setSettingsPanel('timelapse')
+      openPanel('timelapse')
     }
     window.addEventListener(OPEN_TIMELAPSE_SETTINGS_EVENT, openFromHud)
     return () =>
@@ -158,37 +174,64 @@ export function ViewfinderCaptureCapsule({
   }`
 
   const toggleSettings = (panel: Exclude<SettingsPanel, null>) => {
-    setSettingsPanel((current) => (current === panel ? null : panel))
+    if (settingsPanel === panel) {
+      collapseChrome()
+      return
+    }
+    openPanel(panel)
   }
 
   const openCameraFromPill = () => {
-    if (compact && !barExpanded) {
-      setBarExpanded(true)
-      setSettingsPanel('camera')
+    if (compact && (barExpanded || settingsPanel === 'camera')) {
+      collapseChrome()
       return
     }
-    toggleSettings('camera')
+    openPanel('camera')
   }
 
   const applyFrameMode = (mode: ViewfinderFrameMode) => {
     onFrameModeChange(mode)
-    setSettingsPanel(mode === 'pano' ? 'pano' : null)
+    if (mode === 'pano') {
+      // Pano → carte réglages panorama.
+      openPanel('pano')
+      return
+    }
+    // Free / Photo: ne ferme pas la carte ouverte (ex. Appareil photo).
     if (compact) setBarExpanded(true)
+    if (settingsPanel === 'pano' || settingsPanel === 'timelapse') {
+      openPanel('camera')
+    }
   }
 
   const openTimelapse = () => {
     // Timelapse always frames a single photo shot — leave Libre / Pano.
     if (frameMode !== 'dslr') onFrameModeChange('dslr')
-    if (compact) setBarExpanded(true)
-    toggleSettings('timelapse')
+    openPanel('timelapse')
   }
+
+  const onPanelOpenChange =
+    (panel: Exclude<SettingsPanel, null>) => (open: boolean) => {
+      if (open) {
+        openPanel(panel)
+        return
+      }
+      // X / Escape from a card must restore the normal phone chrome.
+      collapseChrome()
+    }
 
   return (
     <div
       ref={rootRef}
       className={
         compact
-          ? `vf-capture-capsule is-compact${barExpanded ? ' is-expanded' : ''}`
+          ? [
+              'vf-capture-capsule',
+              'is-compact',
+              barExpanded ? 'is-expanded' : '',
+              settingsPanel ? 'is-panel-open' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')
           : 'vf-capture-capsule'
       }
     >
@@ -319,7 +362,7 @@ export function ViewfinderCaptureCapsule({
       <ViewfinderCameraPanel
         hideToggle
         open={settingsPanel === 'camera'}
-        onOpenChange={(open) => setSettingsPanel(open ? 'camera' : null)}
+        onOpenChange={onPanelOpenChange('camera')}
         focalMm={focalMm}
         orientation={orientation}
         frameRollDeg={frameRollDeg}
@@ -333,7 +376,7 @@ export function ViewfinderCaptureCapsule({
       <ViewfinderPanoramaPanel
         hideToggle
         open={settingsPanel === 'pano'}
-        onOpenChange={(open) => setSettingsPanel(open ? 'pano' : null)}
+        onOpenChange={onPanelOpenChange('pano')}
         plan={panorama}
         opticalHFovDeg={opticalHFovDeg}
         opticalVFovDeg={opticalVFovDeg}
@@ -347,13 +390,13 @@ export function ViewfinderCaptureCapsule({
         onChange={onPanoramaChange}
         focalMm={focalMm}
         orientation={orientation}
-        onEditCamera={() => setSettingsPanel('camera')}
+        onEditCamera={() => openPanel('camera')}
       />
 
       <ViewfinderTimelapsePanel
         hideToggle
         open={settingsPanel === 'timelapse'}
-        onOpenChange={(open) => setSettingsPanel(open ? 'timelapse' : null)}
+        onOpenChange={onPanelOpenChange('timelapse')}
         plan={timelapse}
         onChange={onTimelapseChange}
         onStartPreview={onStartTimelapsePreview}

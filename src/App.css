@@ -6641,12 +6641,13 @@ html[data-qa-hide-chrome='1'] .photo-frame {
     gap: 2px;
   }
 
-  .vf-capture-capsule .vf-camera-panel,
-  .vf-capture-capsule .vf-camera-panel--pop {
+  /* Non-compact phone fallback; immersive compact panel overrides below. */
+  .vf-capture-capsule:not(.is-compact) .vf-camera-panel,
+  .vf-capture-capsule:not(.is-compact) .vf-camera-panel--pop {
     width: min(300px, calc(100vw - 24px));
   }
 
-  .vf-capture-capsule .vf-camera-pop {
+  .vf-capture-capsule:not(.is-compact) .vf-camera-pop {
     max-height: min(62dvh, calc(100dvh - var(--mobile-above-dock, 180px) - 72px));
   }
 
@@ -11195,12 +11196,16 @@ button.ov-capsule:hover {
     white-space: nowrap;
   }
 
-  /* Expanded: full desktop-like capture bar; hide compass + other top chrome. */
+  /* Expanded: full capture bar only (Libre/Photo/Pano) — tools gone from layout. */
   .immersive:has(.vf-capture-capsule.is-expanded) .immersive__top-bar {
     flex-wrap: nowrap;
   }
 
-  .immersive:has(.vf-capture-capsule.is-expanded) .immersive__top-bar__tools,
+  /* Barre ouverte = plus d’icônes derrière / en dessous (search · move · …). */
+  .immersive:has(.vf-capture-capsule.is-expanded) .immersive__top-bar__tools {
+    display: none !important;
+  }
+
   .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-bearing-tape,
   .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-bearing-tape__altitude,
   .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-pitch-stack,
@@ -11214,7 +11219,7 @@ button.ov-capsule:hover {
   }
 
   .vf-capture-capsule.is-compact.is-expanded {
-    flex: 1 1 auto;
+    flex: 1 1 100%;
     width: 100%;
     max-width: none;
   }
@@ -11227,12 +11232,8 @@ button.ov-capsule:hover {
     gap: 6px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    /* Assombri quand la barre est ouverte / sélectionnée */
-    background: rgba(10, 11, 14, 0.94);
-    border-color: rgba(255, 255, 255, 0.2);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      0 10px 28px rgba(0, 0, 0, 0.45);
+    background: var(--vf-chrome-bg);
+    border-color: rgba(255, 255, 255, 0.16);
   }
 
   .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__divider {
@@ -11246,7 +11247,14 @@ button.ov-capsule:hover {
     gap: 6px;
   }
 
-  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__gear.is-active {
+  /* Infos déjà dans la carte → libère la place pour Free/Photo/Pano. */
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__lens,
+  .vf-capture-capsule.is-compact.is-panel-open .vf-capture-capsule__lens {
+    display: none;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__gear.is-active,
+  .vf-capture-capsule.is-compact.is-panel-open .vf-capture-capsule__gear.is-active {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.22);
     border-radius: 8px;
@@ -11267,7 +11275,32 @@ button.ov-capsule:hover {
     gap: 6px;
   }
 
-  /* Action cards: full screen width under the capture bar. */
+  /*
+   * Panel open: keep the capture bar (focale · Free/Photo/Pano).
+   * Hide only competing chrome that used to bleed through the card.
+   */
+  .immersive:has(.vf-capture-capsule.is-panel-open) .immersive__top-bar__tools {
+    display: none !important;
+  }
+
+  .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-bearing-tape,
+  .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-pitch-stack,
+  .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-pitch-tape,
+  .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-hud-tools,
+  .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-hud-credit,
+  .immersive:has(.vf-capture-capsule.is-panel-open) .immersive__hint {
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+  }
+
+  .immersive:has(.vf-capture-capsule.is-panel-open) .vf-capture-capsule__bar {
+    visibility: visible !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+  }
+
+  /* Action cards: full width under the capture bar. */
   .vf-capture-capsule.is-compact .vf-camera-panel,
   .vf-capture-capsule.is-compact .vf-camera-panel--pop {
     position: fixed;
@@ -11276,18 +11309,37 @@ button.ov-capsule:hover {
     top: calc(var(--imm-phone-top) + var(--imm-phone-bar-h) + 10px);
     width: auto;
     max-width: none;
-    z-index: 20;
+    z-index: 30;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-camera-panel,
+  .vf-capture-capsule.is-compact.is-expanded .vf-camera-panel--pop,
+  .vf-capture-capsule.is-compact.is-panel-open .vf-camera-panel,
+  .vf-capture-capsule.is-compact.is-panel-open .vf-camera-panel--pop {
+    top: calc(var(--imm-phone-top) + var(--imm-phone-bar-h) + 12px);
   }
 
   .vf-capture-capsule.is-compact .vf-camera-pop {
     width: 100%;
     max-width: none;
-    max-height: min(
-      70dvh,
-      calc(100dvh - var(--mobile-above-dock, 180px) - 96px)
+    max-height: calc(
+      100dvh - var(--imm-phone-top) - var(--imm-phone-bar-h) -
+        max(12px, env(safe-area-inset-bottom, 0px)) - 28px
     );
-    background: rgba(10, 11, 14, 0.96);
-    border-color: rgba(255, 255, 255, 0.16);
+    padding: 14px 14px 16px;
+    gap: 12px;
+    /* Plus sombre, mais toujours transparent (verre). */
+    background: rgba(14, 16, 22, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 18px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 16px 40px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(22px) saturate(1.08);
+    -webkit-backdrop-filter: blur(22px) saturate(1.08);
   }
 
   .moon-preview-hud-tools {

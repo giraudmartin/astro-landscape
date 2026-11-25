@@ -21,8 +21,11 @@ import {
 } from './celestialObjects'
 import { useT } from './i18n'
 import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
+import {
+  phoneSheetPlacement,
+  usePhoneSheetViewport,
+} from './usePhoneSheetViewport'
 
-const SHEET_OPEN_VH = 0.62
 const SHEET_DISMISS_FRAC = 0.28
 
 type CelestialSearchPanelProps = {
@@ -60,19 +63,10 @@ export function CelestialSearchPanel({
     moved: boolean
   } | null>(null)
   const suppressClickRef = useRef(false)
-  const [viewportH, setViewportH] = useState(() =>
-    typeof window === 'undefined' ? 800 : window.innerHeight,
-  )
+  const sheetFrame = usePhoneSheetViewport(isPhone, isPhone && open)
   const [progress, setProgress] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [sheetMounted, setSheetMounted] = useState(false)
-
-  useEffect(() => {
-    if (!isPhone) return
-    const onResize = (): void => setViewportH(window.innerHeight)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [isPhone])
 
   useEffect(() => {
     if (!isPhone || dragging) return
@@ -97,7 +91,9 @@ export function CelestialSearchPanel({
 
   useEffect(() => {
     if (!open) return
-    const frame = window.requestAnimationFrame(() => inputRef.current?.focus())
+    const frame = window.requestAnimationFrame(() =>
+      inputRef.current?.focus({ preventScroll: true }),
+    )
     return () => window.cancelAnimationFrame(frame)
   }, [open])
 
@@ -182,7 +178,8 @@ export function CelestialSearchPanel({
     }
   }
 
-  const openHeight = viewportH * SHEET_OPEN_VH
+  const placement = phoneSheetPlacement(sheetFrame)
+  const openHeight = placement.openHeight
   const offsetY = (1 - progress) * openHeight
 
   const endDrag = (clientY: number) => {
@@ -350,15 +347,15 @@ export function CelestialSearchPanel({
 
     return createPortal(
       <div
-        className={
-          open || progress > 0.02
-            ? 'map-address-search-sheet is-open'
-            : 'map-address-search-sheet'
-        }
+        className={`map-address-search-sheet${
+          open || progress > 0.02 ? ' is-open' : ''
+        }${placement.keyboardOpen ? ' is-keyboard' : ''}`}
         style={
           {
             '--mas-open-h': `${openHeight}px`,
             '--mas-offset': `${offsetY}px`,
+            '--vv-top': `${placement.top}px`,
+            '--vv-height': `${placement.height}px`,
           } as CSSProperties
         }
       >

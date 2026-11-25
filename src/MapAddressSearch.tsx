@@ -13,10 +13,13 @@ import { createPortal } from 'react-dom'
 import { searchAddresses, type AddressSearchResult } from './addressSearch'
 import { useT } from './i18n'
 import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
+import {
+  phoneSheetPlacement,
+  usePhoneSheetViewport,
+} from './usePhoneSheetViewport'
 
 const DEBOUNCE_MS = 420
 const MIN_QUERY_LENGTH = 3
-const SHEET_OPEN_VH = 0.62
 const SHEET_DISMISS_FRAC = 0.28
 
 type MapCenter = { lat: number; lon: number }
@@ -60,21 +63,12 @@ export function MapAddressSearch({
     moved: boolean
   } | null>(null)
   const suppressClickRef = useRef(false)
-  const [viewportH, setViewportH] = useState(() =>
-    typeof window === 'undefined' ? 800 : window.innerHeight,
-  )
+  const sheetFrame = usePhoneSheetViewport(isPhone, isPhone && open)
   /** 0 = closed (off-screen), 1 = fully open. Phone sheet only. */
   const [progress, setProgress] = useState(0)
   const [dragging, setDragging] = useState(false)
   /** Keep the portal mounted through the close slide. */
   const [sheetMounted, setSheetMounted] = useState(false)
-
-  useEffect(() => {
-    if (!isPhone) return
-    const onResize = (): void => setViewportH(window.innerHeight)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [isPhone])
 
   useEffect(() => {
     if (!isPhone || dragging) return
@@ -108,7 +102,7 @@ export function MapAddressSearch({
   useEffect(() => {
     if (!open) return
     const frame = window.requestAnimationFrame(() => {
-      inputRef.current?.focus()
+      inputRef.current?.focus({ preventScroll: true })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [open])
@@ -226,7 +220,8 @@ export function MapAddressSearch({
     }
   }
 
-  const openHeight = Math.round(viewportH * SHEET_OPEN_VH)
+  const placement = phoneSheetPlacement(sheetFrame)
+  const openHeight = placement.openHeight
   const offsetY = openHeight * (1 - progress)
 
   const endDrag = (clientY: number): void => {
@@ -369,15 +364,15 @@ export function MapAddressSearch({
 
     return createPortal(
       <div
-        className={
-          open || progress > 0.02
-            ? 'map-address-search-sheet is-open'
-            : 'map-address-search-sheet'
-        }
+        className={`map-address-search-sheet${
+          open || progress > 0.02 ? ' is-open' : ''
+        }${placement.keyboardOpen ? ' is-keyboard' : ''}`}
         style={
           {
             '--mas-open-h': `${openHeight}px`,
             '--mas-offset': `${offsetY}px`,
+            '--vv-top': `${placement.top}px`,
+            '--vv-height': `${placement.height}px`,
           } as CSSProperties
         }
       >

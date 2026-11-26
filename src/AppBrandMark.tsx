@@ -6,7 +6,7 @@ import {
 } from './appMeta'
 import { useT } from './i18n'
 
-/** Product signature — Sphere / by Sadr3D / version · © */
+/** Product signature — Sphere by Sadr3D / version · © (onboarding-matched lockup) */
 export function AppBrandMark() {
   const t = useT()
   return (
@@ -18,9 +18,11 @@ export function AppBrandMark() {
         version: APP_VERSION,
       })}
     >
-      <span className="app-brand-mark__product">{APP_PRODUCT}</span>
-      <span className="app-brand-mark__by">
-        {t('common.brandBy', { brand: APP_BRAND })}
+      <span className="app-brand-mark__lockup">
+        <span className="app-brand-mark__product">{APP_PRODUCT}</span>
+        <span className="app-brand-mark__by">
+          {t('common.brandBy', { brand: APP_BRAND })}
+        </span>
       </span>
       <span className="app-brand-mark__meta">
         v{APP_VERSION} · {APP_COPYRIGHT}

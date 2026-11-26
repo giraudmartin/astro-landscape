@@ -1564,16 +1564,6 @@ html.is-rail-resizing .my-events-rail {
   color: #fff;
 }
 
-.map-address-search__near {
-  margin: 0;
-  padding: 0 2px;
-  color: rgba(var(--ui-accent-rgb), 0.78);
-  font-size: 0.72rem;
-  font-weight: 550;
-  letter-spacing: 0.02em;
-  line-height: 1.3;
-}
-
 .map-address-search__hint {
   margin: 0;
   padding: 0 2px;
@@ -11015,7 +11005,6 @@ button.ov-capsule:hover {
   }
 
   .map-address-search--sheet .map-address-search__form,
-  .map-address-search--sheet .map-address-search__near,
   .map-address-search--sheet .map-address-search__hint {
     flex: 0 0 auto;
   }

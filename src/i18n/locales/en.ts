@@ -99,7 +99,7 @@ export const en = {
       },
       network: {
         title: 'Network requests',
-        body: 'To display the map, terrain, weather and address search, your browser contacts third-party services (Mapterhorn, Esri, Open-Meteo, Nominatim/OSM, NASA GIBS, OpenFreeMap, etc.). These services see your IP and the tiles / requests needed (place, date).',
+        body: 'To display the map, terrain, weather and address search, your browser contacts third-party services (Mapterhorn, Esri, Open-Meteo, Photon/Komoot (OSM), NASA GIBS, OpenFreeMap, etc.). These services see your IP and the tiles / requests needed (place, date).',
       },
       bug: {
         title: 'Bug reports',
@@ -137,7 +137,6 @@ export const en = {
     uiAria: 'Overview and weather',
     searchPlace: 'Search for a place',
     searchPlaceholder: 'Search for a place…',
-    searchNear: 'Prioritizing near {lat}°, {lon}°',
     searchLoading: 'Searching…',
     searchError: 'Search error',
     searchDismissHandle: 'Swipe down to close search',

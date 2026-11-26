@@ -45,10 +45,10 @@ Celestial catalog build notes: `public/catalogs/ATTRIBUTION.md`.
 
 - Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community.
 
-## OpenStreetMap / OpenFreeMap / Nominatim
+## OpenStreetMap / OpenFreeMap / Photon
 
 - Plan basemap labels via OpenFreeMap (OSM data, [ODbL](https://www.openstreetmap.org/copyright)).
-- Place search via [Nominatim](https://nominatim.org/) — respect the [usage policy](https://operations.osmfoundation.org/policies/nominatim/).
+- Place search via [Photon](https://photon.komoot.io/) (Komoot) on OpenStreetMap data — fair use of the public API; availability is not guaranteed.
 
 ## Open-Meteo
 

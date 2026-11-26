@@ -23,7 +23,7 @@ The browser may contact, depending on features used:
 | Mapterhorn | Terrain DEM tiles |
 | Esri World Imagery | Satellite basemap |
 | OpenFreeMap / OpenStreetMap | Plan labels |
-| Nominatim (OSM) | Address / place search |
+| Photon (Komoot) / OSM | Address / place search |
 | Open-Meteo | Forecast / recent archive weather |
 | NASA GIBS / Black Marble | Night-lights overlay / fallback |
 | VIIRS COG host (or same origin `/light-pollution/…`) | Zenith SQM / PL map |

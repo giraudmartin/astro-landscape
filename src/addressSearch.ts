@@ -7,11 +7,33 @@ export type AddressSearchResult = {
 
 export type MapNear = { lat: number; lon: number }
 
-type NominatimItem = {
-  display_name?: string
-  lat?: string
-  lon?: string
-  boundingbox?: [string, string, string, string]
+/** Photon / GeocodeJSON feature properties we care about. */
+type PhotonProperties = {
+  name?: string
+  housenumber?: string
+  street?: string
+  district?: string
+  city?: string
+  county?: string
+  state?: string
+  country?: string
+  postcode?: string
+  /** Photon extent: [minLon, maxLat, maxLon, minLat] */
+  extent?: [number, number, number, number]
+}
+
+type PhotonFeature = {
+  type?: string
+  geometry?: {
+    type?: string
+    coordinates?: [number, number] | number[]
+  }
+  properties?: PhotonProperties
+}
+
+type PhotonResponse = {
+  type?: string
+  features?: PhotonFeature[]
 }
 
 function haversineKm(a: MapNear, b: MapNear): number {
@@ -38,40 +60,94 @@ export function sortByDistanceTo(
   )
 }
 
-function parseNominatimItems(data: NominatimItem[]): AddressSearchResult[] {
-  if (!Array.isArray(data)) return []
-  return data.flatMap((item) => {
-    const lat = Number(item.lat)
-    const lon = Number(item.lon)
-    const label = item.display_name?.trim()
-    if (!label || !Number.isFinite(lat) || !Number.isFinite(lon)) return []
-    let bbox: [number, number, number, number] | null = null
-    if (item.boundingbox?.length === 4) {
-      const south = Number(item.boundingbox[0])
-      const north = Number(item.boundingbox[1])
-      const west = Number(item.boundingbox[2])
-      const east = Number(item.boundingbox[3])
-      if ([south, north, west, east].every(Number.isFinite)) {
-        bbox = [west, south, east, north]
-      }
+/** Build a single-line label from Photon GeocodeJSON properties. */
+export function formatPhotonLabel(props: PhotonProperties): string {
+  const streetLine = [props.housenumber, props.street]
+    .filter((p): p is string => Boolean(p?.trim()))
+    .join(' ')
+    .trim()
+  const parts = [
+    props.name?.trim(),
+    streetLine || null,
+    props.postcode?.trim(),
+    props.district?.trim(),
+    props.city?.trim(),
+    props.county?.trim(),
+    props.state?.trim(),
+    props.country?.trim(),
+  ].filter((p): p is string => Boolean(p))
+
+  // Drop consecutive duplicates (e.g. name === city for "Berlin").
+  const deduped: string[] = []
+  for (const part of parts) {
+    if (
+      deduped.length === 0 ||
+      deduped[deduped.length - 1].toLowerCase() !== part.toLowerCase()
+    ) {
+      deduped.push(part)
     }
-    return [{ label, lat, lon, bbox }]
+  }
+  return deduped.join(', ')
+}
+
+function extentToBbox(
+  extent: [number, number, number, number] | undefined,
+): [number, number, number, number] | null {
+  if (!extent || extent.length !== 4) return null
+  const [minLon, maxLat, maxLon, minLat] = extent.map(Number)
+  if (![minLon, maxLat, maxLon, minLat].every(Number.isFinite)) return null
+  // AddressSearchResult bbox: [west, south, east, north]
+  return [minLon, minLat, maxLon, maxLat]
+}
+
+/** Map Photon GeoJSON features → AddressSearchResult (exported for unit tests). */
+export function parsePhotonFeatures(
+  data: PhotonResponse | PhotonFeature[] | unknown,
+): AddressSearchResult[] {
+  const features = Array.isArray(data)
+    ? data
+    : data && typeof data === 'object' && Array.isArray((data as PhotonResponse).features)
+      ? (data as PhotonResponse).features!
+      : null
+  if (!features) return []
+
+  return features.flatMap((feature) => {
+    const coords = feature?.geometry?.coordinates
+    if (!coords || coords.length < 2) return []
+    const lon = Number(coords[0])
+    const lat = Number(coords[1])
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return []
+    const props = feature.properties ?? {}
+    const label = formatPhotonLabel(props)
+    if (!label) return []
+    return [
+      {
+        label,
+        lat,
+        lon,
+        bbox: extentToBbox(props.extent),
+      },
+    ]
   })
 }
 
 /**
- * Nominatim search (browser).
- * Always worldwide — never `bounded=1` (that hid Deadvlei outside Namibia).
- * Soft viewbox + client distance sort only prefer nearby when several hits exist.
+ * Photon (Komoot) place search — direct browser call to photon.komoot.io.
+ * Always worldwide — never Photon's hard `bbox` filter (that hid far places).
+ * Soft lat/lon location bias + client distance sort only prefer nearby when
+ * several hits exist.
  */
 export async function searchAddresses(
   query: string,
   options?: {
     limit?: number
     signal?: AbortSignal
-    /** Soft bias toward current map view (bounded=0 only). */
+    /**
+     * Soft bias toward current map view. Unused as a Photon hard filter;
+     * kept for API compatibility — prefer `near` for location bias.
+     */
     viewbox?: [number, number, number, number] | null
-    /** Map center — used only to re-rank results. */
+    /** Map center — soft Photon lat/lon bias + client re-rank. */
     near?: MapNear | null
   },
 ): Promise<AddressSearchResult[]> {
@@ -79,20 +155,26 @@ export async function searchAddresses(
   if (q.length < 3) return []
 
   const limit = options?.limit ?? 5
-  // Ask Nominatim for a few extra so distance re-rank can surface nearby hits
+  // Ask Photon for a few extra so distance re-rank can surface nearby hits
   // without ever excluding a unique far match like Deadvlei.
   const fetchLimit = Math.min(10, Math.max(limit, limit * 2))
 
-  const url = new URL('https://nominatim.openstreetmap.org/search')
-  url.searchParams.set('format', 'jsonv2')
+  const url = new URL('https://photon.komoot.io/api/')
   url.searchParams.set('q', q)
   url.searchParams.set('limit', String(fetchLimit))
-  url.searchParams.set('addressdetails', '0')
-  if (options?.viewbox) {
-    const [west, south, east, north] = options.viewbox
-    url.searchParams.set('viewbox', `${west},${north},${east},${south}`)
-    // Soft preference only — hard bound hides places outside the viewport.
-    url.searchParams.set('bounded', '0')
+
+  // Soft location bias only — never Photon's hard `bbox=` filter.
+  const near =
+    options?.near ??
+    (options?.viewbox
+      ? {
+          lon: (options.viewbox[0] + options.viewbox[2]) / 2,
+          lat: (options.viewbox[1] + options.viewbox[3]) / 2,
+        }
+      : null)
+  if (near && Number.isFinite(near.lat) && Number.isFinite(near.lon)) {
+    url.searchParams.set('lat', String(near.lat))
+    url.searchParams.set('lon', String(near.lon))
   }
 
   const response = await fetch(url.toString(), {
@@ -105,8 +187,8 @@ export async function searchAddresses(
     throw new Error(`Address search failed (${response.status})`)
   }
 
-  const data = (await response.json()) as NominatimItem[]
-  const results = parseNominatimItems(data)
+  const data = (await response.json()) as PhotonResponse
+  const results = parsePhotonFeatures(data)
   if (options?.near) {
     return sortByDistanceTo(results, options.near).slice(0, limit)
   }

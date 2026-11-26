@@ -101,7 +101,7 @@ export const fr = {
       },
       network: {
         title: 'Appels réseau',
-        body: 'Pour afficher la carte, le relief, la météo et la recherche d’adresses, le navigateur contacte des services tiers (Mapterhorn, Esri, Open-Meteo, Nominatim/OSM, NASA GIBS, OpenFreeMap, etc.). Ces services voient l’IP et les tuiles / requêtes nécessaires (lieu, date).',
+        body: 'Pour afficher la carte, le relief, la météo et la recherche d’adresses, le navigateur contacte des services tiers (Mapterhorn, Esri, Open-Meteo, Photon/Komoot (OSM), NASA GIBS, OpenFreeMap, etc.). Ces services voient l’IP et les tuiles / requêtes nécessaires (lieu, date).',
       },
       bug: {
         title: 'Signalement de bug',
@@ -139,7 +139,6 @@ export const fr = {
     uiAria: 'Aperçu et météo',
     searchPlace: 'Rechercher un lieu',
     searchPlaceholder: 'Rechercher un lieu…',
-    searchNear: 'Priorité près de {lat}°, {lon}°',
     searchLoading: 'Recherche…',
     searchError: 'Erreur de recherche',
     searchDismissHandle: 'Glisser vers le bas pour fermer la recherche',

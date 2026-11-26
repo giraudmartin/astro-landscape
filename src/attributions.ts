@@ -63,7 +63,7 @@ export const APP_ATTRIBUTIONS: readonly AttributionEntry[] = [
     id: 'openstreetmap',
     nameKey: 'settings.attr.osm',
     credit:
-      'Basemap labels via OpenFreeMap / OpenStreetMap contributors (ODbL). Place search via Nominatim (OpenStreetMap) — usage subject to the Nominatim usage policy.',
+      'Basemap labels via OpenFreeMap / OpenStreetMap contributors (ODbL). Place search via Photon (Komoot) on OpenStreetMap data — fair-use of the public photon.komoot.io API.',
     url: 'https://www.openstreetmap.org/copyright',
   },
   {

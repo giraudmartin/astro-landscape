@@ -287,8 +287,6 @@ export function MapAddressSearch({
     endDrag(event.clientY)
   }
 
-  const center = getMapCenter()
-
   const searchBody: ReactNode = (
     <>
       <form className="map-address-search__form" onSubmit={onSubmit}>
@@ -311,14 +309,6 @@ export function MapAddressSearch({
           onKeyDown={onInputKeyDown}
         />
       </form>
-      {center ? (
-        <p className="map-address-search__near">
-          {t('map.searchNear', {
-            lat: center.lat.toFixed(2),
-            lon: center.lon.toFixed(2),
-          })}
-        </p>
-      ) : null}
       {status === 'loading' ? (
         <p className="map-address-search__hint">{t('map.searchLoading')}</p>
       ) : null}

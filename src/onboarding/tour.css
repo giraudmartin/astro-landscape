@@ -1,0 +1,285 @@
+/* Interactive onboarding tour — coach marks */
+
+.onboarding-tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  pointer-events: none;
+}
+
+/* Above immersive chrome (top bar / rails). */
+.onboarding-tour-root--immersive {
+  z-index: 120;
+}
+
+.onboarding-tour__mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.onboarding-tour__scrim-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 85;
+  pointer-events: auto;
+  /* Transparent hit layer: blocks map / panels / markers under the tour. */
+  background: transparent;
+}
+
+.onboarding-tour__ring {
+  position: fixed;
+  z-index: 86;
+  border: 2px solid rgba(var(--ui-accent-rgb), 0.85);
+  border-radius: 14px;
+  pointer-events: none;
+  box-sizing: border-box;
+  transition:
+    top 220ms var(--motion-ease-out),
+    left 220ms var(--motion-ease-out),
+    width 220ms var(--motion-ease-out),
+    height 220ms var(--motion-ease-out);
+}
+
+.onboarding-tour__ring.is-round {
+  border-radius: 999px;
+}
+
+.onboarding-tour__card {
+  position: fixed;
+  z-index: 87;
+  width: min(360px, calc(100vw - 32px));
+  padding: 18px 18px 16px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--r-xl);
+  background: rgba(14, 16, 22, 0.94);
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: blur(16px);
+  color: var(--ui-text);
+  pointer-events: auto;
+}
+
+.onboarding-tour__step {
+  margin: 0 0 8px;
+  color: var(--ui-accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.onboarding-tour__title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.onboarding-tour__body {
+  margin: 0 0 16px;
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.onboarding-tour__body--follow {
+  margin-top: 0;
+}
+
+.onboarding-tour__card--wide {
+  width: min(420px, calc(100vw - 32px));
+}
+
+/* Map-like patch so the real marker veil/overlay reads like on the map. */
+.onboarding-tour__marker-demo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 220px;
+  margin: 4px 0 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(58, 72, 64, 0.95) 0%,
+      rgba(36, 48, 52, 0.98) 45%,
+      rgba(28, 34, 40, 1) 100%
+    ),
+    repeating-linear-gradient(
+      -18deg,
+      transparent,
+      transparent 11px,
+      rgba(255, 255, 255, 0.03) 11px,
+      rgba(255, 255, 255, 0.03) 12px
+    );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+.onboarding-tour__marker-demo-glow {
+  display: none;
+}
+
+/* Same classes / CSS as the live map pin — only kill motion + disable clicks. */
+.onboarding-tour__marker-demo-pin {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  transition: none !important;
+}
+
+.onboarding-tour__marker-demo-pin,
+.onboarding-tour__marker-demo-pin * {
+  transition: none !important;
+  transition-delay: 0ms !important;
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+.onboarding-tour__marker-demo-pin .spot-action-marker__label {
+  display: none;
+}
+
+.onboarding-tour__action-row:nth-child(1) .onboarding-tour__action-icon {
+  color: #fbbc04;
+}
+
+.onboarding-tour__action-row:nth-child(2) .onboarding-tour__action-icon {
+  color: var(--ui-accent);
+}
+
+.onboarding-tour__action-row:nth-child(3) .onboarding-tour__action-icon {
+  color: #9ec5ff;
+}
+
+.onboarding-tour__action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-tour__action-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.onboarding-tour__action-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(17, 19, 26, 0.92);
+  color: #fff;
+}
+
+.onboarding-tour__action-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.onboarding-tour__action-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.onboarding-tour__action-label {
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.onboarding-tour__action-hint {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.onboarding-tour__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.onboarding-tour__skip {
+  margin-right: auto;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: #9caaa6;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.onboarding-tour__skip:hover {
+  color: var(--ui-text);
+}
+
+.onboarding-tour__skip:focus-visible,
+.onboarding-tour__next:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.onboarding-tour__next {
+  margin: 0;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--ui-accent);
+  color: #10271d;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.onboarding-tour__next:hover {
+  background: var(--ui-accent-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-tour__ring {
+    transition: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .onboarding-tour__card {
+    left: 16px !important;
+    right: 16px;
+    width: auto;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    top: auto !important;
+  }
+}
+
+@media (min-width: 701px) {
+  .onboarding-tour__card {
+    max-width: min(360px, calc(100vw - 32px));
+  }
+}

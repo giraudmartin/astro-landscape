@@ -11,6 +11,7 @@ import { APP_COPYRIGHT, APP_NAME, APP_VERSION } from './appMeta'
 import { loadAppSettings, patchAppSettings } from './appSettings'
 import { BugReportCard } from './BugReportCard'
 import { LOCALES, useLocale } from './i18n'
+import { openOnboardingIntro, openOnboardingTour } from './onboarding'
 import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 
 /** Open the map settings dialog (e.g. from the phone top drawer). */
@@ -29,6 +30,7 @@ type SettingsSection =
   | 'language'
   | 'quality'
   | 'about'
+  | 'onboarding'
   | 'attributions'
   | 'privacy'
 
@@ -38,6 +40,7 @@ const SETTINGS_SECTIONS: readonly {
   labelKey: string
 }[] = [
   { id: 'about', labelKey: 'settings.section.about' },
+  { id: 'onboarding', labelKey: 'settings.section.onboarding' },
   { id: 'quality', labelKey: 'settings.section.quality' },
   { id: 'attributions', labelKey: 'settings.section.attributions' },
   { id: 'privacy', labelKey: 'settings.section.privacy' },
@@ -309,6 +312,40 @@ export function MapSettingsPanel() {
                           {APP_COPYRIGHT}
                         </p>
                       </div>
+                    </div>
+                  ) : null}
+
+                  {section === 'onboarding' ? (
+                    <div className="settings-panel__section">
+                      <p className="settings-panel__hint">
+                        {t('settings.onboarding.hint')}
+                      </p>
+                      <button
+                        type="button"
+                        className="settings-panel__intro-action"
+                        onClick={() => {
+                          setOpen(false)
+                          openOnboardingIntro()
+                        }}
+                      >
+                        {t('settings.onboarding.replayIntro')}
+                      </button>
+                      <p className="settings-panel__intro-hint">
+                        {t('settings.onboarding.replayIntroHint')}
+                      </p>
+                      <button
+                        type="button"
+                        className="settings-panel__intro-action"
+                        onClick={() => {
+                          setOpen(false)
+                          openOnboardingTour()
+                        }}
+                      >
+                        {t('settings.onboarding.replayTour')}
+                      </button>
+                      <p className="settings-panel__intro-hint">
+                        {t('settings.onboarding.replayTourHint')}
+                      </p>
                     </div>
                   ) : null}
 

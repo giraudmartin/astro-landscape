@@ -9,14 +9,12 @@ import { useT } from './i18n'
 import { SettingsSlidersIcon } from './psIcons'
 import { ViewfinderFloatPanel } from './ViewfinderFloatPanel'
 import {
-  applyWeatherCoverPreset,
   clampCloudAltKm,
   clampCloudCoverPct,
   clampCloudDensityPct,
   clampCloudThickKm,
   clampCloudWind,
   getWeatherTotalCloudCoverPct,
-  WEATHER_COVER_PRESETS,
   type ViewfinderWeather,
   type WeatherCloudLayer,
 } from './viewfinderWeather'
@@ -36,7 +34,8 @@ type ViewfinderWeatherControlProps = {
 }
 
 const FLOAT_POS_STORAGE_KEY = 'vf-weather-panel-float-pos'
-const DEFAULT_FLOAT_POS = { x: 470, y: 72 }
+/** Prefer right side so tour coach cards can sit bottom-left. */
+const DEFAULT_FLOAT_POS = { x: 520, y: 56 }
 
 function rangeProgressStyle(
   value: number,
@@ -212,32 +211,6 @@ function WeatherPanelBody({
             }
           />
         </label>
-        <p className="vf-landscape-menu__legend-note">
-          {t('viewfinder.weather.coverNote', {
-            pct: weather.totalCloudsPct,
-          })}
-        </p>
-        <div className="vf-landscape-menu__field vf-landscape-menu__field--row">
-          {(
-            [
-              ['clear', t('viewfinder.weather.preset.clear')],
-              ['scattered', t('viewfinder.weather.preset.scattered')],
-              ['overcast', t('viewfinder.weather.preset.overcast')],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              className="hud-btn"
-              style={{ width: 'auto', minWidth: 0, padding: '4px 8px', fontSize: '0.7rem' }}
-              onClick={() =>
-                onWeatherChange(applyWeatherCoverPreset(base, key))
-              }
-            >
-              {label}
-            </button>
-          ))}
-        </div>
         <label className="vf-landscape-menu__field vf-landscape-menu__field--row">
           <span className="vf-landscape-menu__label">
             {t('viewfinder.weather.followOwm')}
@@ -299,8 +272,8 @@ function WeatherPanelBody({
       <LayerEditor
         title={t('viewfinder.weather.layer.low')}
         layer={weather.low}
-        altMin={1.2}
-        altMax={3.5}
+        altMin={0.5}
+        altMax={5}
         onChange={(low) =>
           onWeatherChange({ ...base, followForecast: false, low })
         }
@@ -308,8 +281,8 @@ function WeatherPanelBody({
       <LayerEditor
         title={t('viewfinder.weather.layer.mid')}
         layer={weather.mid}
-        altMin={3.6}
-        altMax={6}
+        altMin={2.5}
+        altMax={9}
         onChange={(mid) =>
           onWeatherChange({ ...base, followForecast: false, mid })
         }
@@ -317,8 +290,8 @@ function WeatherPanelBody({
       <LayerEditor
         title={t('viewfinder.weather.layer.high')}
         layer={weather.high}
-        altMin={6.1}
-        altMax={9}
+        altMin={5}
+        altMax={14}
         onChange={(high) =>
           onWeatherChange({ ...base, followForecast: false, high })
         }
@@ -383,6 +356,7 @@ export function ViewfinderWeatherControl(props: ViewfinderWeatherControlProps) {
         storageKey={FLOAT_POS_STORAGE_KEY}
         defaultPos={DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}
+        tourAnchor="vf-float-weather"
       >
         <WeatherPanelBody {...panelProps} />
       </ViewfinderFloatPanel>
@@ -398,6 +372,3 @@ export function weatherControlsFromSettings(
     totalCloudsPct: getWeatherTotalCloudCoverPct(settings),
   }
 }
-
-// Silence unused preset map warning in some bundlers.
-void WEATHER_COVER_PRESETS

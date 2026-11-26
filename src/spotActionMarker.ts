@@ -103,6 +103,7 @@ export function createSpotActionMarkerElement(
   element.className = 'spot-action-marker spot-action-marker--active'
   element.setAttribute('role', 'group')
   element.setAttribute('aria-label', currentLabels.group)
+  element.setAttribute('data-tour-anchor', 'spot-marker')
   element.innerHTML = `
     <span class="spot-action-marker__veil" aria-hidden="true"></span>
     <div class="spot-action-marker__orbit">

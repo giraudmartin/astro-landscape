@@ -77,6 +77,7 @@ export function ViewfinderQualityControl({
         storageKey={FLOAT_POS_STORAGE_KEY}
         defaultPos={DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}
+        tourAnchor="vf-float-quality"
       >
         <section className="vf-sky-panel__section">
           <h3 className="vf-sky-panel__section-title">

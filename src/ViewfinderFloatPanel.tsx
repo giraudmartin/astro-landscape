@@ -23,6 +23,8 @@ type ViewfinderFloatPanelProps = {
   /** Portal host — usually `.immersive`. Resolved from trigger if omitted. */
   hostSelector?: string
   triggerRef?: React.RefObject<HTMLElement | null>
+  /** Immersive onboarding coach-mark target. */
+  tourAnchor?: string
 }
 
 const PANEL_WIDTH = 288
@@ -99,6 +101,7 @@ export function ViewfinderFloatPanel({
   children,
   hostSelector = '.immersive',
   triggerRef,
+  tourAnchor,
 }: ViewfinderFloatPanelProps) {
   const t = useT()
   const [floatPos, setFloatPos] = useState<FloatPos>(() =>
@@ -198,6 +201,7 @@ export function ViewfinderFloatPanel({
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}
+      data-tour-anchor={tourAnchor || undefined}
       style={
         {
           left: floatPos.x,

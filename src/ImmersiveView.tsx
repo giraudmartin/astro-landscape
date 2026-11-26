@@ -86,7 +86,11 @@ import {
   nextCompositionGuideMode,
   type CompositionGuideMode,
 } from './compositionGuides'
-import { clampEyeHeightM, EYE_HEIGHT_STEP_M } from './presets'
+import {
+  clampEyeHeightM,
+  EYE_HEIGHT_MIN_M,
+  EYE_HEIGHT_STEP_M,
+} from './presets'
 import { ViewBearingHud } from './ViewBearingHud'
 import { type PanoramaPlan } from './panorama'
 import {
@@ -113,6 +117,10 @@ import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
 import { ViewfinderSceneSettingsControl } from './ViewfinderSceneSettingsControl'
 import { type LocalHaloControls } from './ViewfinderSkyControl'
 import { weatherControlsFromSettings } from './ViewfinderWeatherControl'
+import {
+  TOUR_DEMO_SKY_EVENT,
+  TOUR_DEMO_WEATHER_EVENT,
+} from './onboarding/immersiveTourUi'
 import { fetchWeatherForecast } from './weatherForecast'
 import {
   DEFAULT_VIEWFINDER_WEATHER,
@@ -640,6 +648,57 @@ export function ImmersiveView({
       forecast: null,
     })
   }, [])
+
+  useEffect(() => {
+    if (!active) return
+    const onTourWeather = () => {
+      setWeatherSettings((prev) => ({
+        ...prev,
+        enabled: true,
+        followForecast: false,
+        animateClouds: true,
+        low: {
+          ...prev.low,
+          enabled: true,
+          cover: Math.max(prev.low.cover, 70),
+          densityPct: Math.max(prev.low.densityPct, 100),
+        },
+        mid: { ...prev.mid, enabled: false, cover: 0 },
+        high: { ...prev.high, enabled: false, cover: 0 },
+        forecast: null,
+      }))
+    }
+    const onTourSky = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        amount?: number
+        hue?: number
+        waves?: number
+      }>).detail
+      const amount = clampAirglowAmount(detail?.amount ?? 0.8)
+      const hue = clampAirglowHue(detail?.hue ?? 0)
+      const waves = clampAirglowWaves(detail?.waves ?? 0.85)
+      setAirglowAmount(amount)
+      setAirglowHue(hue)
+      setAirglowWaves(waves)
+      setShowMilkyWay(true)
+      setShowConstellations(true)
+      patchAppSettings({
+        immersive: {
+          airglowAmount: amount,
+          airglowHue: hue,
+          airglowWaves: waves,
+          showMilkyWay: true,
+          showConstellations: true,
+        },
+      })
+    }
+    window.addEventListener(TOUR_DEMO_WEATHER_EVENT, onTourWeather)
+    window.addEventListener(TOUR_DEMO_SKY_EVENT, onTourSky)
+    return () => {
+      window.removeEventListener(TOUR_DEMO_WEATHER_EVENT, onTourWeather)
+      window.removeEventListener(TOUR_DEMO_SKY_EVENT, onTourSky)
+    }
+  }, [active])
 
   const skyTogglesRef = useRef({
     showMilkyWay: savedImmersive.showMilkyWay,
@@ -3438,6 +3497,7 @@ export function ImmersiveView({
               aria-label={t('immersive.eye.lower', {
                 cm: EYE_HEIGHT_STEP_M * 100,
               })}
+              disabled={eyeHeightM <= EYE_HEIGHT_MIN_M}
               onClick={() => {
                 setEyeHeightDraft(null)
                 setEyeHeightM((h) =>

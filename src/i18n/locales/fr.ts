@@ -32,7 +32,7 @@ export const fr = {
     approxMb: '~{mb} Mo',
     level: {
       high: 'Élevée',
-      highHint: 'Relief et ortho max — détail plein cadre',
+      highHint: 'Relief et ortho max : détail plein cadre',
       standard: 'Standard',
       standardHint: 'Même couverture, DEM / ortho un cran plus grossiers',
       medium: 'Moyenne',
@@ -53,6 +53,7 @@ export const fr = {
     navAria: 'Sections des paramètres',
     section: {
       about: 'À propos',
+      onboarding: 'Onboarding',
       quality: 'Qualité',
       attributions: 'Attributions',
       privacy: 'Confidentialité',
@@ -74,6 +75,14 @@ export const fr = {
       p1: 'J’ai conçu Sadr3D Sphere pour préparer des photos de paysage nocturne : repérer un spot, lire le relief et la pollution lumineuse, cadrer au viseur, puis vérifier le ciel immersif avant de sortir.',
       p2: 'Même famille d’outils que Sadr3D Horizon (alignements Lune / Soleil avec le paysage). Ici l’accent est sur le ciel profond, le Bortle estimé et la composition terrain.',
     },
+    onboarding: {
+      hint: 'Revois les slides de présentation ou le guidage complet (carte puis immersif).',
+      replayIntro: 'Revoir l’introduction',
+      replayIntroHint: 'Relance les 3 slides de présentation de Sphere.',
+      replayTour: 'Revoir le guidage',
+      replayTourHint:
+        'Relance le parcours complet : spot Mirador, panels, puis viseur et cadrage en immersif.',
+    },
     attributions: {
       hint: 'Sources de données et contenus tiers utilisés par l’app (cartes, catalogues, météo, licences).',
     },
@@ -93,7 +102,7 @@ export const fr = {
       hint: 'Résumé de ce que l’app lit, stocke et envoie. Pas de compte ni d’analytics.',
       local: {
         title: 'Données locales',
-        body: 'Spots, cadrages, réglages et positions de panneaux sont stockés dans le navigateur (localStorage / IndexedDB). Rien n’est envoyé à un compte Sadr3D Sphere — il n’y en a pas.',
+        body: 'Spots, cadrages, réglages et positions de panneaux sont stockés dans le navigateur (localStorage / IndexedDB). Rien n’est envoyé à un compte Sadr3D Sphere. Il n’y en a pas.',
       },
       geo: {
         title: 'Géolocalisation',
@@ -134,6 +143,154 @@ export const fr = {
     },
   },
 
+  onboarding: {
+    skip: 'Passer l’introduction',
+    continue: 'Continuer',
+    back: 'Retour',
+    start: 'C’est parti',
+    dotsAria: 'Progression de l’introduction',
+    slideN: 'Slide {n}',
+    tour: {
+      skip: 'Passer le guidage',
+      progress: 'Étape {current} / {total}',
+      spotName: 'Mirador de Los Andenes',
+      cta: {
+        next: 'Continuer',
+        place: 'Placer le spot',
+        addFraming: 'Ajouter le cadrage',
+        immersive: 'Ouvrir la vue immersive',
+        finish: 'Terminer',
+      },
+      exampleFramingName: 'Mirador · exemple',
+      steps: {
+        welcome: {
+          title: 'Créons ton premier spot',
+          body: 'Pour l’onboarding, on t’emmène à La Palma, au Mirador de Los Andenes, sous l’un des ciels les plus sombres d’Europe !',
+          body2: 'Créons notre premier marqueur.',
+        },
+        place: {
+          title: 'Place le spot ici',
+          bodyDesktop: 'Sur ordinateur : clic droit sur la carte pour poser le pin.',
+          bodyDesktop2:
+            'Ici on place Mirador de Los Andenes pour toi. Clique « Placer le spot ».',
+          bodyMobile: 'Sur mobile : appui long sur la carte pour poser le pin.',
+          bodyMobile2:
+            'Ici on place Mirador de Los Andenes pour toi. Touche « Placer le spot ».',
+          bodyAfter: 'Le marker est en place. Continue pour voir les actions autour.',
+        },
+        panels: {
+          title: 'Overview, météo et ciel',
+          body: 'À gauche : l’overview (lieu, date, heure), la météo, et l’indice Bortle / pollution lumineuse pour ce spot.',
+        },
+        pl: {
+          title: 'Pollution lumineuse sur la carte',
+          body: 'Ce bouton (à droite) active la heatmap de pollution lumineuse. Utile pour choisir un ciel vraiment sombre.',
+        },
+        spots: {
+          title: 'Tes spots',
+          body: 'À droite, ouvre Mes spots pour retrouver, renommer ou masquer tes points enregistrés.',
+        },
+        framings: {
+          title: 'Tes cadrages',
+          body: 'Juste en dessous du bouton spots : les cadrages sauvegardés (composition, date, point de vue) pour rejouer une scène.',
+        },
+        exampleFraming: {
+          title: 'Un cadrage d’exemple',
+          body: 'On ajoute un cadrage d’exemple sur Mirador de Los Andenes, pour voir comment les compositions sauvegardées apparaissent ici.',
+          bodyAfter:
+            'Le voici dans la liste. Tu pourras le rouvrir plus tard pour rejouer la scène.',
+        },
+        marker: {
+          title: 'Actions du marqueur',
+          body: 'Quand tu cliques sur le marker, un menu radial s’ouvre autour. Voici ce que fait chaque action :',
+          actions: {
+            street: {
+              label: 'Street View',
+              hint: 'Ouvre Google Street View au sol, pour voir l’accès et le terrain.',
+            },
+            immersive: {
+              label: 'Immersif',
+              hint: 'Vue immersive en 3D avec le relief pour planifier tes photos.',
+            },
+            skyFlat: {
+              label: 'Ciel plat',
+              hint: 'La même vue, mais sans le sol : utile pour tester le ciel seul.',
+            },
+            edit: {
+              label: 'Modifier',
+              hint: 'Renomme ou ajuste le spot enregistré.',
+            },
+          },
+        },
+        done: {
+          title: 'Direction l’immersif',
+          body: 'La carte est vue. Prochaine étape : la vue immersive pour cadrer avec le relief et le ciel.',
+          body2:
+            'On ouvre notre spot en immersif pour la suite du guidage (viseur, modes, réglages, sauvegarde).',
+        },
+      },
+    },
+    immersiveTour: {
+      skip: 'Passer le guidage',
+      progress: 'Étape {current} / {total}',
+      cta: {
+        next: 'Continuer',
+        finish: 'Terminer',
+      },
+      steps: {
+        viewfinder: {
+          title: 'Le viseur',
+          body: 'En haut : focale, format de capteur et orientation. C’est ici que tu règles le cadre optique de ta composition.',
+        },
+        modes: {
+          title: 'Explore les différents modes',
+          body: 'Mode libre pour explorer sans cadre. Photo pour un viseur DSLR. Pano pour un balayage multi-prises. Timelapse pour planifier, animer et voir le rendu vidéo !',
+        },
+        quality: {
+          title: 'Qualité du terrain',
+          body: 'Regarde en haut à droite : le bouton Réglages. On l’ouvre sur Qualité pour choisir la résolution du relief. Plus c’est fin, plus le téléchargement est lourd.',
+        },
+        sky: {
+          title: 'Ciel et ambiance',
+          body: 'Toujours dans Réglages → Ciel : pollution lumineuse, atmosphère, lumière de la Lune, lumière zodiacale. Active ou ajuste ce que tu veux pour simuler la nuit au mieux.',
+        },
+        weather: {
+          title: 'Météo et nuages',
+          body: 'Réglages → Météo pour activer les nuages. Ici on met des nuages bas en exemple : tu vois tout de suite l’effet sur le paysage et le ciel. Les nuages interagissent aussi avec la pollution lumineuse.',
+        },
+        save: {
+          title: 'Enregistre un cadrage',
+          body: 'Ouvre Cadrages, puis Enregistrer pour garder la composition (orientation, focale, date). Tu pourras la rejouer plus tard depuis la carte.',
+        },
+        done: {
+          title: 'Guidage terminé',
+          body: 'Tu as le parcours complet : carte, viseur, modes, réglages et sauvegarde. Explore, compose, et reviens quand tu veux.',
+          body2: 'Tu peux tout relancer depuis Réglages → Onboarding.',
+        },
+      },
+    },
+    slides: {
+      explore: {
+        eyebrow: 'Explorez',
+        title: 'Votre prochaine photo\ncommence ici.',
+        body: 'Explorez le monde et trouvez le spot qui vous donne envie de sortir votre appareil.',
+        imageAlt: 'Vue du globe terrestre',
+      },
+      anticipate: {
+        eyebrow: 'Organisez',
+        title: 'Vos idées prennent place.',
+        body: 'Repérez vos spots, placez vos marqueurs et enregistrez vos cadrages pour organiser vos prochaines prises de vue.',
+        imageAlt: 'Carte 3D avec un spot marqué',
+      },
+      compose: {
+        eyebrow: 'Prévisualisez',
+        title: 'Visualisez votre prochaine photo.',
+        body: 'Préparez vos cadrages, panoramas et timelapses en 3D. Simulez la météo et la pollution lumineuse pour anticiper le rendu sur place.',
+        imageAlt: 'Prévisualisation immersive du ciel nocturne',
+      },
+    },
+  },
+
   map: {
     controlsAria: 'Contrôles carte',
     uiAria: 'Aperçu et météo',
@@ -152,9 +309,9 @@ export const fr = {
       hybrid: 'Satellite + plan',
       plan: 'Plan',
       switching: 'Passage en {label}…',
-      loading: 'Chargement — {label}',
+      loading: 'Chargement : {label}',
       cycleTitle: '{label} (satellite → sat+plan → plan)',
-      clickToChange: '{label} — cliquer pour changer',
+      clickToChange: '{label} : cliquer pour changer',
     },
     pl: {
       toggleOn: 'Masquer la heatmap pollution lumineuse',
@@ -168,7 +325,7 @@ export const fr = {
       legendTitle: 'Échelle Bortle',
       legendSubtitle: 'Pollution lumineuse',
       legendSource:
-        'Données : {link} (~500 m, CC BY 4.0 · OpenLandMap/Zenodo) — fausse couleur Bortle, pas World Atlas.',
+        'Données : {link} (~500 m, CC BY 4.0 · OpenLandMap/Zenodo). Fausse couleur Bortle, pas World Atlas.',
       legendHide: 'Masquer la légende Bortle',
       legendShow: 'Afficher la légende Bortle',
     },
@@ -291,7 +448,7 @@ export const fr = {
       alt: 'Altitude',
       source: 'Source : {hint}',
       highSiteNote:
-        'Site élevé : correction DEM approximative (ridges). Un écart résiduel vs LPM reste possible (~0,2–0,4 mag).',
+        'Site élevé : correction DEM approximative (ridges). Un écart résiduel vs LPM reste possible (~0,2-0,4 mag).',
       openSky: 'Voir la pollution lumineuse',
       openSkyTitle: 'Voir la pollution lumineuse (fisheye / panoramique)',
       defaultSourceHint: 'estimé · satellite',
@@ -317,7 +474,7 @@ export const fr = {
       notePano:
         'L’azimut va de gauche à droite ; la hauteur va de l’horizon (bas) au zénith (haut).',
       disclaimer:
-        'Zénith : First Rig / VIIRS (+ DEM near-field si site élevé). Dômes : Duriscoe all-sky + flou dôme (pas Falchi). Estimation scout — pas une mesure SQM au sol.',
+        'Zénith : First Rig / VIIRS (+ DEM near-field si site élevé). Dômes : Duriscoe all-sky + flou dôme (pas Falchi). Estimation scout, pas une mesure SQM au sol.',
       sideTitle: 'À cet emplacement',
       assess: {
         loading: 'Calcul des mesures en cours…',
@@ -461,7 +618,7 @@ export const fr = {
     hideCurves: 'Masquer les courbes d’altitude',
     showCurves: 'Afficher les courbes d’altitude',
     modeSimple: 'Mode simple',
-    modeAdvanced: 'Mode avancé — altitudes Soleil, Lune, Voie lactée',
+    modeAdvanced: 'Mode avancé : altitudes Soleil, Lune, Voie lactée',
     prevDay: 'Jour précédent',
     nextDay: 'Jour suivant',
     zoomOut: 'Dézoomer la timeline',
@@ -469,8 +626,8 @@ export const fr = {
     zoomWindow: 'Fenêtre ±{min} min',
     setUtc: 'Régler l’heure UTC',
     setLocal: 'Régler l’heure locale',
-    utcExact: 'Heure UTC — régler l’heure exacte',
-    localExact: 'Heure locale du spot — régler l’heure exacte',
+    utcExact: 'Heure UTC : régler l’heure exacte',
+    localExact: 'Heure locale du spot : régler l’heure exacte',
     noSpotUtc: 'Pas de spot : heure mondiale UTC',
     civilApprox: 'Heure civile approximative au spot',
     utc: 'UTC',
@@ -559,13 +716,13 @@ export const fr = {
       recenter: 'Recentrer la vue sur le cadrage verrouillé',
     },
     guide: {
-      photoOnly: 'Guide de composition — disponible en mode Photo',
+      photoOnly: 'Guide de composition : disponible en mode Photo',
       cycle: 'Guide de composition : {label}. Cliquer pour changer.',
     },
     layersAria: 'Couches célestes',
     layer: {
       milkyWay: 'Voie lactée',
-      halphaTitle: 'Hα — émission hydrogène',
+      halphaTitle: 'Hα : émission hydrogène',
       halpha: 'Hα',
       constellations: 'Constellations',
       radec: 'Grille RA/Dec',
@@ -677,7 +834,7 @@ export const fr = {
       rangeAz: 'Azimut',
       rangeAlt: 'Hauteur',
       rangeHint:
-        'Angles tête de la 1ʳᵉ vue (haut-gauche) à la dernière (bas-droite) — à saisir sur une tête motorisée (ex. Benro Polaris).',
+        'Angles tête de la 1ʳᵉ vue (haut-gauche) à la dernière (bas-droite). à saisir sur une tête motorisée (ex. Benro Polaris).',
       captureTime: 'Durée',
       captureTimeTip:
         'Temps de prise de vue estimé (pose + intervalle, partagé avec Timelapse).',
@@ -702,10 +859,10 @@ export const fr = {
       },
       infoOpticalLabel: 'Optique (trépied)',
       infoOptical:
-        '— chaque cadre = ce que voit vraiment l’appareil (le capteur). Utile pour vérifier où tombe une photo. En stéréo, ça se tord sur les bords : normal, pas un bug.',
+        'Chaque cadre = ce que voit vraiment l’appareil (le capteur). Utile pour vérifier où tombe une photo. En stéréo, ça se tord sur les bords : normal, pas un bug.',
       infoSphericalLabel: 'Sphérique (az/alt)',
       infoSpherical:
-        '— cases régulières sur la boule ciel. Plus facile à lire pour régler colonnes, lignes et overlap.',
+        'Cases régulières sur la boule ciel. Plus facile à lire pour régler colonnes, lignes et overlap.',
       infoTip:
         'Astuce : règle le plan en sphérique, vérifie une zone en optique si besoin.',
       display: 'Affichage',
@@ -732,10 +889,10 @@ export const fr = {
       supportFixed: 'Trépied fixe',
       supportEq: 'Monture équatoriale',
       eqLockedTarget:
-        'Verrouillé sur {name} — étoiles fixes dans le cadre, le sol bascule (rotation de champ).',
+        'Verrouillé sur {name} : étoiles fixes dans le cadre, le sol bascule (rotation de champ).',
       eqLockedCenter:
-        'Verrouillé sur le centre du viseur — étoiles fixes dans le cadre, le sol bascule (rotation de champ).',
-      fixedHint: 'Paysage fixe — le ciel dérive.',
+        'Verrouillé sur le centre du viseur : étoiles fixes dans le cadre, le sol bascule (rotation de champ).',
+      fixedHint: 'Paysage fixe. Le ciel dérive.',
       trailHot:
         'Filé d’étoiles actif (pose {pose} s > règle des 500 ≈ {rule} s @ {focal} mm).',
       trailWarn:
@@ -950,7 +1107,7 @@ export const fr = {
       visAria: 'Visibilité',
       status: {
         riseSet: 'Lever / coucher (horizon astronomique)',
-        circumpolar: 'Circumpolaire — ne se couche pas',
+        circumpolar: 'Circumpolaire : ne se couche pas',
         never: 'Jamais au-dessus de l’horizon',
         unknown: 'Horaires indisponibles',
       },
@@ -960,11 +1117,11 @@ export const fr = {
       constNote:
         'Horaires pour le point de référence de la constellation, pas pour toute sa surface.',
       multiPass:
-        'Plusieurs passages possibles ce jour — premier franchissement affiché.',
+        'Plusieurs passages possibles ce jour. premier franchissement affiché.',
       belowHorizon: 'Sous l’horizon à l’instant sélectionné',
       pitchClamp: '(hors plage de pointage caméra ±85°)',
       unlockTitle: 'Déverrouiller la cible (ou déplacer la vue)',
-      lockTitle: 'Verrouiller la cible — suit la timeline',
+      lockTitle: 'Verrouiller la cible : suit la timeline',
       unlock: 'Déverrouiller la cible',
       lock: 'Verrouiller la cible sur la timeline',
       center: 'Centrer sur la cible',
@@ -989,25 +1146,25 @@ export const fr = {
     passSingular: 'passe',
     passPlural: 'passes',
     frustum: 'Frustum culling',
-    frustumHint: 'OFF par défaut — AABBs monde incorrects sous warp',
+    frustumHint: 'OFF par défaut : AABBs monde incorrects sous warp',
     near: 'Near caméra',
     nearHint: 'Plan near PerspectiveCamera (live)',
     far: 'Far caméra (clip)',
-    farHint: 'Plan far uniquement — ne charge / décharge aucune tuile',
+    farHint: 'Plan far uniquement : ne charge / décharge aucune tuile',
     wireframe: 'Wireframe terrain',
     terrainNear: 'Terrain proche',
     terrainFar: 'Terrain far / LOD',
-    terrainFarHint: 'Visibilité seule — ne modifie pas le LOD',
+    terrainFarHint: 'Visibilité seule : ne modifie pas le LOD',
     skyDome: 'Ciel / atmosphère (dôme)',
     nightSky: 'Ciel nocturne (MW, grilles…)',
     passNote:
       'Production = passe directe (warp vertex). Pas d’EffectComposer. Cubemap = debug optionnel (6 RT + composite).',
     cubemap: 'Passe cubemap stéréo',
-    cubemapHint: 'Live — bascule le chemin de rendu',
+    cubemapHint: 'Live : bascule le chemin de rendu',
     atlas: 'Aperçu atlas faces (avant reproj.)',
     atlasHint: 'Active aussi la passe cubemap',
     depthLocked:
-      'logarithmicDepthBuffer : ON (fixé à la création du renderer — recréer la ressource pour changer)',
+      'logarithmicDepthBuffer : ON (fixé à la création du renderer ; recréer la ressource pour changer)',
     reset: 'Réinitialiser',
     copy: 'Copier le diagnostic',
     copied: 'Copié',

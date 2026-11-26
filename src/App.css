@@ -117,8 +117,8 @@
   --weather-layer-low: #5d7d8b;
 
   --map-control-size: 50px;
-  /* Settings + bug-report FABs stacked with 10px gap. */
-  --map-fab-stack-height: calc(2 * var(--map-control-size) + 10px);
+  /* Help + settings + bug-report FABs stacked with 10px gap. */
+  --map-fab-stack-height: calc(3 * var(--map-control-size) + 20px);
   --map-control-icon: 22px;
   --map-control-stack-gap: 16px;
   --map-control-stack-inset: 16px;
@@ -5060,6 +5060,14 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   backdrop-filter: var(--vf-chrome-blur);
   -webkit-backdrop-filter: var(--vf-chrome-blur);
   color: #e8f5ee;
+}
+
+/* Tour target wrapping Libre/Photo/Pano + Timelapse (real box for spotlight). */
+.vf-capture-capsule__tour-modes {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 
 .vf-capture-capsule .moon-preview-dock__rec {
@@ -11147,12 +11155,36 @@ button.ov-capsule:hover {
     width: min(300px, calc(100vw - 24px));
   }
 
-  .immersive__top-bar .celestial-target {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    left: auto;
-    width: min(280px, calc(100vw - 24px));
+  /* Target card: full-width bottom sheet (portaled onto .immersive). */
+  .immersive > .celestial-target--sheet {
+    position: fixed;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+    top: auto;
+    /* Collapsed date pill ≈ 40px + 8px gap above dock bottom. */
+    bottom: calc(
+      var(--mobile-dock-bottom, max(10px, env(safe-area-inset-bottom, 0px))) +
+        56px
+    );
+    width: auto;
+    max-width: none;
+    max-height: min(48dvh, 420px);
+    overflow: auto;
+    z-index: 30;
+    padding: 14px;
+    border-radius: 18px;
+    background: rgba(14, 16, 22, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 16px 40px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(22px) saturate(1.08);
+    -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  }
+
+  /* Lift above the expanded timeline dock when it is open. */
+  body:has(.moon-timeline-dock) .immersive > .celestial-target--sheet {
+    bottom: calc(var(--mobile-above-dock, 162px) + 12px);
   }
 
   /* Collapsed: LED + focal grows to fill leftover width. */
@@ -11684,6 +11716,70 @@ button.ov-capsule:hover {
   .immersive__top-bar .vf-proj-control__trigger {
     justify-content: center;
     gap: 0;
+  }
+
+  /* Scene settings menu: full-width sheet under the top bar (phone). */
+  .immersive__top-bar .vf-proj-control__menu {
+    position: fixed;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+    top: calc(var(--imm-phone-top) + var(--imm-phone-bar-h) + 10px);
+    width: auto;
+    max-width: none;
+    max-height: calc(
+      100dvh - var(--imm-phone-top) - var(--imm-phone-bar-h) -
+        max(12px, env(safe-area-inset-bottom, 0px)) - 28px
+    );
+    overflow: auto;
+    z-index: 30;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 18px;
+    background: rgba(14, 16, 22, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 16px 40px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(22px) saturate(1.08);
+    -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  }
+
+  .immersive__top-bar .vf-proj-control__option {
+    padding: 12px 14px;
+    min-height: 48px;
+  }
+
+  .immersive__top-bar .vf-proj-control__option-copy b {
+    font-size: 0.84rem;
+  }
+
+  .immersive__top-bar .vf-proj-control__option-copy small {
+    font-size: 0.7rem;
+  }
+
+  /* Nested scene panels (Qualité / Paysage / Ciel / Météo): same full-width sheet. */
+  .immersive .vf-sky-panel.vf-sky-panel--float {
+    position: fixed !important;
+    left: max(8px, env(safe-area-inset-left, 0px)) !important;
+    right: max(8px, env(safe-area-inset-right, 0px)) !important;
+    top: calc(var(--imm-phone-top) + var(--imm-phone-bar-h) + 10px) !important;
+    bottom: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: calc(
+      100dvh - var(--imm-phone-top) - var(--imm-phone-bar-h) -
+        max(12px, env(safe-area-inset-bottom, 0px)) - 28px
+    ) !important;
+    z-index: 31;
+    transform: none !important;
+    background: rgba(14, 16, 22, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 18px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 16px 40px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(22px) saturate(1.08);
+    -webkit-backdrop-filter: blur(22px) saturate(1.08);
   }
 
   .immersive__top-bar .celestial-dock {

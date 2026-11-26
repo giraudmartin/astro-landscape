@@ -47,6 +47,9 @@ import {
 import { AppBrandMark } from './AppBrandMark'
 import { MapControlsStack } from './MapControlsStack'
 import { MapSettingsPanel } from './MapSettingsPanel'
+import { OnboardingIntroHost } from './onboarding'
+import { TOUR_DEMO_SPOT } from './onboarding/tourDemoSpot'
+import { TOUR_FLY_TO_DEMO_EVENT } from './onboarding/tourEvents'
 import {
   filterMapVisiblePersonalSpots,
   fitPersonalSpots,
@@ -395,8 +398,11 @@ export function MapCanvas({
   const onRequestSaveSpotRef = useRef(onRequestSaveSpot)
   const onRequestEditSpotRef = useRef(onRequestEditSpot)
   const onMarkerMenuOpenChangeRef = useRef(onMarkerMenuOpenChange)
+  const markerMenuOpenRef = useRef(markerMenuOpen)
   /** Open radial after selecting a saved camera pin (working pin remounts). */
   const pendingOpenMarkerMenuRef = useRef(false)
+  /** Programmatic spot (tour, etc.): create/move the working pin outside map clicks. */
+  const syncWorkingPinRef = useRef<(lat: number, lon: number) => void>(() => {})
 
   const skyUtcMsRef = useRef(skyUtcMs)
   skyUtcMsRef.current = skyUtcMs
@@ -432,6 +438,7 @@ export function MapCanvas({
   onRequestSaveSpotRef.current = onRequestSaveSpot
   onRequestEditSpotRef.current = onRequestEditSpot
   onMarkerMenuOpenChangeRef.current = onMarkerMenuOpenChange
+  markerMenuOpenRef.current = markerMenuOpen
 
   // Drop fly focus once React spot matches the destination.
   if (
@@ -455,6 +462,7 @@ export function MapCanvas({
     flyToAddress: (result: AddressSearchResult) => void
     flyToMyLocation: () => void
     flyToPersonalSpot: (spot: PersonalSpot) => void
+    flyToTourDemo: () => void
     showAllPersonalSpots: (spots: PersonalSpot[]) => void
   } | null>(null)
 
@@ -630,10 +638,14 @@ export function MapCanvas({
         markerUiRef.current.setSaved(Boolean(match))
         markerUiRef.current.setLabel(match?.name ?? null)
       }
-      if (pendingOpenMarkerMenuRef.current) {
+      if (pendingOpenMarkerMenuRef.current || markerMenuOpenRef.current) {
         pendingOpenMarkerMenuRef.current = false
         markerUiRef.current?.open()
       }
+    }
+
+    syncWorkingPinRef.current = (lat, lon) => {
+      upsertMarker(lon, lat)
     }
 
     const publishSpot = (
@@ -882,6 +894,33 @@ export function MapCanvas({
       fitPersonalSpots(map, spots)
     }
 
+    /** Tour: fly to Mirador without placing a pin (place step comes next). */
+    const flyToTourDemo = () => {
+      onModeChangeRef.current('orbit')
+      if (!threeDimensionalRef.current) {
+        onThreeDimensionalChangeRef.current(true)
+        threeDimensionalRef.current = true
+      }
+      hideLightPollutionForGroundFly()
+      const pitch = THREE_D_PITCH
+      skyFocusRef.current = {
+        lat: TOUR_DEMO_SPOT.lat,
+        lon: TOUR_DEMO_SPOT.lon,
+        elevM: TOUR_DEMO_SPOT.heightM,
+      }
+      map.flyTo({
+        center: [TOUR_DEMO_SPOT.lon, TOUR_DEMO_SPOT.lat],
+        zoom: TOUR_DEMO_SPOT.zoom,
+        pitch,
+        bearing: TOUR_DEMO_SPOT.bearingDeg,
+        essential: true,
+        duration: 1600,
+      })
+      settleGroundSkyAfterFly(map, 10, () => {
+        applyPlayheadSkyNowAndOnIdleRef.current(map)
+      })
+    }
+
     apiRef.current = {
       setMode,
       setThreeDimensional,
@@ -890,6 +929,7 @@ export function MapCanvas({
       flyToAddress,
       flyToMyLocation,
       flyToPersonalSpot,
+      flyToTourDemo,
       showAllPersonalSpots,
     }
 
@@ -1145,6 +1185,7 @@ export function MapCanvas({
 
     return () => {
       scheduleElevationRef.current = () => {}
+      syncWorkingPinRef.current = () => {}
       map.off('sourcedata', onTerrainData)
       map.off('idle', scheduleElevation)
       map.off('zoomend', gatePlHeatmapZoom)
@@ -1437,14 +1478,16 @@ export function MapCanvas({
   }, [personalSpots, personalSpotFolders, selectedPersonalSpotId, spot, t])
 
   useEffect(() => {
-    const ui = markerUiRef.current
     if (!spot) {
-      ui?.destroy()
+      markerUiRef.current?.destroy()
       markerUiRef.current = null
       markerRef.current?.remove()
       markerRef.current = null
       return
     }
+    // App may setSpot without a map click / fly settle (tour place) — ensure pin exists.
+    syncWorkingPinRef.current(spot.lat, spot.lon)
+    const ui = markerUiRef.current
     if (!ui) return
     const match =
       personalSpots.find(
@@ -1454,16 +1497,27 @@ export function MapCanvas({
       ) ?? null
     ui.setSaved(Boolean(match))
     ui.setLabel(match?.name ?? null)
-    if (pendingOpenMarkerMenuRef.current) {
+    if (pendingOpenMarkerMenuRef.current || markerMenuOpen) {
       pendingOpenMarkerMenuRef.current = false
       ui.open()
     }
-  }, [spot, personalSpots, selectedPersonalSpotId])
+  }, [spot, personalSpots, selectedPersonalSpotId, markerMenuOpen])
 
   useEffect(() => {
-    if (markerMenuOpen) return
+    if (markerMenuOpen) {
+      markerUiRef.current?.open()
+      return
+    }
     markerUiRef.current?.close()
   }, [markerMenuOpen])
+
+  useEffect(() => {
+    const onTourFly = () => {
+      apiRef.current?.flyToTourDemo()
+    }
+    window.addEventListener(TOUR_FLY_TO_DEMO_EVENT, onTourFly)
+    return () => window.removeEventListener(TOUR_FLY_TO_DEMO_EVENT, onTourFly)
+  }, [])
 
   useEffect(() => {
     if (!flyToPersonalSpotId) return
@@ -1554,6 +1608,7 @@ export function MapCanvas({
         onFramingsOpenChange={onFramingsOpenChange}
       />
       <MapSettingsPanel />
+      <OnboardingIntroHost />
       <AppBrandMark />
     </div>
   )

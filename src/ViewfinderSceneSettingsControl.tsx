@@ -20,6 +20,10 @@ import {
   stageProjectionMeta,
   type StageProjection,
 } from './stelProjector'
+import {
+  OPEN_SCENE_PANEL_EVENT,
+  type ImmersiveScenePanelId,
+} from './onboarding/immersiveTourUi'
 
 type ScenePanelId = 'landscape' | 'sky' | 'weather' | 'quality'
 
@@ -122,6 +126,27 @@ export function ViewfinderSceneSettingsControl({
   }, [flatTerrain, panel])
 
   useEffect(() => {
+    const onOpen = (event: Event) => {
+      const next = (event as CustomEvent<{ panel: ImmersiveScenePanelId | null }>)
+        .detail?.panel
+      if (next === undefined) return
+      if (next == null) {
+        setPanel(null)
+        setMenuOpen(false)
+        return
+      }
+      if (flatTerrain && (next === 'quality')) {
+        setPanel(null)
+        return
+      }
+      setMenuOpen(false)
+      setPanel(next)
+    }
+    window.addEventListener(OPEN_SCENE_PANEL_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_SCENE_PANEL_EVENT, onOpen)
+  }, [flatTerrain])
+
+  useEffect(() => {
     if (!menuOpen) return
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null
@@ -156,6 +181,7 @@ export function ViewfinderSceneSettingsControl({
     >
       <button
         type="button"
+        data-tour-anchor="vf-scene"
         className={
           menuOpen || anyPanelOpen
             ? 'vf-proj-control__trigger is-active'

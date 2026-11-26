@@ -122,7 +122,7 @@ export function normalizeWeatherLayer(
   return {
     enabled: row.enabled == null ? fallback.enabled : Boolean(row.enabled),
     cover: clampCloudCoverPct(Number(row.cover ?? fallback.cover)),
-    altKm: clampCloudAltKm(Number(row.altKm ?? fallback.altKm), 0.5, 12),
+    altKm: clampCloudAltKm(Number(row.altKm ?? fallback.altKm), 0.5, 14),
     thickKm: clampCloudThickKm(Number(row.thickKm ?? fallback.thickKm)),
     densityPct: clampCloudDensityPct(
       Number(row.densityPct ?? fallback.densityPct),

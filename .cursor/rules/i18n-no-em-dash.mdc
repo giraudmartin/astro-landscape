@@ -1,0 +1,33 @@
+---
+description: Forbidden em dashes in user-facing copy (i18n labels)
+alwaysApply: true
+---
+
+# i18n: zero em dashes in labels
+
+Never use the em dash (`—`, U+2014) or en dash (`–`, U+2013) as punctuation in **user-facing** strings (buttons, titles, body copy, hints, aria-labels, tooltips, empty states, tour text, settings).
+
+## Forbidden
+
+| Hack | Why |
+|---|---|
+| `Here we’ll place Mirador for you — click “…”.` | AI-default clause dash; reads fake |
+| `Help — replay the introduction` | Same |
+| `Loading — {label}` | Same |
+| En dash as a clause separator (`text – more`) | Same family; do not use |
+
+## Do instead
+
+- Split into two sentences: `…. ….`
+- Use a colon for label/value: `Loading: {label}`
+- Use the middle dot already in the product: `A · B`
+- Use a hyphen only inside real compound words (`right-click`, `near-field`), never as a clause break
+
+## Scope
+
+- Applies to `src/i18n/locales/**` and any hardcoded user-visible string (which should already live in i18n).
+- Does **not** apply to code comments, license legalese credits, or numeric ranges written with ASCII hyphen-minus (`0.2-0.4`).
+
+## Rule of landing
+
+A UI string that contains `—` or a clause-breaking `–` is a failed change. Rewrite before merge.

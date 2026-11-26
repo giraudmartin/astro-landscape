@@ -690,6 +690,7 @@ export function ViewfinderSkyControl(props: ViewfinderSkyControlProps) {
         storageKey={FLOAT_POS_STORAGE_KEY}
         defaultPos={DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}
+        tourAnchor="vf-float-sky"
       >
         <SkyPanelBody {...panelProps} />
       </ViewfinderFloatPanel>

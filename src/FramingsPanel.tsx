@@ -239,6 +239,7 @@ export function FramingsToggle({
             ? 'my-events-control__toggle my-events-control__toggle--active'
             : 'my-events-control__toggle'
         }
+        data-tour-anchor="framings"
         aria-expanded={open}
         aria-controls="framings-rail"
         aria-label={t('framings.toggle')}
@@ -366,6 +367,7 @@ export function FramingsPanel({
     <aside
       id="framings-rail"
       className="my-events-rail framings-rail"
+      data-tour-panel="framings-rail"
       role="complementary"
       aria-label={title}
     >
@@ -482,6 +484,7 @@ export function FramingsPanel({
                     <button
                       type="button"
                       className="my-events-panel__add framings-panel__save"
+                      data-tour-anchor="immersive-save"
                       disabled={!canSaveCurrent}
                       title={
                         canSaveCurrent

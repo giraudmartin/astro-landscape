@@ -13,6 +13,44 @@ import {
   OPEN_MAP_SETTINGS_EVENT,
 } from './MapSettingsPanel'
 import {
+  hasSeenOnboardingIntro,
+  ONBOARDING_INTRO_COMPLETE_EVENT,
+  openOnboardingIntro,
+  openOnboardingTour,
+  type OnboardingCompleteReason,
+} from './onboarding'
+import { OnboardingTour } from './onboarding/OnboardingTour'
+import { OnboardingImmersiveTour } from './onboarding/OnboardingImmersiveTour'
+import {
+  findExistingTourDemoSpot,
+  TOUR_DEMO_DATE,
+  TOUR_DEMO_SPOT,
+  tourDemoUtcMs,
+} from './onboarding/tourDemoSpot'
+import {
+  OPEN_ONBOARDING_TOUR_EVENT,
+  shouldStartTourAfterIntro,
+} from './onboarding/tourEvents'
+import {
+  PENDING_IMMERSIVE_TOUR_EVENT,
+  START_IMMERSIVE_TOUR_EVENT,
+  requestImmersiveTour,
+} from './onboarding/immersiveTourEvents'
+import {
+  applyImmersiveTourDemoSky,
+  openImmersiveScenePanel,
+} from './onboarding/immersiveTourUi'
+import {
+  hasSeenImmersiveTour,
+  markImmersiveTourSeen,
+} from './onboarding/immersiveTourStorage'
+import type { ImmersiveTourStepId } from './onboarding/immersiveTourSteps'
+import {
+  hasSeenOnboardingTour,
+  markOnboardingTourSeen,
+} from './onboarding/tourStorage'
+import type { TourStepId } from './onboarding/tourSteps'
+import {
   FramingsPanel,
   type FramingsEditorDraft,
 } from './FramingsPanel'
@@ -68,6 +106,12 @@ import {
   type FramingViewSnapshot,
   type PersonalFraming,
 } from './personalFramings'
+import {
+  DEFAULT_FOCAL_LENGTH_MM,
+  DEFAULT_FRAME_ROLL_DEG,
+  DEFAULT_ORIENTATION,
+  DEFAULT_SENSOR_FORMAT,
+} from './lensFov'
 import {
   createPersonalSpot,
   createPersonalSpotFolder,
@@ -274,6 +318,9 @@ export default function App() {
     null,
   )
   const [markerMenuOpen, setMarkerMenuOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
+  const [immersiveTourPending, setImmersiveTourPending] = useState(false)
+  const [immersiveTourOpen, setImmersiveTourOpen] = useState(false)
 
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null)
   const [pendingSaveName, setPendingSaveName] = useState('')
@@ -397,6 +444,270 @@ export default function App() {
       folders: personalSpotFolders,
     })
   }, [personalSpots, personalSpotFolders])
+
+  useEffect(() => {
+    const onIntroComplete = (event: Event) => {
+      const reason = (event as CustomEvent<{ reason: OnboardingCompleteReason }>)
+        .detail?.reason
+      if (
+        reason &&
+        shouldStartTourAfterIntro(reason, hasSeenOnboardingTour())
+      ) {
+        window.setTimeout(() => setTourOpen(true), 280)
+      }
+    }
+    const onOpenTour = () => setTourOpen(true)
+    window.addEventListener(ONBOARDING_INTRO_COMPLETE_EVENT, onIntroComplete)
+    window.addEventListener(OPEN_ONBOARDING_TOUR_EVENT, onOpenTour)
+
+    // Intro already dismissed (pre-tour builds / prior visit): still offer the tour once.
+    let pending: number | undefined
+    if (hasSeenOnboardingIntro() && !hasSeenOnboardingTour()) {
+      pending = window.setTimeout(() => setTourOpen(true), 600)
+    }
+
+    return () => {
+      window.removeEventListener(
+        ONBOARDING_INTRO_COMPLETE_EVENT,
+        onIntroComplete,
+      )
+      window.removeEventListener(OPEN_ONBOARDING_TOUR_EVENT, onOpenTour)
+      if (pending != null) window.clearTimeout(pending)
+    }
+  }, [])
+
+  const onTourStepEnter = useCallback(
+    (stepId: TourStepId) => {
+      switch (stepId) {
+        case 'welcome':
+        case 'place':
+          setMarkerMenuOpen(false)
+          setMySpotsOpen(false)
+          setFramingsOpen(false)
+          break
+        case 'panels':
+          setMarkerMenuOpen(false)
+          setMySpotsOpen(false)
+          setFramingsOpen(false)
+          setOverviewCollapsed(false)
+          if (isPhone) setInfoDrawerOpen(true)
+          break
+        case 'pl':
+          setMarkerMenuOpen(false)
+          setMySpotsOpen(false)
+          setFramingsOpen(false)
+          setPlHeatmapEnabled(true)
+          if (isPhone) setInfoDrawerOpen(false)
+          break
+        case 'spots':
+          setMarkerMenuOpen(false)
+          setFramingsOpen(false)
+          setMySpotsOpen(true)
+          break
+        case 'framings':
+        case 'exampleFraming':
+          setMarkerMenuOpen(false)
+          setMySpotsOpen(false)
+          setFramingsOpen(true)
+          break
+        case 'marker':
+          setMySpotsOpen(false)
+          setFramingsOpen(false)
+          // Explained in the tour card (icons): keep the live radial closed.
+          setMarkerMenuOpen(false)
+          break
+        case 'done':
+          setMarkerMenuOpen(false)
+          setMySpotsOpen(false)
+          setFramingsOpen(false)
+          break
+        default:
+          break
+      }
+    },
+    [isPhone],
+  )
+
+  /** Immersive night scene (Mirador demo look). Not used on the map — Open-Meteo needs “today”. */
+  const applyTourDemoClock = useCallback(() => {
+    const utcMs = tourDemoUtcMs(TOUR_DEMO_SPOT.lon)
+    setDate(TOUR_DEMO_DATE)
+    setPlayheadUtcMs(utcMs)
+  }, [])
+
+  /** Map half of the guide: civil “now” so weather / forecast panels populate. */
+  const applyTourMapClock = useCallback(() => {
+    const now = Math.floor(Date.now() / 60_000) * 60_000
+    setPlayheadUtcMs(now)
+    setDate(civilDateFromUtc(now, TOUR_DEMO_SPOT.lon))
+  }, [])
+
+  /** Tour immersive: Standard (one below Élevée) — lighter download for the guide. */
+  const applyTourTerrainQuality = useCallback(() => {
+    if (isPhone) return
+    patchAppSettings({
+      immersive: { terrainQuality: 'standard', terrainQualityChosen: true },
+    })
+    setTerrainQuality('standard')
+    setTerrainQualityChosen(true)
+    emitTerrainQualityChange('standard')
+  }, [isPhone])
+
+  const addTourExampleFraming = useCallback(() => {
+    const saved = findExistingTourDemoSpot(personalSpots)
+    if (!saved) return
+    const already = personalFramings.some(
+      (row) => row.note === 'tour-example' && row.spotId === saved.id,
+    )
+    if (already) {
+      setFramingsOpen(true)
+      return
+    }
+    applyTourDemoClock()
+    const utcMs = tourDemoUtcMs(saved.lon)
+    const peakLocal = formatCivilLocalTimestamp(utcMs, saved.lon)
+    const framing = createPersonalFraming({
+      name: t('onboarding.tour.exampleFramingName'),
+      lat: saved.lat,
+      lon: saved.lon,
+      peakUtc: new Date(utcMs).toISOString(),
+      peakLocal,
+      localDate: civilDateFromUtc(utcMs, saved.lon),
+      spotId: saved.id,
+      spotName: saved.name,
+      heightM: saved.heightM,
+      view: {
+        frameMode: 'dslr',
+        focalMm: DEFAULT_FOCAL_LENGTH_MM,
+        orientation: DEFAULT_ORIENTATION,
+        sensorFormat: DEFAULT_SENSOR_FORMAT,
+        frameRollDeg: DEFAULT_FRAME_ROLL_DEG,
+        bearingDeg: TOUR_DEMO_SPOT.bearingDeg,
+        pitchDeg: TOUR_DEMO_SPOT.pitchDeg,
+        eyeHeightM: null,
+        panorama: null,
+        timelapse: null,
+      },
+      source: 'manual',
+      note: 'tour-example',
+    })
+    setPersonalFramings((prev) => upsertPersonalFraming(prev, framing))
+    setFramingsOpen(true)
+  }, [personalSpots, personalFramings, t, applyTourDemoClock])
+
+  const openTourImmersive = useCallback(() => {
+    requestImmersiveTour()
+    applyTourDemoClock()
+    applyTourTerrainQuality()
+    setSpot({
+      lat: TOUR_DEMO_SPOT.lat,
+      lon: TOUR_DEMO_SPOT.lon,
+      heightM: TOUR_DEMO_SPOT.heightM,
+      bearingDeg: TOUR_DEMO_SPOT.bearingDeg,
+      pitchDeg: TOUR_DEMO_SPOT.pitchDeg,
+    })
+    gateImmersiveEnter(() => {
+      setImmersiveLook({
+        bearingDeg: TOUR_DEMO_SPOT.bearingDeg,
+        pitchDeg: TOUR_DEMO_SPOT.pitchDeg,
+      })
+      setFlatTerrain(false)
+      setMode('ground')
+    })
+  }, [gateImmersiveEnter, applyTourDemoClock, applyTourTerrainQuality])
+
+  const onTourClose = useCallback((reason: 'skip' | 'finish') => {
+    markOnboardingTourSeen()
+    // One guide: skipping the map half abandons the whole walkthrough.
+    if (reason === 'skip') markImmersiveTourSeen()
+    setTourOpen(false)
+    setMarkerMenuOpen(false)
+  }, [])
+
+  const onImmersiveTourStepEnter = useCallback(
+    (stepId: ImmersiveTourStepId) => {
+      if (stepId === 'save') {
+        setMySpotsOpen(false)
+        setFramingsEditor(null)
+        setFramingsOpen(true)
+        return
+      }
+      setFramingsOpen(false)
+    },
+    [],
+  )
+
+  const onImmersiveTourClose = useCallback((_reason: 'skip' | 'finish') => {
+    // End of the single guide (map already marked when immersive opened).
+    markOnboardingTourSeen()
+    markImmersiveTourSeen()
+    setImmersiveTourOpen(false)
+    setImmersiveTourPending(false)
+    openImmersiveScenePanel(null)
+  }, [])
+
+  useEffect(() => {
+    const onPending = () => setImmersiveTourPending(true)
+    const onStart = () => {
+      setImmersiveTourPending(true)
+      applyTourDemoClock()
+      applyTourTerrainQuality()
+      // Always open the guide on Mirador with the demo look.
+      setSpot({
+        lat: TOUR_DEMO_SPOT.lat,
+        lon: TOUR_DEMO_SPOT.lon,
+        heightM: TOUR_DEMO_SPOT.heightM,
+        bearingDeg: TOUR_DEMO_SPOT.bearingDeg,
+        pitchDeg: TOUR_DEMO_SPOT.pitchDeg,
+      })
+      if (mode === 'ground') return
+      gateImmersiveEnter(() => {
+        setImmersiveLook({
+          bearingDeg: TOUR_DEMO_SPOT.bearingDeg,
+          pitchDeg: TOUR_DEMO_SPOT.pitchDeg,
+        })
+        setFlatTerrain(false)
+        setMode('ground')
+      })
+    }
+    window.addEventListener(PENDING_IMMERSIVE_TOUR_EVENT, onPending)
+    window.addEventListener(START_IMMERSIVE_TOUR_EVENT, onStart)
+    return () => {
+      window.removeEventListener(PENDING_IMMERSIVE_TOUR_EVENT, onPending)
+      window.removeEventListener(START_IMMERSIVE_TOUR_EVENT, onStart)
+    }
+  }, [mode, spot, gateImmersiveEnter, applyTourDemoClock, applyTourTerrainQuality])
+
+  useEffect(() => {
+    if (!immersiveTourPending) return
+    if (mode !== 'ground' || !immersiveTerrainReady) return
+    setImmersiveTourPending(false)
+    setImmersiveTourOpen(true)
+  }, [immersiveTourPending, mode, immersiveTerrainReady])
+
+  // Immersive guide: lock Mirador night (8 May 2027 01:00) + green structured airglow.
+  useEffect(() => {
+    if (!immersiveTourOpen) return
+    applyTourDemoClock()
+    const id = window.setTimeout(() => applyImmersiveTourDemoSky(), 120)
+    return () => window.clearTimeout(id)
+  }, [immersiveTourOpen, applyTourDemoClock])
+
+  // First-time: after map tour CTA we already set pending. Also catch
+  // users who open immersive once without having seen the immersive tour.
+  useEffect(() => {
+    if (mode !== 'ground' || !immersiveTerrainReady) return
+    if (immersiveTourOpen || immersiveTourPending) return
+    if (hasSeenImmersiveTour()) return
+    // Only auto-start if the map tour was already completed (intro path).
+    if (!hasSeenOnboardingTour()) return
+    setImmersiveTourPending(true)
+  }, [
+    mode,
+    immersiveTerrainReady,
+    immersiveTourOpen,
+    immersiveTourPending,
+  ])
 
   useEffect(() => {
     savePersonalFramings(personalFramings)
@@ -532,6 +843,26 @@ export default function App() {
     setMode('orbit')
     setFlyToPersonalSpotId(saved.id)
   }, [])
+
+  /** Tour place step: create Mirador spot only if none already sits at that place. */
+  const placeTourDemoSpot = useCallback(() => {
+    applyTourMapClock()
+    const existing = findExistingTourDemoSpot(personalSpots)
+    if (existing) {
+      selectPersonalSpot(existing)
+      return
+    }
+    const saved = createPersonalSpot({
+      name: t('onboarding.tour.spotName'),
+      lat: TOUR_DEMO_SPOT.lat,
+      lon: TOUR_DEMO_SPOT.lon,
+      heightM: TOUR_DEMO_SPOT.heightM,
+      bearingDeg: TOUR_DEMO_SPOT.bearingDeg,
+      pitchDeg: TOUR_DEMO_SPOT.pitchDeg,
+    })
+    setPersonalSpots((prev) => upsertPersonalSpot(prev, saved))
+    selectPersonalSpot(saved)
+  }, [personalSpots, t, selectPersonalSpot, applyTourMapClock])
 
   /** Opening the pin panel: bind list selection if this pin matches a saved spot. */
   const activateWorkingPin = useCallback(() => {
@@ -1312,6 +1643,8 @@ export default function App() {
               setFramingsOpen(false)
               setFramingsEditor(null)
               mapFramingsReturnRef.current = null
+              setImmersiveTourOpen(false)
+              setImmersiveTourPending(false)
               setMode('orbit')
             }}
           />
@@ -1386,6 +1719,26 @@ export default function App() {
                 className="mobile-top-drawer__action"
                 onClick={() => {
                   setInfoDrawerOpen(false)
+                  openOnboardingIntro()
+                }}
+              >
+                {t('settings.onboarding.replayIntro')}
+              </button>
+              <button
+                type="button"
+                className="mobile-top-drawer__action"
+                onClick={() => {
+                  setInfoDrawerOpen(false)
+                  openOnboardingTour()
+                }}
+              >
+                {t('settings.onboarding.replayTour')}
+              </button>
+              <button
+                type="button"
+                className="mobile-top-drawer__action"
+                onClick={() => {
+                  setInfoDrawerOpen(false)
                   window.dispatchEvent(new Event(OPEN_BUG_REPORT_EVENT))
                 }}
               >
@@ -1398,7 +1751,7 @@ export default function App() {
 
       {!immersive && !isPhone ? (
         <div className="map-ui" aria-label={t('map.uiAria')}>
-          <div className="ov-anchor">
+          <div className="ov-anchor" data-tour-anchor="ov-anchor">
             <OverviewCard
               lat={observer.lat}
               lon={observer.lon}
@@ -1596,6 +1949,21 @@ export default function App() {
         open={terrainQualityPromptOpen}
         onChoose={onTerrainQualityChoose}
         onCancel={onTerrainQualityCancel}
+      />
+
+      <OnboardingTour
+        open={tourOpen}
+        onClose={onTourClose}
+        onPlaceDemoSpot={placeTourDemoSpot}
+        onAddExampleFraming={addTourExampleFraming}
+        onOpenImmersive={openTourImmersive}
+        onStepEnter={onTourStepEnter}
+      />
+
+      <OnboardingImmersiveTour
+        open={immersiveTourOpen}
+        onClose={onImmersiveTourClose}
+        onStepEnter={onImmersiveTourStepEnter}
       />
     </div>
   )

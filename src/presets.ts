@@ -10,9 +10,11 @@ export const DEFAULT_MAP_VIEW = {
 export const TRIPOD_HEIGHT_M = 1.6
 /** Stepper / nudge interval for lens elevation above ground (m). */
 export const EYE_HEIGHT_STEP_M = 0.5
+/** Floor for eye / tripod elevation above ground (m). Never below this. */
+export const EYE_HEIGHT_MIN_M = 1.0
 
-/** Any finite elevation is allowed (including negative / underground). */
+/** Clamp lens elevation above ground (≥ {@link EYE_HEIGHT_MIN_M}). */
 export function clampEyeHeightM(meters: number): number {
   if (!Number.isFinite(meters)) return TRIPOD_HEIGHT_M
-  return meters
+  return Math.max(EYE_HEIGHT_MIN_M, meters)
 }

@@ -202,6 +202,7 @@ export function MySpotsToggle({ open, onOpenChange }: MySpotsToggleProps) {
             ? 'my-spots-control__toggle my-spots-control__toggle--active'
             : 'my-spots-control__toggle'
         }
+        data-tour-anchor="my-spots"
         aria-expanded={open}
         aria-controls="my-spots-rail"
         aria-label={t('spots.title')}
@@ -463,6 +464,7 @@ export function MySpotsRail({
     <aside
       id="my-spots-rail"
       className="my-spots-rail"
+      data-tour-panel="my-spots-rail"
       role="complementary"
       aria-label={t('spots.title')}
     >

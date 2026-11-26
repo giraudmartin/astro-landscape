@@ -173,6 +173,7 @@ export function PlHeatmapControl({
       <button
         type="button"
         className="pl-heatmap-control__toggle"
+        data-tour-anchor="pl-control"
         data-pl-heatmap-toggle=""
         data-loading={loading ? 'true' : undefined}
         aria-pressed={enabled}

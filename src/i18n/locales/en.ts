@@ -30,7 +30,7 @@ export const en = {
     approxMb: '~{mb} MB',
     level: {
       high: 'High',
-      highHint: 'Max relief and ortho — full-frame detail',
+      highHint: 'Max relief and ortho: full-frame detail',
       standard: 'Standard',
       standardHint: 'Same coverage, one step coarser DEM / ortho',
       medium: 'Medium',
@@ -51,6 +51,7 @@ export const en = {
     navAria: 'Settings sections',
     section: {
       about: 'About',
+      onboarding: 'Onboarding',
       quality: 'Quality',
       attributions: 'Attributions',
       privacy: 'Privacy',
@@ -72,6 +73,14 @@ export const en = {
       p1: 'I built Sadr3D Sphere to plan night landscape photos: scout a spot, read the terrain and light pollution, frame in the viewfinder, then check the immersive sky before heading out.',
       p2: 'Same family of tools as Sadr3D Horizon (Moon / Sun alignments with the landscape). Here the focus is on deep sky, the estimated Bortle class and terrain composition.',
     },
+    onboarding: {
+      hint: 'Replay the intro slides or the full guided tour (map then immersive).',
+      replayIntro: 'Replay the introduction',
+      replayIntroHint: 'Opens Sphere’s three intro slides again.',
+      replayTour: 'Replay the guided tour',
+      replayTourHint:
+        'Restarts the full walkthrough: Mirador spot, panels, then viewfinder and framing in immersive.',
+    },
     attributions: {
       hint: 'Data sources and third-party content used by the app (maps, catalogs, weather, licenses).',
     },
@@ -91,7 +100,7 @@ export const en = {
       hint: 'Summary of what the app reads, stores and sends. No account, no analytics.',
       local: {
         title: 'Local data',
-        body: 'Spots, framings, settings and panel positions are stored in your browser (localStorage / IndexedDB). Nothing is sent to a Sadr3D Sphere account — there is none.',
+        body: 'Spots, framings, settings and panel positions are stored in your browser (localStorage / IndexedDB). Nothing is sent to a Sadr3D Sphere account. There is none.',
       },
       geo: {
         title: 'Geolocation',
@@ -132,6 +141,154 @@ export const en = {
     },
   },
 
+  onboarding: {
+    skip: 'Skip introduction',
+    continue: 'Continue',
+    back: 'Back',
+    start: 'Let’s go',
+    dotsAria: 'Introduction progress',
+    slideN: 'Slide {n}',
+    tour: {
+      skip: 'Skip the tour',
+      progress: 'Step {current} / {total}',
+      spotName: 'Mirador de Los Andenes',
+      cta: {
+        next: 'Continue',
+        place: 'Place the spot',
+        addFraming: 'Add example framing',
+        immersive: 'Open immersive view',
+        finish: 'Done',
+      },
+      exampleFramingName: 'Mirador · example',
+      steps: {
+        welcome: {
+          title: 'Let’s create your first spot',
+          body: 'For the onboarding we’ll take you to La Palma at the Mirador de Los Andenes under one of the darkest skies in Europe!',
+          body2: 'Let’s create our first marker.',
+        },
+        place: {
+          title: 'Place the spot here',
+          bodyDesktop: 'On desktop: right-click the map to place the pin.',
+          bodyDesktop2:
+            'Here we’ll place Mirador de Los Andenes for you. Click “Place the spot”.',
+          bodyMobile: 'On mobile: long-press the map to place the pin.',
+          bodyMobile2:
+            'Here we’ll place Mirador de Los Andenes for you. Tap “Place the spot”.',
+          bodyAfter: 'The marker is in place. Continue to see the actions around it.',
+        },
+        panels: {
+          title: 'Overview, weather, and sky',
+          body: 'On the left: overview (place, date, time), weather, and the Bortle / light-pollution index for this spot.',
+        },
+        pl: {
+          title: 'Light pollution on the map',
+          body: 'This control (on the right) toggles the light-pollution heatmap. Handy when you want a truly dark sky.',
+        },
+        spots: {
+          title: 'Your spots',
+          body: 'On the right, open My spots to find, rename, or hide your saved locations.',
+        },
+        framings: {
+          title: 'Your framings',
+          body: 'Just below the spots button: saved framings (composition, date, viewpoint) so you can replay a scene later.',
+        },
+        exampleFraming: {
+          title: 'An example framing',
+          body: 'We’ll add a sample framing on Mirador de Los Andenes so you can see how saved compositions show up here.',
+          bodyAfter:
+            'There it is in the list. You can reopen it later to replay the scene.',
+        },
+        marker: {
+          title: 'Marker actions',
+          body: 'When you click on the marker, a radial menu opens around it. Here’s what each action does:',
+          actions: {
+            street: {
+              label: 'Street View',
+              hint: 'Opens Google Street View at ground level. Check access and terrain.',
+            },
+            immersive: {
+              label: 'Immersive',
+              hint: '3D immersive view with terrain to plan your shots.',
+            },
+            skyFlat: {
+              label: 'Flat sky',
+              hint: 'Same view, but without the ground. Useful to test the sky alone.',
+            },
+            edit: {
+              label: 'Edit',
+              hint: 'Rename or adjust the saved spot.',
+            },
+          },
+        },
+        done: {
+          title: 'Next: immersive',
+          body: 'You’ve seen the map. Next up: the immersive view to frame with terrain and sky.',
+          body2:
+            'We’ll open our spot in immersive for the rest of the guide (viewfinder, modes, settings, save).',
+        },
+      },
+    },
+    immersiveTour: {
+      skip: 'Skip the guide',
+      progress: 'Step {current} / {total}',
+      cta: {
+        next: 'Continue',
+        finish: 'Done',
+      },
+      steps: {
+        viewfinder: {
+          title: 'The viewfinder',
+          body: 'At the top: focal length, sensor format, and orientation. This is where you set the optical frame for your composition.',
+        },
+        modes: {
+          title: 'Explore the different modes',
+          body: 'Free mode to explore without a frame. Photo for a DSLR viewfinder. Pano for a multi-shot sweep. Timelapse to plan, animate, and preview the video look!',
+        },
+        quality: {
+          title: 'Terrain quality',
+          body: 'Look top-right: the Settings button. We open Quality so you can pick terrain resolution. Finer detail means a heavier download.',
+        },
+        sky: {
+          title: 'Sky and atmosphere',
+          body: 'Still in Settings → Sky: light pollution, atmosphere, moonlight, and zodiacal light. Turn on or tweak what you want to best simulate the night.',
+        },
+        weather: {
+          title: 'Weather and clouds',
+          body: 'Settings → Weather turns clouds on. Here we enable low clouds as an example so you can see the effect on landscape and sky right away. Clouds also interact with light pollution.',
+        },
+        save: {
+          title: 'Save a framing',
+          body: 'Open Framings, then Save to keep the composition (look, focal length, date). You can replay it later from the map.',
+        },
+        done: {
+          title: 'Tour complete',
+          body: 'You’ve finished the full guide: map, viewfinder, modes, settings, and save. Explore, compose, and come back anytime.',
+          body2: 'You can replay it all from Settings → Onboarding.',
+        },
+      },
+    },
+    slides: {
+      explore: {
+        eyebrow: 'Explore',
+        title: 'Your next shot\nstarts here.',
+        body: 'Explore the world and find a spot that inspires you to pick up your camera.',
+        imageAlt: 'View of Earth from space',
+      },
+      anticipate: {
+        eyebrow: 'Organize',
+        title: 'Your plans take shape.',
+        body: 'Find your spots, place markers, and save your compositions to organize your next shoots.',
+        imageAlt: '3D map with a marked spot',
+      },
+      compose: {
+        eyebrow: 'Preview',
+        title: 'See your next shot before you take it.',
+        body: 'Plan your compositions, panoramas, and timelapses in 3D. Simulate weather and light pollution to preview the scene on location.',
+        imageAlt: 'Immersive night-sky preview',
+      },
+    },
+  },
+
   map: {
     controlsAria: 'Map controls',
     uiAria: 'Overview and weather',
@@ -150,9 +307,9 @@ export const en = {
       hybrid: 'Satellite + map',
       plan: 'Map',
       switching: 'Switching to {label}…',
-      loading: 'Loading — {label}',
+      loading: 'Loading: {label}',
       cycleTitle: '{label} (satellite → sat+map → map)',
-      clickToChange: '{label} — click to change',
+      clickToChange: '{label}: click to change',
     },
     pl: {
       toggleOn: 'Hide the light pollution heatmap',
@@ -166,7 +323,7 @@ export const en = {
       legendTitle: 'Bortle scale',
       legendSubtitle: 'Light pollution',
       legendSource:
-        'Data: {link} (~500 m, CC BY 4.0 · OpenLandMap/Zenodo) — Bortle false color, not World Atlas.',
+        'Data: {link} (~500 m, CC BY 4.0 · OpenLandMap/Zenodo). Bortle false color, not World Atlas.',
       legendHide: 'Hide Bortle legend',
       legendShow: 'Show Bortle legend',
     },
@@ -289,7 +446,7 @@ export const en = {
       alt: 'Elevation',
       source: 'Source: {hint}',
       highSiteNote:
-        'High site: approximate DEM correction (ridges). A residual gap vs LPM is still possible (~0.2–0.4 mag).',
+        'High site: approximate DEM correction (ridges). A residual gap vs LPM is still possible (~0.2-0.4 mag).',
       openSky: 'View light pollution',
       openSkyTitle: 'View light pollution (fisheye / panoramic)',
       defaultSourceHint: 'estimated · satellite',
@@ -315,7 +472,7 @@ export const en = {
       notePano:
         'Azimuth runs from left to right; altitude runs from the horizon (bottom) to the zenith (top).',
       disclaimer:
-        'Zenith: First Rig / VIIRS (+ near-field DEM for high sites). Domes: Duriscoe all-sky + dome blur (not Falchi). Scouting estimate — not a ground SQM measurement.',
+        'Zenith: First Rig / VIIRS (+ near-field DEM for high sites). Domes: Duriscoe all-sky + dome blur (not Falchi). Scouting estimate, not a ground SQM measurement.',
       sideTitle: 'At this location',
       assess: {
         loading: 'Computing measurements…',
@@ -454,7 +611,7 @@ export const en = {
     hideCurves: 'Hide altitude curves',
     showCurves: 'Show altitude curves',
     modeSimple: 'Simple mode',
-    modeAdvanced: 'Advanced mode — Sun, Moon, Milky Way altitudes',
+    modeAdvanced: 'Advanced mode: Sun, Moon, Milky Way altitudes',
     prevDay: 'Previous day',
     nextDay: 'Next day',
     zoomOut: 'Zoom out timeline',
@@ -462,8 +619,8 @@ export const en = {
     zoomWindow: 'Window ±{min} min',
     setUtc: 'Set UTC time',
     setLocal: 'Set local time',
-    utcExact: 'UTC time — set exact time',
-    localExact: 'Spot local time — set exact time',
+    utcExact: 'UTC time: set exact time',
+    localExact: 'Spot local time: set exact time',
     noSpotUtc: 'No spot: world time (UTC)',
     civilApprox: 'Approximate civil time at the spot',
     utc: 'UTC',
@@ -552,13 +709,13 @@ export const en = {
       recenter: 'Recenter the view on the locked framing',
     },
     guide: {
-      photoOnly: 'Composition guide — available in Photo mode',
+      photoOnly: 'Composition guide: available in Photo mode',
       cycle: 'Composition guide: {label}. Click to change.',
     },
     layersAria: 'Sky layers',
     layer: {
       milkyWay: 'Milky Way',
-      halphaTitle: 'Hα — hydrogen emission',
+      halphaTitle: 'Hα: hydrogen emission',
       halpha: 'Hα',
       constellations: 'Constellations',
       radec: 'RA/Dec grid',
@@ -669,7 +826,7 @@ export const en = {
       rangeAz: 'Azimuth',
       rangeAlt: 'Altitude',
       rangeHint:
-        'Head angles from the first shot (top-left) to the last (bottom-right) — enter these on a motorized head (e.g. Benro Polaris).',
+        'Head angles from the first shot (top-left) to the last (bottom-right). enter these on a motorized head (e.g. Benro Polaris).',
       captureTime: 'Duration',
       captureTimeTip:
         'Estimated capture time (exposure + interval, shared with Timelapse).',
@@ -694,10 +851,10 @@ export const en = {
       },
       infoOpticalLabel: 'Optical (tripod)',
       infoOptical:
-        '— each frame = what the camera really sees (the sensor). Useful to check where a photo lands. In stereographic it warps at the edges: expected, not a bug.',
+        'Each frame = what the camera really sees (the sensor). Useful to check where a photo lands. In stereographic it warps at the edges: expected, not a bug.',
       infoSphericalLabel: 'Spherical (az/alt)',
       infoSpherical:
-        '— regular cells on the sky sphere. Easier to read when setting columns, rows and overlap.',
+        'Regular cells on the sky sphere. Easier to read when setting columns, rows and overlap.',
       infoTip:
         'Tip: plan in spherical mode, check an area in optical mode if needed.',
       display: 'Display',
@@ -724,10 +881,10 @@ export const en = {
       supportFixed: 'Fixed tripod',
       supportEq: 'Equatorial mount',
       eqLockedTarget:
-        'Locked on {name} — stars stay fixed in the frame, the ground rotates (field rotation).',
+        'Locked on {name}: stars stay fixed in the frame, the ground rotates (field rotation).',
       eqLockedCenter:
-        'Locked on the viewfinder center — stars stay fixed in the frame, the ground rotates (field rotation).',
-      fixedHint: 'Fixed landscape — the sky drifts.',
+        'Locked on the viewfinder center: stars stay fixed in the frame, the ground rotates (field rotation).',
+      fixedHint: 'Fixed landscape. The sky drifts.',
       trailHot:
         'Star trails active (exposure {pose} s > 500 rule ≈ {rule} s @ {focal} mm).',
       trailWarn: 'Beyond ≈ {rule} s (@ {focal} mm), trailing becomes visible.',
@@ -939,7 +1096,7 @@ export const en = {
       visAria: 'Visibility',
       status: {
         riseSet: 'Rise / set (astronomical horizon)',
-        circumpolar: 'Circumpolar — never sets',
+        circumpolar: 'Circumpolar: never sets',
         never: 'Never above the horizon',
         unknown: 'Times unavailable',
       },
@@ -949,11 +1106,11 @@ export const en = {
       constNote:
         'Times for the constellation’s reference point, not for its whole area.',
       multiPass:
-        'Several passes possible on this day — first crossing shown.',
+        'Several passes possible on this day. first crossing shown.',
       belowHorizon: 'Below the horizon at the selected time',
       pitchClamp: '(outside camera pointing range ±85°)',
       unlockTitle: 'Unlock the target (or move the view)',
-      lockTitle: 'Lock the target — follows the timeline',
+      lockTitle: 'Lock the target: follows the timeline',
       unlock: 'Unlock the target',
       lock: 'Lock the target to the timeline',
       center: 'Center on the target',
@@ -978,25 +1135,25 @@ export const en = {
     passSingular: 'pass',
     passPlural: 'passes',
     frustum: 'Frustum culling',
-    frustumHint: 'OFF by default — world AABBs are wrong under warp',
+    frustumHint: 'OFF by default: world AABBs are wrong under warp',
     near: 'Camera near',
     nearHint: 'PerspectiveCamera near plane (live)',
     far: 'Camera far (clip)',
-    farHint: 'Far plane only — does not load / unload any tile',
+    farHint: 'Far plane only: does not load / unload any tile',
     wireframe: 'Terrain wireframe',
     terrainNear: 'Near terrain',
     terrainFar: 'Far terrain / LOD',
-    terrainFarHint: 'Visibility only — does not change the LOD',
+    terrainFarHint: 'Visibility only: does not change the LOD',
     skyDome: 'Sky / atmosphere (dome)',
     nightSky: 'Night sky (MW, grids…)',
     passNote:
       'Production = direct pass (vertex warp). No EffectComposer. Cubemap = optional debug (6 RT + composite).',
     cubemap: 'Stereo cubemap pass',
-    cubemapHint: 'Live — switches the render path',
+    cubemapHint: 'Live: switches the render path',
     atlas: 'Face atlas preview (before reproj.)',
     atlasHint: 'Also enables the cubemap pass',
     depthLocked:
-      'logarithmicDepthBuffer: ON (fixed at renderer creation — recreate the resource to change)',
+      'logarithmicDepthBuffer: ON (fixed at renderer creation; recreate the resource to change)',
     reset: 'Reset',
     copy: 'Copy diagnostics',
     copied: 'Copied',

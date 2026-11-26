@@ -23,6 +23,7 @@ import type { TimelapsePlan } from './timelapse'
 import { ViewfinderCameraPanel } from './ViewfinderCameraPanel'
 import { ViewfinderPanoramaPanel } from './ViewfinderPanoramaPanel'
 import { ViewfinderTimelapsePanel } from './ViewfinderTimelapsePanel'
+import { EXPAND_CAPTURE_BAR_EVENT } from './onboarding/immersiveTourUi'
 
 /** Opens / expands the existing TimelineDock (kept for other chrome). */
 export const EXPAND_TIMELINE_EVENT = 'astro-planner:expand-timeline'
@@ -108,6 +109,14 @@ export function ViewfinderCaptureCapsule({
   frameModeRef.current = frameMode
   const showFullBar = !compact || barExpanded
 
+  useEffect(() => {
+    const onExpand = () => {
+      if (compact) setBarExpanded(true)
+    }
+    window.addEventListener(EXPAND_CAPTURE_BAR_EVENT, onExpand)
+    return () => window.removeEventListener(EXPAND_CAPTURE_BAR_EVENT, onExpand)
+  }, [compact])
+
   const collapseChrome = () => {
     setSettingsPanel(null)
     setBarExpanded(false)
@@ -175,18 +184,28 @@ export function ViewfinderCaptureCapsule({
 
   const toggleSettings = (panel: Exclude<SettingsPanel, null>) => {
     if (settingsPanel === panel) {
-      collapseChrome()
+      setSettingsPanel(null)
       return
     }
     openPanel(panel)
   }
 
+  /** Collapsed pill → full bar only. Expanded gear → toggle camera card. */
   const openCameraFromPill = () => {
-    if (compact && (barExpanded || settingsPanel === 'camera')) {
-      collapseChrome()
+    if (compact && !barExpanded) {
+      setBarExpanded(true)
+      setSettingsPanel(null)
       return
     }
-    openPanel('camera')
+    if (compact && barExpanded) {
+      if (settingsPanel === 'camera') {
+        setSettingsPanel(null)
+        return
+      }
+      openPanel('camera')
+      return
+    }
+    toggleSettings('camera')
   }
 
   const applyFrameMode = (mode: ViewfinderFrameMode) => {
@@ -196,11 +215,8 @@ export function ViewfinderCaptureCapsule({
       openPanel('pano')
       return
     }
-    // Free / Photo: ne ferme pas la carte ouverte (ex. Appareil photo).
+    // Free / Photo: barre ouverte, ne force pas une carte.
     if (compact) setBarExpanded(true)
-    if (settingsPanel === 'pano' || settingsPanel === 'timelapse') {
-      openPanel('camera')
-    }
   }
 
   const openTimelapse = () => {
@@ -215,13 +231,15 @@ export function ViewfinderCaptureCapsule({
         openPanel(panel)
         return
       }
-      // X / Escape from a card must restore the normal phone chrome.
-      collapseChrome()
+      // X ferme la carte mais garde la barre Free/Photo/Pano.
+      setSettingsPanel(null)
+      if (compact) setBarExpanded(true)
     }
 
   return (
     <div
       ref={rootRef}
+      data-tour-anchor="vf-capsule"
       className={
         compact
           ? [
@@ -284,7 +302,10 @@ export function ViewfinderCaptureCapsule({
         </button>
 
         {showFullBar ? (
-          <>
+          <div
+            className="vf-capture-capsule__tour-modes"
+            data-tour-anchor="vf-modes"
+          >
             <div className="vf-capture-capsule__divider" aria-hidden="true" />
 
             <div className="vf-capture-capsule__finder">
@@ -318,7 +339,8 @@ export function ViewfinderCaptureCapsule({
                 })}
               </div>
 
-              {frameMode === 'pano' ? (
+              {/* Desktop only — on phone, tapping Pano already opens the settings card. */}
+              {!compact && frameMode === 'pano' ? (
                 <button
                   type="button"
                   className={
@@ -355,7 +377,7 @@ export function ViewfinderCaptureCapsule({
               <TimelapseIcon size={16} />
               <span>{t('viewfinder.capture.timelapse')}</span>
             </button>
-          </>
+          </div>
         ) : null}
       </div>
 

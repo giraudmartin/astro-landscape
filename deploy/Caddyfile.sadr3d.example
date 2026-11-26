@@ -72,7 +72,7 @@ sphere.sadr3d.com {
 		@html path / /index.html
 		header @html Cache-Control "no-cache"
 
-		@static path /sky/* /models/* /vendor/* /catalogs/* /favicon.svg /icons.svg
+		@static path /sky/* /models/* /vendor/* /catalogs/* /favicon.svg /icons.svg /robots.txt /sitemap.xml /og-share.png
 		header @static Cache-Control "public, max-age=86400, must-revalidate"
 
 		# SPA fallback for unknown paths (no client router today; keep for later).

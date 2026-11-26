@@ -493,18 +493,18 @@ export function OnboardingTour({
     step.id === 'welcome'
       ? t('onboarding.tour.steps.welcome.body2')
       : step.id === 'place'
-        ? t(
-            isPhone
-              ? 'onboarding.tour.steps.place.bodyMobile2'
-              : 'onboarding.tour.steps.place.bodyDesktop2',
-          )
+        ? placeDone
+          ? t('onboarding.tour.steps.place.bodyAfter')
+          : t(
+              isPhone
+                ? 'onboarding.tour.steps.place.bodyMobile2'
+                : 'onboarding.tour.steps.place.bodyDesktop2',
+            )
         : step.id === 'done'
           ? t('onboarding.tour.steps.done.body2')
-          : step.id === 'place' && placeDone
-            ? t('onboarding.tour.steps.place.bodyAfter')
-            : step.id === 'exampleFraming' && exampleFramingAdded
-              ? t('onboarding.tour.steps.exampleFraming.bodyAfter')
-              : null
+          : step.id === 'exampleFraming' && exampleFramingAdded
+            ? t('onboarding.tour.steps.exampleFraming.bodyAfter')
+            : null
   const ctaLabel =
     step.cta === 'place'
       ? placeDone

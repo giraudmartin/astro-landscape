@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import {
   buildObjectLiveInfo,
   celestialObjectDisplayName,
@@ -7,6 +8,7 @@ import {
   type CelestialObject,
 } from './celestialObjects'
 import { useT } from './i18n'
+import { OPERATE_PHONE_MQ, useMatchMedia } from './useMatchMedia'
 
 type CelestialTargetCardProps = {
   object: CelestialObject
@@ -101,6 +103,7 @@ export function CelestialTargetCard({
   onClose,
 }: CelestialTargetCardProps) {
   const t = useT()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const info = useMemo(
     () =>
       buildObjectLiveInfo(object, date, playheadUtcMs, lat, lon, elevationM),
@@ -114,8 +117,13 @@ export function CelestialTargetCard({
     info.position != null && Math.abs(info.position.altitudeDeg) > 85
   const canAim = canCenter && info.position != null && !pitchClamped
 
-  return (
-    <aside className="celestial-target" aria-label={t('celestial.target.aria')}>
+  const card = (
+    <aside
+      className={
+        isPhone ? 'celestial-target celestial-target--sheet' : 'celestial-target'
+      }
+      aria-label={t('celestial.target.aria')}
+    >
       <header className="celestial-target__header">
         <div className="celestial-target__titles">
           <p className="celestial-target__type">
@@ -257,4 +265,10 @@ export function CelestialTargetCard({
       </div>
     </aside>
   )
+
+  if (!isPhone) return card
+  if (typeof document === 'undefined') return null
+  const host = document.querySelector('.immersive')
+  if (!host) return card
+  return createPortal(card, host)
 }

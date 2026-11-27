@@ -11370,7 +11370,8 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 
   /*
    * Panel open: keep the capture bar (focale · Free/Photo/Pano).
-   * Hide only competing chrome that used to bleed through the card.
+   * Hide competing chrome that used to bleed through the card —
+   * including the timeline dock (same z as the card; was covering Rotation).
    */
   .immersive:has(.vf-capture-capsule.is-panel-open) .immersive__top-bar__tools {
     display: none !important;
@@ -11384,6 +11385,30 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
     visibility: hidden !important;
     pointer-events: none !important;
     opacity: 0 !important;
+  }
+
+  /* Timeline is a body sibling of immersive — slide away like is-legend-covered. */
+  body:has(.vf-capture-capsule.is-panel-open) .moon-timeline-dock,
+  body:has(.vf-capture-capsule.is-panel-open) .moon-timeline-dock--advanced {
+    opacity: 0;
+    transform: translateY(18px);
+    pointer-events: none;
+    visibility: hidden;
+    transition:
+      opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s linear 0.28s;
+  }
+
+  body:has(.vf-capture-capsule.is-panel-open) .moon-timeline-dock__collapsed {
+    opacity: 0;
+    transform: translateX(-50%) translateY(18px);
+    pointer-events: none;
+    visibility: hidden;
+    transition:
+      opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s linear 0.28s;
   }
 
   .immersive:has(.vf-capture-capsule.is-panel-open) .vf-capture-capsule__bar {
@@ -11401,7 +11426,8 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
     top: calc(var(--imm-phone-top) + var(--imm-phone-bar-h) + 10px);
     width: auto;
     max-width: none;
-    z-index: 30;
+    /* Above timeline (z≈30) while it fades out. */
+    z-index: 35;
     visibility: visible !important;
     pointer-events: auto !important;
     opacity: 1 !important;
@@ -11421,6 +11447,10 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
       100dvh - var(--imm-phone-top) - var(--imm-phone-bar-h) -
         max(12px, env(safe-area-inset-bottom, 0px)) - 28px
     );
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding: 14px 14px 16px;
     gap: 12px;
     /* Plus sombre, mais toujours transparent (verre). */

@@ -158,7 +158,7 @@ export const fr = {
         next: 'Continuer',
         place: 'Placer le spot',
         addFraming: 'Ajouter le cadrage',
-        immersive: 'Ouvrir la vue immersive',
+        immersive: 'Ouvrir l’immersif',
         finish: 'Terminer',
       },
       exampleFramingName: 'Mirador · exemple',
@@ -169,8 +169,9 @@ export const fr = {
           body2: 'Créons notre premier marqueur.',
         },
         place: {
-          title: 'Place le spot ici',
-          bodyDesktop: 'Sur ordinateur : clic droit sur la carte pour poser le pin.',
+          title: 'Création du spot',
+          bodyDesktop:
+            'Sur ordinateur : clic droit sur la carte (Ctrl+clic sur Mac) pour poser le pin.',
           bodyDesktop2:
             'Ici on place Mirador de Los Andenes pour toi. Clique « Placer le spot ».',
           bodyMobile: 'Sur mobile : appui long sur la carte pour poser le pin.',
@@ -203,6 +204,8 @@ export const fr = {
         marker: {
           title: 'Actions du marqueur',
           body: 'Quand tu cliques sur le marker, un menu radial s’ouvre autour. Voici ce que fait chaque action :',
+          bodyDesktop:
+            'Le menu radial est ouvert sur le marker. Voici ce que fait chaque action :',
           actions: {
             street: {
               label: 'Street View',

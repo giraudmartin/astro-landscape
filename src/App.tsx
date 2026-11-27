@@ -23,6 +23,7 @@ import { OnboardingTour } from './onboarding/OnboardingTour'
 import { OnboardingImmersiveTour } from './onboarding/OnboardingImmersiveTour'
 import {
   findExistingTourDemoSpot,
+  isSameTourDemoPlace,
   TOUR_DEMO_DATE,
   TOUR_DEMO_SPOT,
   tourDemoUtcMs,
@@ -319,6 +320,7 @@ export default function App() {
   )
   const [markerMenuOpen, setMarkerMenuOpen] = useState(false)
   const [tourOpen, setTourOpen] = useState(false)
+  const [tourStepId, setTourStepId] = useState<TourStepId | null>(null)
   const [immersiveTourPending, setImmersiveTourPending] = useState(false)
   const [immersiveTourOpen, setImmersiveTourOpen] = useState(false)
 
@@ -478,6 +480,7 @@ export default function App() {
 
   const onTourStepEnter = useCallback(
     (stepId: TourStepId) => {
+      setTourStepId(stepId)
       switch (stepId) {
         case 'welcome':
         case 'place':
@@ -513,8 +516,8 @@ export default function App() {
         case 'marker':
           setMySpotsOpen(false)
           setFramingsOpen(false)
-          // Explained in the tour card (icons): keep the live radial closed.
-          setMarkerMenuOpen(false)
+          // Desktop: open the live radial on the map. Phone: keep closed + in-card demo.
+          setMarkerMenuOpen(!isPhone)
           break
         case 'done':
           setMarkerMenuOpen(false)
@@ -556,18 +559,20 @@ export default function App() {
   const addTourExampleFraming = useCallback(() => {
     const saved = findExistingTourDemoSpot(personalSpots)
     if (!saved) return
+    // Keep the tour step, but never insert a second example (note or same name@Mirador).
+    const exampleName = t('onboarding.tour.exampleFramingName')
     const already = personalFramings.some(
-      (row) => row.note === 'tour-example' && row.spotId === saved.id,
+      (row) =>
+        row.note === 'tour-example' ||
+        (row.name === exampleName && isSameTourDemoPlace(row.lat, row.lon)),
     )
-    if (already) {
-      setFramingsOpen(true)
-      return
-    }
+    setFramingsOpen(true)
+    if (already) return
     applyTourDemoClock()
     const utcMs = tourDemoUtcMs(saved.lon)
     const peakLocal = formatCivilLocalTimestamp(utcMs, saved.lon)
     const framing = createPersonalFraming({
-      name: t('onboarding.tour.exampleFramingName'),
+      name: exampleName,
       lat: saved.lat,
       lon: saved.lon,
       peakUtc: new Date(utcMs).toISOString(),
@@ -591,8 +596,15 @@ export default function App() {
       source: 'manual',
       note: 'tour-example',
     })
-    setPersonalFramings((prev) => upsertPersonalFraming(prev, framing))
-    setFramingsOpen(true)
+    setPersonalFramings((prev) => {
+      const exists = prev.some(
+        (row) =>
+          row.note === 'tour-example' ||
+          (row.name === exampleName && isSameTourDemoPlace(row.lat, row.lon)),
+      )
+      if (exists) return prev
+      return upsertPersonalFraming(prev, framing)
+    })
   }, [personalSpots, personalFramings, t, applyTourDemoClock])
 
   const openTourImmersive = useCallback(() => {
@@ -621,6 +633,7 @@ export default function App() {
     // One guide: skipping the map half abandons the whole walkthrough.
     if (reason === 'skip') markImmersiveTourSeen()
     setTourOpen(false)
+    setTourStepId(null)
     setMarkerMenuOpen(false)
   }, [])
 
@@ -1586,6 +1599,9 @@ export default function App() {
           onRequestEditSpot={onRequestEditSpot}
           markerMenuOpen={markerMenuOpen}
           onMarkerMenuOpenChange={setMarkerMenuOpen}
+          markerActionsLocked={
+            tourOpen && !isPhone && tourStepId === 'marker'
+          }
         />
       </div>
       {mountImmersive && spot != null ? (

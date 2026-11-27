@@ -182,6 +182,8 @@ type MapCanvasProps = {
   onRequestEditSpot: () => void
   markerMenuOpen: boolean
   onMarkerMenuOpenChange: (open: boolean) => void
+  /** Onboarding: keep radial open but disable spokes + close (X). */
+  markerActionsLocked?: boolean
 }
 
 const THREE_D_PITCH = 55
@@ -366,6 +368,7 @@ export function MapCanvas({
   onRequestEditSpot,
   markerMenuOpen,
   onMarkerMenuOpenChange,
+  markerActionsLocked = false,
 }: MapCanvasProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -1510,6 +1513,10 @@ export function MapCanvas({
     }
     markerUiRef.current?.close()
   }, [markerMenuOpen])
+
+  useEffect(() => {
+    markerUiRef.current?.setLocked(markerActionsLocked)
+  }, [markerActionsLocked, markerMenuOpen, spot])
 
   useEffect(() => {
     const onTourFly = () => {

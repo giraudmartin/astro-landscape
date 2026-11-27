@@ -123,7 +123,11 @@ type HoleRect = {
 const PAD = 8
 const MARGIN = 16
 const GAP = 12
-const SCRIM = 'rgba(2, 6, 7, 0.62)'
+/** Keep the map timeline / bottom chrome clear when parking a card. */
+const BOTTOM_CLEAR = 108
+/** Right map control stack — leave room when docking bottom-right. */
+const RIGHT_RAIL_CLEAR = 72
+const SCRIM = 'rgba(2, 6, 7, 0.42)'
 
 /** Layout truth: overview column is LEFT; map control stack is RIGHT. */
 type Side = 'left' | 'right'
@@ -171,8 +175,8 @@ function measureSpotMarkerHole(): HoleRect | null {
   const target = center ?? el
   const r = target.getBoundingClientRect()
   if (r.width < 1 && r.height < 1) return null
-  const open = el.classList.contains('spot-action-marker--open')
-  const size = open ? 200 : Math.max(r.width, r.height, 44) + PAD * 2
+  // Same green ring whether the radial is open or just placed (tour spotlight).
+  const size = 300
   const cx = r.left + r.width / 2
   const cy = r.top + r.height / 2
   return {
@@ -184,17 +188,64 @@ function measureSpotMarkerHole(): HoleRect | null {
   }
 }
 
+/** Intersect two axis-aligned rects; null if empty. */
+function intersectRect(
+  a: { top: number; left: number; width: number; height: number },
+  b: { top: number; left: number; width: number; height: number },
+): { top: number; left: number; width: number; height: number } | null {
+  const left = Math.max(a.left, b.left)
+  const top = Math.max(a.top, b.top)
+  const right = Math.min(a.left + a.width, b.left + b.width)
+  const bottom = Math.min(a.top + a.height, b.top + b.height)
+  if (right - left < 8 || bottom - top < 8) return null
+  return { left, top, width: right - left, height: bottom - top }
+}
+
 function measureAnchorHole(anchor: TourAnchor): HoleRect | null {
   if (anchor === 'spot-marker') return measureSpotMarkerHole()
   const el = queryAnchor(anchor)
   if (!el) return null
   const r = el.getBoundingClientRect()
   if (r.width < 2 || r.height < 2) return null
+  let top = r.top - PAD
+  let left = r.left - PAD
+  let width = r.width + PAD * 2
+  let height = r.height + PAD * 2
+
+  // Overview column scrolls inside .map-ui and can be taller than the viewport.
+  // Spotlight only the visible slice so desktop doesn't get a full-height green slab.
+  if (anchor === 'ov-anchor') {
+    const scrollPort =
+      el.closest<HTMLElement>('.map-ui')?.getBoundingClientRect() ?? null
+    const view = {
+      top: 0,
+      left: 0,
+      width: typeof window !== 'undefined' ? window.innerWidth : 1200,
+      height: typeof window !== 'undefined' ? window.innerHeight : 800,
+    }
+    const clip = scrollPort
+      ? intersectRect(
+          { top, left, width, height },
+          {
+            top: scrollPort.top,
+            left: scrollPort.left,
+            width: scrollPort.width,
+            height: scrollPort.height,
+          },
+        )
+      : intersectRect({ top, left, width, height }, view)
+    if (!clip) return null
+    top = clip.top
+    left = clip.left
+    width = clip.width
+    height = clip.height
+  }
+
   return {
-    top: r.top - PAD,
-    left: r.left - PAD,
-    width: r.width + PAD * 2,
-    height: r.height + PAD * 2,
+    top,
+    left,
+    width,
+    height,
     round:
       anchor === 'my-spots' ||
       anchor === 'framings' ||
@@ -219,10 +270,18 @@ function measureTourPanelHole(
   }
 }
 
-/** Spotlight cutouts for the active step (marker step skips overlay entirely). */
+/** Spotlight cutouts for the active step. */
 function collectHoles(step: TourStepDef): HoleRect[] {
-  if (step.id === 'marker' || !step.anchor) return []
   const holes: HoleRect[] = []
+
+  // Place + marker: always ring the live pin so the spot stays visible.
+  if (step.id === 'place' || step.id === 'marker') {
+    const pin = measureSpotMarkerHole()
+    if (pin) holes.push(pin)
+    return holes
+  }
+
+  if (!step.anchor) return []
   const primary = measureAnchorHole(step.anchor)
   if (primary) holes.push(primary)
   // Spots / cadrages: undim the open rail so the presented panel stays readable.
@@ -241,6 +300,64 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(Math.max(n, min), max)
 }
 
+/**
+ * Welcome / place / done: never cover map center.
+ * Beside the pin when it exists; otherwise bottom-right corner.
+ */
+function parkClearOfMapCenterStyle(
+  hole: HoleRect | null,
+  cardW: number,
+  cardH: number,
+): CSSProperties {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1200
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const width = Math.min(cardW, vw - MARGIN * 2)
+  const height = Math.max(cardH, 120)
+
+  if (hole) {
+    const spaceRight =
+      vw - (hole.left + hole.width) - MARGIN - RIGHT_RAIL_CLEAR
+    const spaceLeft = hole.left - MARGIN
+    let left: number
+    if (spaceRight >= width + GAP) {
+      left = hole.left + hole.width + GAP
+    } else if (spaceLeft >= width + GAP) {
+      left = hole.left - width - GAP
+    } else {
+      left = vw - width - MARGIN - RIGHT_RAIL_CLEAR
+    }
+    return {
+      left: clamp(left, MARGIN, vw - width - MARGIN),
+      top: clamp(
+        hole.top + hole.height / 2 - height / 2,
+        MARGIN,
+        vh - height - MARGIN,
+      ),
+    }
+  }
+
+  return {
+    left: clamp(
+      vw - width - MARGIN - RIGHT_RAIL_CLEAR,
+      MARGIN,
+      vw - width - MARGIN,
+    ),
+    top: clamp(vh - height - BOTTOM_CLEAR, MARGIN, vh - height - MARGIN),
+  }
+}
+
+/** Last map step: center the card in the viewport. */
+function parkCenterStyle(cardW: number, cardH: number): CSSProperties {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1200
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const width = Math.min(cardW, vw - MARGIN * 2)
+  const height = Math.max(cardH, 120)
+  return {
+    left: Math.max(MARGIN, (vw - width) / 2),
+    top: clamp((vh - height) / 2, MARGIN, vh - height - MARGIN),
+  }
+}
+
 function cardStyleFor(
   hole: HoleRect | null,
   step: TourStepDef,
@@ -253,10 +370,7 @@ function cardStyleFor(
   const height = Math.max(cardH, 120)
 
   if (!hole) {
-    return {
-      left: Math.max(MARGIN, (vw - width) / 2),
-      top: Math.max(24, vh * 0.22),
-    }
+    return parkClearOfMapCenterStyle(null, width, height)
   }
 
   const side = preferredSide(step.anchor)
@@ -265,15 +379,7 @@ function cardStyleFor(
 
   let left: number
   if (step.anchor === 'spot-marker') {
-    left = hole.left + hole.width / 2 - width / 2
-    let top = hole.top + hole.height + GAP
-    if (top + height > vh - MARGIN) {
-      top = hole.top - height - GAP
-    }
-    return {
-      left: clamp(left, MARGIN, vw - width - MARGIN),
-      top: clamp(top, MARGIN, vh - height - MARGIN),
-    }
+    return parkClearOfMapCenterStyle(hole, width, height)
   }
 
   if (side === 'left') {
@@ -316,7 +422,7 @@ export function OnboardingTour({
   const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
   const [index, setIndex] = useState(0)
   const [holes, setHoles] = useState<HoleRect[]>([])
-  const [cardBox, setCardBox] = useState({ w: 360, h: 200 })
+  const [cardBox, setCardBox] = useState({ w: 280, h: 160 })
   /** After place / add-framing CTAs, stay on the same card with Continuer. */
   const [placeDone, setPlaceDone] = useState(false)
   const [exampleFramingAdded, setExampleFramingAdded] = useState(false)
@@ -356,6 +462,17 @@ export function OnboardingTour({
     setPlaceDone(false)
     setExampleFramingAdded(false)
   }, [open])
+
+  /** Desktop panels: punch a scroll hole over .map-ui; clicks stay blocked. */
+  const allowMapUiScroll = open && !isPhone && step.id === 'panels'
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('is-tour-scroll-map-ui', allowMapUiScroll)
+    return () => {
+      root.classList.remove('is-tour-scroll-map-ui')
+    }
+  }, [allowMapUiScroll])
 
   useEffect(() => {
     if (step.id !== 'place') setPlaceDone(false)
@@ -488,7 +605,13 @@ export function OnboardingTour({
             ? 'onboarding.tour.steps.place.bodyMobile'
             : 'onboarding.tour.steps.place.bodyDesktop',
         )
-      : t(`onboarding.tour.steps.${step.id}.body`)
+      : step.id === 'marker'
+        ? t(
+            isPhone
+              ? 'onboarding.tour.steps.marker.body'
+              : 'onboarding.tour.steps.marker.bodyDesktop',
+          )
+        : t(`onboarding.tour.steps.${step.id}.body`)
   const bodyFollow =
     step.id === 'welcome'
       ? t('onboarding.tour.steps.welcome.body2')
@@ -520,24 +643,39 @@ export function OnboardingTour({
             ? t('onboarding.tour.cta.finish')
             : t('onboarding.tour.cta.next')
 
-  // Marker step: full dim + hit-block; actions explained in-card (no live radial).
-  const overlayHoles = isMarkerStep ? [] : holes
   const isRailStep =
     step.id === 'spots' ||
     step.id === 'framings' ||
     step.id === 'exampleFraming'
   // Ring the toggle only — the open rail is undimmed without a giant frame.
-  const ringHoles = isRailStep ? overlayHoles.slice(0, 1) : overlayHoles
-  const cardStyle = cardStyleFor(
-    isMarkerStep ? null : primaryHole,
-    step,
-    cardBox.w,
-    cardBox.h,
-  )
+  const ringHoles = isRailStep ? holes.slice(0, 1) : holes
+  // Map-centric steps: bottom-right (pin stays clear). Finale is centered.
+  const mapCornerStep =
+    step.id === 'welcome' || step.id === 'place' || step.id === 'marker'
+  const styleCardW =
+    isMarkerStep && isPhone
+      ? Math.max(cardBox.w, Math.min(328, viewport.w - 48))
+      : isMarkerStep && !isPhone
+        ? Math.max(cardBox.w, Math.min(300, viewport.w - 48))
+        : step.id === 'done'
+          ? Math.max(cardBox.w, Math.min(300, viewport.w - 48))
+          : cardBox.w
+  const cardStyle =
+    step.id === 'done'
+      ? parkCenterStyle(styleCardW, cardBox.h)
+      : mapCornerStep
+        ? parkClearOfMapCenterStyle(null, styleCardW, cardBox.h)
+        : cardStyleFor(primaryHole, step, styleCardW, cardBox.h)
   const maskId = 'onboarding-tour-mask'
-  const cardClass = isMarkerStep
-    ? 'onboarding-tour__card onboarding-tour__card--wide'
-    : 'onboarding-tour__card'
+  // Desktop marker: live radial on the map → list card (no cropped demo).
+  const cardClass = [
+    'onboarding-tour__card',
+    isMarkerStep && isPhone ? 'onboarding-tour__card--wide' : '',
+    isMarkerStep && !isPhone ? 'onboarding-tour__card--marker-list' : '',
+    step.id === 'done' ? 'onboarding-tour__card--finale' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div
@@ -568,7 +706,7 @@ export function OnboardingTour({
               height={viewport.h}
               fill="#fff"
             />
-            {overlayHoles.map((h, i) =>
+            {holes.map((h, i) =>
               h.round ? (
                 <ellipse
                   key={i}
@@ -603,8 +741,59 @@ export function OnboardingTour({
         />
       </svg>
 
-      {/* Full-screen hit lock: holes are visual only — panels stay non-interactive. */}
-      <div className="onboarding-tour__scrim-hit" aria-hidden="true" />
+      {/*
+        Hit lock: full-screen by default. On desktop panels step, leave a hole over
+        .map-ui so wheel/trackpad can scroll — controls stay inert via CSS.
+      */}
+      {allowMapUiScroll && primaryHole ? (
+        <>
+          <div
+            className="onboarding-tour__scrim-hit onboarding-tour__scrim-hit--band"
+            style={{
+              top: 0,
+              left: 0,
+              right: 0,
+              height: Math.max(0, primaryHole.top),
+            }}
+            aria-hidden="true"
+          />
+          <div
+            className="onboarding-tour__scrim-hit onboarding-tour__scrim-hit--band"
+            style={{
+              top: primaryHole.top + primaryHole.height,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+            aria-hidden="true"
+          />
+          <div
+            className="onboarding-tour__scrim-hit onboarding-tour__scrim-hit--band"
+            style={{
+              top: primaryHole.top,
+              left: 0,
+              width: Math.max(0, primaryHole.left),
+              height: primaryHole.height,
+            }}
+            aria-hidden="true"
+          />
+          <div
+            className="onboarding-tour__scrim-hit onboarding-tour__scrim-hit--band"
+            style={{
+              top: primaryHole.top,
+              left: primaryHole.left + primaryHole.width,
+              right: 0,
+              height: primaryHole.height,
+            }}
+            aria-hidden="true"
+          />
+        </>
+      ) : (
+        <div
+          className="onboarding-tour__scrim-hit onboarding-tour__scrim-hit--full"
+          aria-hidden="true"
+        />
+      )}
 
       {ringHoles.map((h, i) => (
         <div
@@ -639,8 +828,14 @@ export function OnboardingTour({
           </p>
         ) : null}
         {isMarkerStep ? (
-          <>
-            <TourMarkerPanelDemo />
+          <div
+            className={
+              isPhone
+                ? 'onboarding-tour__marker-layout'
+                : 'onboarding-tour__marker-layout onboarding-tour__marker-layout--list'
+            }
+          >
+            {isPhone ? <TourMarkerPanelDemo /> : null}
             <ul className="onboarding-tour__action-list">
               {MARKER_ACTION_IDS.map((id) => (
                 <li key={id} className="onboarding-tour__action-row">
@@ -658,7 +853,7 @@ export function OnboardingTour({
                 </li>
               ))}
             </ul>
-          </>
+          </div>
         ) : null}
         <div className="onboarding-tour__actions">
           <button

@@ -662,6 +662,8 @@ export function ImmersiveView({
           enabled: true,
           cover: Math.max(prev.low.cover, 70),
           densityPct: Math.max(prev.low.densityPct, 100),
+          /* Tour demo: keep low deck at 1 km so it reads against the ridges. */
+          altKm: 1,
         },
         mid: { ...prev.mid, enabled: false, cover: 0 },
         high: { ...prev.high, enabled: false, cover: 0 },

@@ -37,6 +37,11 @@ export type SpotActionMarkerController = {
   setSaved: (saved: boolean) => void
   setLabel: (name: string | null) => void
   setLabels: (labels: SpotActionMarkerLabels) => void
+  /**
+   * Tour / showcase lock: radial stays open but spokes + red X ignore input.
+   * Programmatic open/close still works.
+   */
+  setLocked: (locked: boolean) => void
   open: () => void
   close: () => void
   destroy: () => void
@@ -98,6 +103,7 @@ export function createSpotActionMarkerElement(
 ): SpotActionMarkerController {
   let followLocale = labels === undefined
   let currentLabels = labels ?? spotActionMarkerLabels()
+  let locked = false
   const element = document.createElement('div')
   // Working pin is always the active point — green camera chrome.
   element.className = 'spot-action-marker spot-action-marker--active'
@@ -146,9 +152,18 @@ export function createSpotActionMarkerElement(
 
   const syncActionTabStops = (): void => {
     for (const button of actionButtons) {
-      button.tabIndex = open ? 0 : -1
-      button.setAttribute('aria-disabled', 'false')
+      button.tabIndex = open && !locked ? 0 : -1
+      button.disabled = locked
+      button.setAttribute('aria-disabled', locked ? 'true' : 'false')
     }
+    center.disabled = locked
+    center.setAttribute('aria-disabled', locked ? 'true' : 'false')
+  }
+
+  const setLocked = (next: boolean): void => {
+    locked = next
+    element.classList.toggle('spot-action-marker--locked', next)
+    syncActionTabStops()
   }
 
   const applyLabels = (): void => {
@@ -226,9 +241,11 @@ export function createSpotActionMarkerElement(
 
   const stopMapInteraction = (event: Event): void => event.stopPropagation()
   const onDocumentPointerDown = (event: PointerEvent): void => {
+    if (locked) return
     if (!element.contains(event.target as Node)) setOpen(false)
   }
   const onKeyDown = (event: KeyboardEvent): void => {
+    if (locked) return
     if (event.key !== 'Escape') return
     setOpen(false)
     center.focus()
@@ -236,6 +253,7 @@ export function createSpotActionMarkerElement(
   const runAction = (event: Event): void => {
     event.preventDefault()
     event.stopPropagation()
+    if (locked) return
     const action = (event.currentTarget as HTMLElement).dataset.action
     if (action === 'street') actions.onStreetView()
     if (action === 'immersive') {
@@ -259,6 +277,7 @@ export function createSpotActionMarkerElement(
   center.addEventListener('click', (event) => {
     event.preventDefault()
     event.stopPropagation()
+    if (locked) return
     if (!open && actions.shouldBlockOpen?.()) return
     setOpen(!open)
   })
@@ -268,6 +287,7 @@ export function createSpotActionMarkerElement(
   element.addEventListener('contextmenu', (event) => {
     event.preventDefault()
     event.stopPropagation()
+    if (locked) return
     if (!open && actions.shouldBlockOpen?.()) return
     setOpen(true)
   })
@@ -283,6 +303,7 @@ export function createSpotActionMarkerElement(
     setSaved,
     setLabel,
     setLabels,
+    setLocked,
     open: () => setOpen(true),
     close: closeThisMenu,
     destroy: () => {

@@ -106,8 +106,11 @@ function CreditChevron() {
 }
 
 /**
- * Map settings gear + bug report FAB — side nav, fixed card size.
+ * Map settings gear + bug report FAB — side nav, compact fixed card on desktop.
  */
+/** Min gap (px) between right-rail stack bottom and settings FABs before hide. */
+const SETTINGS_STACK_CLEARANCE_PX = 8
+
 export function MapSettingsPanel() {
   const { locale, setLocale, t } = useLocale()
   const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
@@ -116,6 +119,7 @@ export function MapSettingsPanel() {
   const [bugReportOpen, setBugReportOpen] = useState(false)
   const [langMenuOpen, setLangMenuOpen] = useState(false)
   const [qualityMenuOpen, setQualityMenuOpen] = useState(false)
+  const [railObscured, setRailObscured] = useState(false)
   const [terrainQuality, setTerrainQuality] = useState<TerrainQuality>(
     () => loadAppSettings().immersive.terrainQuality,
   )
@@ -127,6 +131,7 @@ export function MapSettingsPanel() {
   const contentRef = useRef<HTMLDivElement>(null)
   const langMenuRef = useRef<HTMLDivElement>(null)
   const qualityMenuRef = useRef<HTMLDivElement>(null)
+  const anchorRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onOpenSettings = () => {
@@ -144,6 +149,87 @@ export function MapSettingsPanel() {
       window.removeEventListener(OPEN_BUG_REPORT_EVENT, onOpenBug)
     }
   }, [])
+
+  /* Hide bug/settings FABs only while the right stack actually covers them
+     (PL expand on short Mac desktops). Phone FABs live in the drawer. */
+  useEffect(() => {
+    if (isPhone) {
+      setRailObscured(false)
+      return
+    }
+
+    let rafId = 0
+    let animRafId = 0
+    let animUntil = 0
+
+    const measure = () => {
+      const anchor = anchorRef.current
+      const stack = document.querySelector('.map-controls-stack')
+      if (!anchor || !stack) {
+        setRailObscured(false)
+        return
+      }
+      const stackRect = stack.getBoundingClientRect()
+      const anchorRect = anchor.getBoundingClientRect()
+      if (anchorRect.height < 1 || stackRect.height < 1) {
+        setRailObscured(false)
+        return
+      }
+      const overlaps =
+        stackRect.bottom + SETTINGS_STACK_CLEARANCE_PX > anchorRect.top &&
+        stackRect.right > anchorRect.left &&
+        stackRect.left < anchorRect.right
+      setRailObscured(overlaps)
+    }
+
+    const scheduleMeasure = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0
+        measure()
+      })
+    }
+
+    const pumpDuringAnim = () => {
+      measure()
+      if (performance.now() < animUntil) {
+        animRafId = window.requestAnimationFrame(pumpDuringAnim)
+      } else {
+        animRafId = 0
+      }
+    }
+
+    const onPlClass = () => {
+      /* PL slider expand/collapse ~240ms — keep measuring through the tween. */
+      animUntil = performance.now() + 320
+      if (!animRafId) animRafId = window.requestAnimationFrame(pumpDuringAnim)
+    }
+
+    measure()
+
+    const stack = document.querySelector('.map-controls-stack')
+    const pl = document.querySelector('.pl-heatmap-control')
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleMeasure) : null
+    if (anchorRef.current) ro?.observe(anchorRef.current)
+    if (stack) ro?.observe(stack)
+    if (pl) ro?.observe(pl)
+
+    const mo =
+      typeof MutationObserver !== 'undefined' && pl
+        ? new MutationObserver(onPlClass)
+        : null
+    if (pl) mo?.observe(pl, { attributes: true, attributeFilter: ['class'] })
+
+    window.addEventListener('resize', scheduleMeasure)
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId)
+      if (animRafId) window.cancelAnimationFrame(animRafId)
+      ro?.disconnect()
+      mo?.disconnect()
+      window.removeEventListener('resize', scheduleMeasure)
+    }
+  }, [isPhone])
 
   useEffect(() => {
     if (!open) {
@@ -592,11 +678,19 @@ export function MapSettingsPanel() {
         )
       : null
 
+  const anchorClass = [
+    'settings-anchor',
+    isPhone ? 'settings-anchor--phone-drawer' : '',
+    !isPhone && railObscured ? 'settings-anchor--obscured' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
     <div
-      className={
-        isPhone ? 'settings-anchor settings-anchor--phone-drawer' : 'settings-anchor'
-      }
+      ref={anchorRef}
+      className={anchorClass}
+      aria-hidden={!isPhone && railObscured ? true : undefined}
     >
       {!isPhone ? (
         <>
@@ -610,6 +704,7 @@ export function MapSettingsPanel() {
             aria-label={t('settings.bugReport')}
             title={t('settings.bugReport')}
             aria-expanded={bugReportOpen}
+            tabIndex={railObscured ? -1 : undefined}
             onClick={() => {
               setOpen(false)
               setBugReportOpen(true)
@@ -628,6 +723,7 @@ export function MapSettingsPanel() {
             title={t('settings.title')}
             aria-expanded={open}
             aria-controls="map-settings-panel"
+            tabIndex={railObscured ? -1 : undefined}
             onClick={() => {
               setBugReportOpen(false)
               setOpen((value) => !value)

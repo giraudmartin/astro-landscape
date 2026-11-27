@@ -14,8 +14,8 @@
 
 .onboarding-intro {
   position: relative;
-  width: min(1080px, 100%);
-  height: min(610px, calc(100svh - 48px));
+  width: min(920px, 100%);
+  height: min(520px, calc(100svh - 80px));
   max-height: 100%;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -24,6 +24,38 @@
   box-shadow: 0 32px 100px rgba(0, 0, 0, 0.5);
   color: var(--ui-text);
   outline: none;
+}
+
+/* Desktop: contained dialog with air around it, not a near-fullscreen sheet. */
+@media (min-width: 901px) {
+  .onboarding-intro-backdrop {
+    padding: 56px 64px;
+  }
+
+  .onboarding-intro {
+    width: min(860px, calc(100vw - 128px));
+    height: min(480px, calc(100svh - 112px));
+    border-radius: 20px;
+  }
+
+  .onboarding-intro__copy {
+    bottom: 96px;
+    max-width: 520px;
+    padding: 0 40px;
+  }
+
+  .onboarding-intro__title {
+    font-size: clamp(1.7rem, 2.2vw, 2.35rem);
+  }
+
+  .onboarding-intro__body {
+    font-size: 15px;
+    max-width: 460px;
+  }
+
+  .onboarding-intro__footer {
+    padding: 22px 40px 26px;
+  }
 }
 
 .onboarding-intro__visual {
@@ -506,15 +538,15 @@
 }
 
 .settings-panel__intro-action {
-  margin-top: 14px;
+  margin-top: 8px;
   width: 100%;
-  padding: 11px 14px;
+  padding: 8px 11px;
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--r-md);
   background: rgba(255, 255, 255, 0.04);
   color: var(--ui-text);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   text-align: left;

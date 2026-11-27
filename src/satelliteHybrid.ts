@@ -26,7 +26,19 @@ export function getBasemapModeForMap(map: MapLibreMap): BasemapMode | undefined 
  * only listened for the event we already missed, the wait hung forever and the
  * next mode click never reached visibility updates.
  */
+/**
+ * `isStyleLoaded()` warns ("There is no style added to the map") and returns
+ * void when the style was dropped — StrictMode teardown calls `map.remove()`
+ * → `setStyle(null)` before an in-flight basemap apply resumes.
+ * `map.style` is the live object; `getStyle()` would serialize every poll.
+ */
+function mapHasStyle(map: MapLibreMap): boolean {
+  return map.style != null
+}
+
 export function waitForStyleLoaded(map: MapLibreMap): Promise<void> {
+  // Removed map: resolve so callers can bail. Do not call isStyleLoaded.
+  if (!mapHasStyle(map)) return Promise.resolve()
   if (map.isStyleLoaded()) return Promise.resolve()
   return new Promise((resolve) => {
     let settled = false
@@ -35,14 +47,16 @@ export function waitForStyleLoaded(map: MapLibreMap): Promise<void> {
       settled = true
       map.off('style.load', done)
       map.off('load', done)
+      map.off('remove', done)
       window.clearInterval(poll)
       window.clearTimeout(fallback)
       resolve()
     }
     map.on('style.load', done)
     map.on('load', done)
+    map.on('remove', done)
     const poll = window.setInterval(() => {
-      if (map.isStyleLoaded()) done()
+      if (!mapHasStyle(map) || map.isStyleLoaded()) done()
     }, 32)
     const fallback = window.setTimeout(done, 2000)
     if (map.isStyleLoaded()) done()
@@ -149,7 +163,9 @@ function setPrefixedVisibility(
   prefix: string,
   visible: boolean,
 ): void {
-  for (const layer of map.getStyle().layers ?? []) {
+  const layers = map.getStyle()?.layers
+  if (!layers) return
+  for (const layer of layers) {
     if (!layer.id.startsWith(prefix)) continue
     map.setLayoutProperty(layer.id, 'visibility', visible ? 'visible' : 'none')
   }
@@ -236,6 +252,7 @@ export async function ensureSatelliteHybridOverlay(
   // Same wait as plan — an early return left hybrid with no overlay layers
   // (button said hybrid, map stayed pure satellite).
   await waitForStyleLoaded(map)
+  if (!mapHasStyle(map)) return
 
   if (!map.getSource(HYBRID_SOURCE_ID)) {
     const source = style.sources[VERSATILES_VECTOR_SOURCE_ID]
@@ -278,6 +295,7 @@ export async function ensurePlanBasemap(
 ): Promise<string | undefined> {
   const style = await loadPlanStyle()
   await waitForStyleLoaded(map)
+  if (!mapHasStyle(map)) return
 
   for (const [sourceId, source] of Object.entries(style.sources ?? {})) {
     const id = `${PLAN_SOURCE_PREFIX}${sourceId}`
@@ -329,7 +347,10 @@ export async function applyBasemapMode(
 ): Promise<void> {
   const gen = (basemapApplyGenByMap.get(map) ?? 0) + 1
   basemapApplyGenByMap.set(map, gen)
-  const alive = () => basemapApplyGenByMap.get(map) === gen
+  // Style gone: StrictMode removed this map while the apply was awaiting.
+  // A newer apply on the replacement map owns the screen — do not touch layers.
+  const alive = () =>
+    basemapApplyGenByMap.get(map) === gen && mapHasStyle(map)
 
   await waitForStyleLoaded(map)
   if (!alive()) return

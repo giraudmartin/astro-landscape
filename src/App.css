@@ -11333,9 +11333,13 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
     border-radius: 8px;
   }
 
-  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__mode > span,
-  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__timelapse > span {
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__mode > span {
     display: inline;
+  }
+
+  /* Timelapse label is long — icon only on phone; aria-label keeps the name. */
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__timelapse > span {
+    display: none;
   }
 
   .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__mode,
@@ -11346,6 +11350,22 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
     height: 32px;
     padding: 4px 8px;
     gap: 6px;
+  }
+
+  /* Fill leftover bar width and center the stopwatch in that slot. */
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__tour-modes {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .vf-capture-capsule.is-compact.is-expanded .vf-capture-capsule__timelapse {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 32px;
+    padding: 4px;
+    gap: 0;
   }
 
   /*
@@ -11646,7 +11666,11 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
     left: max(10px, env(safe-area-inset-left, 0px));
     right: auto;
     max-width: min(160px, calc(100vw - 176px));
-    bottom: calc(var(--mobile-above-dock) + 12px);
+    /* Collapsed pill / no dock: bottom-left (pill ≈ 40px + gap). */
+    bottom: calc(
+      var(--mobile-dock-bottom, max(10px, env(safe-area-inset-bottom, 0px))) +
+        52px
+    );
     font-size: 0.62rem;
     line-height: 1.2;
     flex-direction: column;
@@ -11654,6 +11678,19 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
     justify-content: flex-start;
     gap: 2px;
     pointer-events: none;
+  }
+
+  /* Expanded dock only (class absent while collapsed).
+     Phone compact dock ≈ handle+controls+40px strip+eph ≈ 136px — sit 4px above. */
+  body:has(.moon-timeline-dock) .immersive__hint {
+    bottom: calc(
+      var(--mobile-dock-bottom, max(10px, env(safe-area-inset-bottom, 0px))) +
+        140px
+    );
+  }
+
+  body:has(.moon-timeline-dock--advanced) .immersive__hint {
+    bottom: calc(var(--mobile-above-dock-advanced, 302px) + 6px);
   }
 
   /* Phone: keep pinch + look only — skip pad/focal/DEM noise under the pitch tape. */

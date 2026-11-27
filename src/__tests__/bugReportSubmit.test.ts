@@ -11,6 +11,9 @@ vi.mock('../i18n', () => ({
 }))
 
 import {
+  BUG_REPORT_MAX_DESCRIPTION_CHARS,
+  BUG_REPORT_MAX_IMAGE_BYTES,
+  BUG_REPORT_MAX_TITLE_CHARS,
   BugReportSubmitError,
   submitBugReport,
 } from '../bugReportSubmit'
@@ -54,7 +57,56 @@ describe('submitBugReport', () => {
     expect(init.body).toBeInstanceOf(FormData)
     const form = init.body as FormData
     expect(form.get('title')).toBe('Map frozen')
+    expect(form.get('_honey')).toBe('')
+    expect(form.get('_captcha')).toBe('false')
     expect(form.get('attachment')).toBeInstanceOf(File)
+  })
+
+  it('rejects overlong titles before fetch', async () => {
+    const err = await submitBugReport({
+      title: 'x'.repeat(BUG_REPORT_MAX_TITLE_CHARS + 1),
+      description: 'ok',
+      screenshot: null,
+    }).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(BugReportSubmitError)
+    expect((err as BugReportSubmitError).code).toBe('validation')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects overlong descriptions before fetch', async () => {
+    const err = await submitBugReport({
+      title: 'ok',
+      description: 'y'.repeat(BUG_REPORT_MAX_DESCRIPTION_CHARS + 1),
+      screenshot: null,
+    }).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(BugReportSubmitError)
+    expect((err as BugReportSubmitError).code).toBe('validation')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized images before fetch', async () => {
+    const shot = new File(
+      [new Uint8Array(BUG_REPORT_MAX_IMAGE_BYTES + 1)],
+      'big.png',
+      { type: 'image/png' },
+    )
+    const err = await submitBugReport({
+      title: 'ok',
+      description: 'ok',
+      screenshot: shot,
+    }).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(BugReportSubmitError)
+    expect((err as BugReportSubmitError).code).toBe('validation')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('rejects with activation code when FormSubmit asks to activate', async () => {

@@ -122,6 +122,8 @@ Caddy headers on **`sphere.sadr3d.com` only** (do not change Horizon’s block):
 | `/sky/*`, `/models/*`, `/vendor/*`, `/catalogs/*`, favicon/icons | `public, max-age=86400, must-revalidate` |
 | `/light-pollution/*` (COG) | `public, max-age=2592000` |
 
+Site-wide (same block): `Content-Security-Policy` (SPA + WebGL/workers), `frame-ancestors 'none'` / `X-Frame-Options DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, `Permissions-Policy` (camera/mic/geo off). See [`deploy/Caddyfile.sadr3d.example`](../deploy/Caddyfile.sadr3d.example).
+
 Missing `/assets/*` must return **404**, not the SPA HTML (`try_files` must not
 apply under `/assets/`).
 

@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  BUG_REPORT_MAX_DESCRIPTION_CHARS,
   BUG_REPORT_MAX_IMAGE_BYTES,
+  BUG_REPORT_MAX_TITLE_CHARS,
   BugReportSubmitError,
   submitBugReport,
   type BugReportPayload,
@@ -192,7 +194,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder={t('settings.bug.phTitle')}
-                maxLength={120}
+                maxLength={BUG_REPORT_MAX_TITLE_CHARS}
                 disabled={sending || sent}
               />
             </label>
@@ -204,7 +206,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder={t('settings.bug.phDesc')}
                 rows={4}
-                maxLength={4000}
+                maxLength={BUG_REPORT_MAX_DESCRIPTION_CHARS}
                 disabled={sending || sent}
               />
             </label>

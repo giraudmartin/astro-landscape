@@ -248,6 +248,8 @@ export function createNasaSkyTileLayer(input: {
   blending: THREE.Blending
   transparent?: boolean
   depthTest?: boolean
+  /** Bust browser / CDN cache after retile (e.g. `neb-v3`). */
+  cacheTag?: string
   configureMaterial?: (material: THREE.MeshBasicMaterial) => void
 }): NasaSkyTileLayerHandle | null {
   const meta = input.manifest.layers[input.layer]
@@ -271,12 +273,16 @@ export function createNasaSkyTileLayer(input: {
   const wanted = new Map<TileKey, QueuedTile>()
   const lookLocal = new THREE.Vector3()
 
-  const pathFor = (z: number, x: number, y: number): string =>
-    input.manifest.pathTemplate
+  const pathFor = (z: number, x: number, y: number): string => {
+    const base = input.manifest.pathTemplate
       .replace('{layer}', input.layer)
       .replace('{z}', String(z))
       .replace('{x}', String(x))
       .replace('{y}', String(y))
+    return input.cacheTag
+      ? `${base}${base.includes('?') ? '&' : '?'}v=${encodeURIComponent(input.cacheTag)}`
+      : base
+  }
 
   const release = (tile: ResidentTile) => {
     root.remove(tile.mesh)
@@ -365,8 +371,13 @@ export function createNasaSkyTileLayer(input: {
           pumpQueue()
         },
         undefined,
-        () => {
+        (err) => {
           inflight.delete(next.key)
+          console.warn(
+            '[nasaSkyTiles] EXR load failed',
+            pathFor(next.z, next.x, next.y),
+            err,
+          )
           pumpQueue()
         },
       )

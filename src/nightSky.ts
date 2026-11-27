@@ -8,8 +8,20 @@ import {
   createNasaSkyTileLayer,
   loadNasaSkyTilesManifest,
   type NasaSkyTileLayerHandle,
+  type NasaSkyTileLayerId,
 } from './nasaSkyTiles'
 import { attachStelProjector } from './stelProjector'
+import {
+  DEFAULT_MILKY_WAY_NEB_LOOK,
+  MILKY_WAY_NEB_EXPOSURE_NO_ATMO_RATIO,
+  type MilkyWayNebLook,
+} from './milkyWayNebLook'
+
+/** Shipping NASA tiles vs enhanced nebulae rebuild (A/B). */
+export type MilkyWayTileVariant = Extract<
+  NasaSkyTileLayerId,
+  'milkyway' | 'milkyway-neb'
+>
 
 /**
  * With atmosphere: keep the translucent glow in the sky (not a solid sheet).
@@ -20,20 +32,25 @@ export const MILKY_WAY_DOME_OPACITY = 0.72
 /** Atmosphere off: stronger read on a black sky. */
 export const MILKY_WAY_DOME_OPACITY_NO_ATMO = 0.96
 export const MILKY_WAY_EXPOSURE_NO_ATMO = 10
-/**
- * Enhanced TIFF tiles are ~0..1 (Photoshop uint16), not NASA’s tiny HDR
- * floats — keep exposure near 1 so nebulae don’t blow out.
- */
-export const MILKY_WAY_EXPOSURE_NEB = 1.2
-export const MILKY_WAY_EXPOSURE_NEB_NO_ATMO = 1.45
+/** @deprecated Prefer milkyWayNebLook.exposure from the temp grade card. */
+export const MILKY_WAY_EXPOSURE_NEB = DEFAULT_MILKY_WAY_NEB_LOOK.exposure
+export const MILKY_WAY_EXPOSURE_NEB_NO_ATMO =
+  DEFAULT_MILKY_WAY_NEB_LOOK.exposure * MILKY_WAY_NEB_EXPOSURE_NO_ATMO_RATIO
 export const HALPHA_GAIN = 2.4
 export const HALPHA_TEXTURE_URL = '/sky/halpha_j2000.webp?v=5'
-/**
- * A/B tile folder under public/sky/tiles/.
- * `milkyway` = shipping NASA tiles; `milkyway-neb` = enhanced TIFF rebuild.
- * Flip back to `milkyway` until the neb set is validated.
- */
-export const MILKY_WAY_TILE_LAYER: 'milkyway' | 'milkyway-neb' = 'milkyway-neb'
+/** When true, Néb. reuses NASA tiles (A/B plumbing only). Keep false for custom. */
+export const MILKY_WAY_NEB_ALIAS_NASA_TILES = false
+/** Open on the custom enhanced VL. */
+export const DEFAULT_MILKY_WAY_TILE_VARIANT: MilkyWayTileVariant = 'milkyway-neb'
+
+function tileFolderForVariant(
+  variant: MilkyWayTileVariant,
+): NasaSkyTileLayerId {
+  if (variant === 'milkyway-neb' && MILKY_WAY_NEB_ALIAS_NASA_TILES) {
+    return 'milkyway'
+  }
+  return variant
+}
 
 /**
  * Astronomy Engine J2000 → Three local (X=east, Y=up, Z=south).
@@ -112,6 +129,10 @@ export type NightSkyHandle = {
     sunAltitudeDeg: number
     camera: THREE.PerspectiveCamera
     showMilkyWay?: boolean
+    /** Which MW tile folder to show (`milkyway` vs `milkyway-neb`). */
+    milkyWayTileVariant?: MilkyWayTileVariant
+    /** Temporary grade for `milkyway-neb` only. */
+    milkyWayNebLook?: MilkyWayNebLook
     showHalpha?: boolean
     /** Rayleigh amount 0…1 (legacy: showAtmosphere true/false). */
     atmosphereAmount?: number
@@ -199,6 +220,10 @@ export function createNightSky(opts?: {
   htmlLabels?.setVisible(false)
 
   let milkyWayTiles: NasaSkyTileLayerHandle | null = null
+  let milkyManifest: Awaited<
+    ReturnType<typeof loadNasaSkyTilesManifest>
+  > = null
+  let milkyFolderMounted: NasaSkyTileLayerId | null = null
   let milkyReady = false
   let lastRotation: { utcMs: number; lat: number; lon: number; elevationM: number } | undefined
   let disposed = false
@@ -206,6 +231,10 @@ export function createNightSky(opts?: {
   const blackHalpha = createBlackDataTexture()
   const exposureUniform = { value: MILKY_WAY_EXPOSURE }
   const milkyWayAmountUniform = { value: 1 }
+  const mwGradeOnUniform = { value: 0 }
+  const mwBrightnessUniform = { value: 1 }
+  const mwContrastUniform = { value: 1 }
+  const mwSaturationUniform = { value: 1 }
   const halphaAmountUniform = { value: 0 }
   const halphaGainUniform = { value: HALPHA_GAIN }
   const halphaMapUniform: { value: THREE.Texture } = { value: blackHalpha }
@@ -217,6 +246,10 @@ export function createNightSky(opts?: {
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uMilkyWayExposure = exposureUniform
       shader.uniforms.uMilkyWayAmount = milkyWayAmountUniform
+      shader.uniforms.uMwGradeOn = mwGradeOnUniform
+      shader.uniforms.uMwBrightness = mwBrightnessUniform
+      shader.uniforms.uMwContrast = mwContrastUniform
+      shader.uniforms.uMwSaturation = mwSaturationUniform
       shader.uniforms.uHalphaAmount = halphaAmountUniform
       shader.uniforms.uHalphaGain = halphaGainUniform
       shader.uniforms.uHalphaMap = halphaMapUniform
@@ -244,6 +277,10 @@ export function createNightSky(opts?: {
             #include <common>
             uniform float uMilkyWayExposure;
             uniform float uMilkyWayAmount;
+            uniform float uMwGradeOn;
+            uniform float uMwBrightness;
+            uniform float uMwContrast;
+            uniform float uMwSaturation;
             uniform float uHalphaAmount;
             uniform float uHalphaGain;
             uniform sampler2D uHalphaMap;
@@ -258,6 +295,17 @@ export function createNightSky(opts?: {
             diffuseColor.rgb *= uMilkyWayAmount;
             diffuseColor.rgb *= uMilkyWayExposure;
 
+            if (uMwGradeOn > 0.5) {
+              diffuseColor.rgb *= uMwBrightness;
+              diffuseColor.rgb = (diffuseColor.rgb - 0.5) * uMwContrast + 0.5;
+              float luma = dot(
+                max(diffuseColor.rgb, vec3(0.0)),
+                vec3(0.2126, 0.7152, 0.0722)
+              );
+              diffuseColor.rgb = mix(vec3(luma), diffuseColor.rgb, uMwSaturation);
+              diffuseColor.rgb = max(diffuseColor.rgb, vec3(0.0));
+            }
+
             if (uHalphaAmount > 0.001) {
               vec3 haDir = normalize(vHalphaDir);
               float haU = atan(haDir.z, -haDir.x) / (2.0 * 3.141592653589793);
@@ -270,10 +318,48 @@ export function createNightSky(opts?: {
           `,
         )
     }
-    material.customProgramCacheKey = () => 'astro-milky-way-halpha-v7'
+    material.customProgramCacheKey = () => 'astro-milky-way-halpha-v8'
     material.depthWrite = false
     material.needsUpdate = true
     attachStelProjector(material)
+  }
+
+  const remountMilkyFolder = (folder: NasaSkyTileLayerId): boolean => {
+    if (!milkyManifest?.layers[folder]) {
+      console.warn('[nightSky] milky folder missing in manifest', folder, milkyManifest?.layers)
+      return false
+    }
+    if (milkyWayTiles && milkyFolderMounted === folder) return true
+    if (milkyWayTiles) {
+      celestialLayers.remove(milkyWayTiles.root)
+      milkyWayTiles.dispose()
+      milkyWayTiles = null
+    }
+    milkyWayTiles = createNasaSkyTileLayer({
+      layer: folder,
+      manifest: milkyManifest,
+      radius: CELESTIAL_SKY_DISTANCE_M * 0.995,
+      renderOrder: 20,
+      blending: THREE.NormalBlending,
+      transparent: true,
+      depthTest: true,
+      cacheTag: folder === 'milkyway' ? 'nasa-v1' : 'neb-v8-custom',
+      configureMaterial: milkyShaderHook,
+    })
+    if (!milkyWayTiles) {
+      console.warn('[nightSky] createNasaSkyTileLayer returned null', folder)
+      milkyFolderMounted = null
+      milkyReady = false
+      return false
+    }
+    milkyWayTiles.setVisible(false)
+    celestialLayers.add(milkyWayTiles.root)
+    celestialLayers.remove(vectorLayers.root)
+    celestialLayers.add(vectorLayers.root)
+    milkyFolderMounted = folder
+    milkyReady = true
+    console.info('[nightSky] milky layer mounted', folder)
+    return true
   }
 
   const ensureHalphaLoaded = (): Promise<void> => {
@@ -315,30 +401,26 @@ export function createNightSky(opts?: {
   }
 
   void loadNasaSkyTilesManifest().then((manifest) => {
-    if (disposed || !manifest?.layers[MILKY_WAY_TILE_LAYER]) return
-    milkyWayTiles = createNasaSkyTileLayer({
-      layer: MILKY_WAY_TILE_LAYER,
-      manifest,
-      radius: CELESTIAL_SKY_DISTANCE_M * 0.995,
-      renderOrder: 20,
-      blending: THREE.NormalBlending,
-      transparent: true,
-      depthTest: true,
-      configureMaterial: milkyShaderHook,
-    })
-    if (milkyWayTiles) {
-      milkyWayTiles.setVisible(false)
-      // Milky under additive stars (renderOrder 20 vs 22).
-      celestialLayers.add(milkyWayTiles.root)
-      celestialLayers.remove(vectorLayers.root)
-      celestialLayers.add(vectorLayers.root)
-      milkyReady = true
-    }
+    if (disposed || !manifest) return
+    milkyManifest = manifest
+    remountMilkyFolder(tileFolderForVariant(DEFAULT_MILKY_WAY_TILE_VARIANT))
   })
 
   root.traverse((obj) => {
     obj.frustumCulled = false
   })
+
+  // Temporary QA probe for the custom VL A/B (remove after lock-in).
+  ;(window as unknown as { __astroMilkyDebug?: () => unknown }).__astroMilkyDebug =
+    () => ({
+      disposed,
+      milkyReady,
+      milkyFolderMounted,
+      hasHandle: !!milkyWayTiles,
+      manifestLayers: milkyManifest ? Object.keys(milkyManifest.layers) : null,
+      aliasNasa: MILKY_WAY_NEB_ALIAS_NASA_TILES,
+      defaultVariant: DEFAULT_MILKY_WAY_TILE_VARIANT,
+    })
 
   return {
     root,
@@ -351,6 +433,8 @@ export function createNightSky(opts?: {
       sunAltitudeDeg,
       camera,
       showMilkyWay = true,
+      milkyWayTileVariant = DEFAULT_MILKY_WAY_TILE_VARIANT,
+      milkyWayNebLook = DEFAULT_MILKY_WAY_NEB_LOOK,
       showHalpha = false,
       showAtmosphere = true,
       atmosphereAmount,
@@ -456,15 +540,31 @@ export function createNightSky(opts?: {
 
       milkyWayAmountUniform.value = showMilkyWay ? 1 : 0
       halphaAmountUniform.value = showHalpha && halphaTexture ? 1 : 0
-      const expNoAtmo =
-        MILKY_WAY_TILE_LAYER === 'milkyway-neb'
-          ? MILKY_WAY_EXPOSURE_NEB_NO_ATMO
-          : MILKY_WAY_EXPOSURE_NO_ATMO
-      const expAtmo =
-        MILKY_WAY_TILE_LAYER === 'milkyway-neb'
-          ? MILKY_WAY_EXPOSURE_NEB
-          : MILKY_WAY_EXPOSURE
+      const useNeb = milkyWayTileVariant === 'milkyway-neb'
+      const wantFolder = tileFolderForVariant(milkyWayTileVariant)
+      if (milkyManifest) remountMilkyFolder(wantFolder)
+      // At defaults, use the exact NASA exposure path so A/B only differs by tiles.
+      const nebExp = milkyWayNebLook.exposure
+      const expNoAtmo = useNeb
+        ? Math.abs(nebExp - MILKY_WAY_EXPOSURE) < 0.05
+          ? MILKY_WAY_EXPOSURE_NO_ATMO
+          : nebExp * MILKY_WAY_NEB_EXPOSURE_NO_ATMO_RATIO
+        : MILKY_WAY_EXPOSURE_NO_ATMO
+      const expAtmo = useNeb
+        ? Math.abs(nebExp - MILKY_WAY_EXPOSURE) < 0.05
+          ? MILKY_WAY_EXPOSURE
+          : nebExp
+        : MILKY_WAY_EXPOSURE
       exposureUniform.value = THREE.MathUtils.lerp(expNoAtmo, expAtmo, atmoAmt)
+      const gradeLive =
+        useNeb &&
+        (Math.abs(milkyWayNebLook.brightness - 1) > 0.001 ||
+          Math.abs(milkyWayNebLook.contrast - 1) > 0.001 ||
+          Math.abs(milkyWayNebLook.saturation - 1) > 0.001)
+      mwGradeOnUniform.value = gradeLive ? 1 : 0
+      mwBrightnessUniform.value = gradeLive ? milkyWayNebLook.brightness : 1
+      mwContrastUniform.value = gradeLive ? milkyWayNebLook.contrast : 1
+      mwSaturationUniform.value = gradeLive ? milkyWayNebLook.saturation : 1
 
       if (milkyWayTiles && milkyReady) {
         // Hα lives in the MW shader — keep the dome up if either layer is on.
@@ -474,7 +574,6 @@ export function createNightSky(opts?: {
           nightOn &&
           deepNight > 0.05 &&
           (mwVisible || (showHalpha && !!halphaTexture))
-        milkyWayTiles.setVisible(showDome)
         const baseOp =
           deepNight *
           THREE.MathUtils.lerp(
@@ -482,10 +581,12 @@ export function createNightSky(opts?: {
             MILKY_WAY_DOME_OPACITY,
             atmoAmt,
           )
-        milkyWayTiles.setOpacity(
-          showHalpha && !mwVisible ? baseOp : baseOp * lpMwMul,
-        )
-        if (showDome) milkyWayTiles.update(camera)
+        const opacity =
+          showHalpha && !mwVisible ? baseOp : baseOp * lpMwMul
+        milkyWayTiles.setVisible(showDome)
+        milkyWayTiles.setOpacity(opacity)
+        // Preload cover tiles as soon as night falls (don't wait for showDome).
+        if (nightOn || showDome) milkyWayTiles.update(camera)
       }
     },
     dispose: () => {
@@ -495,6 +596,9 @@ export function createNightSky(opts?: {
       azimuthGrid.dispose()
       milkyWayTiles?.dispose()
       milkyWayTiles = null
+      milkyFolderMounted = null
+      milkyManifest = null
+      milkyReady = false
       if (halphaTexture) {
         halphaTexture.dispose()
         halphaTexture = null

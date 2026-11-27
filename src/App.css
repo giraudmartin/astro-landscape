@@ -6550,6 +6550,24 @@ html[data-qa-hide-chrome='1'] .photo-frame {
   color: rgba(255, 255, 255, 0.45);
 }
 
+.vf-sky-panel__reset {
+  margin-top: 12px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.88);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.vf-sky-panel__reset:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .vf-landscape-menu__range::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 999px;

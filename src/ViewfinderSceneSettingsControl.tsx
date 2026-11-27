@@ -13,6 +13,8 @@ import {
   type WeatherControls,
 } from './ViewfinderWeatherControl'
 import { ViewfinderQualityControl } from './ViewfinderQualityControl'
+import { ViewfinderMilkyWayNebControl } from './ViewfinderMilkyWayNebControl'
+import type { MilkyWayNebLook } from './milkyWayNebLook'
 import type { ViewfinderWeather } from './viewfinderWeather'
 import type { TerrainQuality } from './terrainQuality'
 import {
@@ -25,7 +27,13 @@ import {
   type ImmersiveScenePanelId,
 } from './onboarding/immersiveTourUi'
 
-type ScenePanelId = 'landscape' | 'sky' | 'weather' | 'quality'
+type ScenePanelId =
+  | 'landscape'
+  | 'sky'
+  | 'weather'
+  | 'quality'
+  /** Temporary A/B grade for enhanced milky-way tiles. */
+  | 'milkyWayNeb'
 
 type ViewfinderSceneSettingsControlProps = {
   /** Sky-flat / sans DEM — Qualité, Paysage, and local-halo controls are hidden. */
@@ -77,6 +85,12 @@ type ViewfinderSceneSettingsControlProps = {
     manual: ViewfinderWeather
     onWeatherChange: (next: ViewfinderWeather) => void
   }
+  /** Temporary enhanced-VL grade card (omit to hide the menu entry). */
+  milkyWayNeb?: {
+    look: MilkyWayNebLook
+    onChange: (patch: Partial<MilkyWayNebLook>) => void
+    onReset: () => void
+  }
   /** When set, projection choices live inside the settings card (phone bar). */
   projection?: {
     value: StageProjection
@@ -90,6 +104,7 @@ const PANEL_IDS: ReadonlyArray<ScenePanelId> = [
   'quality',
   'landscape',
   'sky',
+  'milkyWayNeb',
   'weather',
 ]
 
@@ -103,6 +118,7 @@ export function ViewfinderSceneSettingsControl({
   landscape,
   sky,
   weather,
+  milkyWayNeb,
   projection,
   iconOnly = false,
 }: ViewfinderSceneSettingsControlProps) {
@@ -111,9 +127,11 @@ export function ViewfinderSceneSettingsControl({
   const [panel, setPanel] = useState<ScenePanelId | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const menuId = useId()
-  const visiblePanelIds = flatTerrain
-    ? PANEL_IDS.filter((id) => id !== 'landscape' && id !== 'quality')
-    : PANEL_IDS
+  const visiblePanelIds = (
+    flatTerrain
+      ? PANEL_IDS.filter((id) => id !== 'landscape' && id !== 'quality')
+      : PANEL_IDS
+  ).filter((id) => id !== 'milkyWayNeb' || milkyWayNeb != null)
   const anyPanelOpen = panel != null
 
   useEffect(() => {
@@ -124,6 +142,10 @@ export function ViewfinderSceneSettingsControl({
       setPanel(null)
     }
   }, [flatTerrain, panel])
+
+  useEffect(() => {
+    if (!milkyWayNeb && panel === 'milkyWayNeb') setPanel(null)
+  }, [milkyWayNeb, panel])
 
   useEffect(() => {
     const onOpen = (event: Event) => {
@@ -300,6 +322,17 @@ export function ViewfinderSceneSettingsControl({
         showTrigger={false}
         anchorRef={rootRef}
       />
+      {milkyWayNeb ? (
+        <ViewfinderMilkyWayNebControl
+          look={milkyWayNeb.look}
+          onChange={milkyWayNeb.onChange}
+          onReset={milkyWayNeb.onReset}
+          open={panel === 'milkyWayNeb'}
+          onOpenChange={(next) => setPanel(next ? 'milkyWayNeb' : null)}
+          showTrigger={false}
+          anchorRef={rootRef}
+        />
+      ) : null}
       <ViewfinderWeatherControl
         {...weather}
         open={panel === 'weather'}

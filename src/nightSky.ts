@@ -20,8 +20,20 @@ export const MILKY_WAY_DOME_OPACITY = 0.72
 /** Atmosphere off: stronger read on a black sky. */
 export const MILKY_WAY_DOME_OPACITY_NO_ATMO = 0.96
 export const MILKY_WAY_EXPOSURE_NO_ATMO = 10
+/**
+ * Enhanced TIFF tiles are ~0..1 (Photoshop uint16), not NASA’s tiny HDR
+ * floats — keep exposure near 1 so nebulae don’t blow out.
+ */
+export const MILKY_WAY_EXPOSURE_NEB = 1.2
+export const MILKY_WAY_EXPOSURE_NEB_NO_ATMO = 1.45
 export const HALPHA_GAIN = 2.4
 export const HALPHA_TEXTURE_URL = '/sky/halpha_j2000.webp?v=5'
+/**
+ * A/B tile folder under public/sky/tiles/.
+ * `milkyway` = shipping NASA tiles; `milkyway-neb` = enhanced TIFF rebuild.
+ * Flip back to `milkyway` until the neb set is validated.
+ */
+export const MILKY_WAY_TILE_LAYER: 'milkyway' | 'milkyway-neb' = 'milkyway-neb'
 
 /**
  * Astronomy Engine J2000 → Three local (X=east, Y=up, Z=south).
@@ -303,9 +315,9 @@ export function createNightSky(opts?: {
   }
 
   void loadNasaSkyTilesManifest().then((manifest) => {
-    if (disposed || !manifest?.layers.milkyway) return
+    if (disposed || !manifest?.layers[MILKY_WAY_TILE_LAYER]) return
     milkyWayTiles = createNasaSkyTileLayer({
-      layer: 'milkyway',
+      layer: MILKY_WAY_TILE_LAYER,
       manifest,
       radius: CELESTIAL_SKY_DISTANCE_M * 0.995,
       renderOrder: 20,
@@ -444,11 +456,15 @@ export function createNightSky(opts?: {
 
       milkyWayAmountUniform.value = showMilkyWay ? 1 : 0
       halphaAmountUniform.value = showHalpha && halphaTexture ? 1 : 0
-      exposureUniform.value = THREE.MathUtils.lerp(
-        MILKY_WAY_EXPOSURE_NO_ATMO,
-        MILKY_WAY_EXPOSURE,
-        atmoAmt,
-      )
+      const expNoAtmo =
+        MILKY_WAY_TILE_LAYER === 'milkyway-neb'
+          ? MILKY_WAY_EXPOSURE_NEB_NO_ATMO
+          : MILKY_WAY_EXPOSURE_NO_ATMO
+      const expAtmo =
+        MILKY_WAY_TILE_LAYER === 'milkyway-neb'
+          ? MILKY_WAY_EXPOSURE_NEB
+          : MILKY_WAY_EXPOSURE
+      exposureUniform.value = THREE.MathUtils.lerp(expNoAtmo, expAtmo, atmoAmt)
 
       if (milkyWayTiles && milkyReady) {
         // Hα lives in the MW shader — keep the dome up if either layer is on.

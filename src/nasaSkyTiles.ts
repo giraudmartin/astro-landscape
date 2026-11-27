@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js'
 
-export type NasaSkyTileLayerId = 'milkyway' | 'hiptyc'
+export type NasaSkyTileLayerId = 'milkyway' | 'milkyway-neb' | 'hiptyc'
 
 export type NasaSkyTilesManifest = {
   version: number

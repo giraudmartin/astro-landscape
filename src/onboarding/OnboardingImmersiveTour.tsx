@@ -396,7 +396,14 @@ export function OnboardingImmersiveTour({
         />
       </svg>
 
-      <div className="onboarding-tour__scrim-hit" aria-hidden="true" />
+      {/*
+        Full-screen hit lock: visual mask has spotlight holes, but chrome /
+        canvas must stay inert for the whole immersive tour (map tour pattern).
+      */}
+      <div
+        className="onboarding-tour__scrim-hit onboarding-tour__scrim-hit--full"
+        aria-hidden="true"
+      />
 
       {displayRings.map((h, i) => (
         <div

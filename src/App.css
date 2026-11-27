@@ -7477,41 +7477,12 @@ html[data-qa-hide-chrome='1'] .render-diag {
   color: var(--ui-action-primary-text, var(--ui-action-primary-text));
 }
 
-.moon-preview-hud-tool__halpha,
 .moon-preview-hud-tool__atmo {
   font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 0.01em;
   line-height: 1;
-}
-
-.moon-preview-hud-tool__halpha {
-  font-size: 11px;
-  letter-spacing: 0.02em;
-}
-
-.moon-preview-hud-credit {
-  max-width: 148px;
-  margin: 0;
-  padding: 6px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background: rgba(8, 10, 14, 0.78);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 9px;
-  line-height: 1.35;
-}
-
-.moon-preview-hud-credit a {
-  color: rgba(255, 196, 196, 0.88);
-  text-decoration: none;
-}
-
-.moon-preview-hud-credit a:hover {
-  text-decoration: underline;
 }
 
 /* —— Viewfinder camera panel (PS focal dock + orient + sensor) —— */
@@ -11307,7 +11278,6 @@ button.ov-capsule:hover {
   .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-pitch-stack,
   .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-pitch-tape,
   .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-hud-tools,
-  .immersive:has(.vf-capture-capsule.is-expanded) .moon-preview-hud-credit,
   .immersive:has(.vf-capture-capsule.is-expanded) .immersive__hint {
     visibility: hidden !important;
     pointer-events: none !important;
@@ -11383,7 +11353,6 @@ button.ov-capsule:hover {
   .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-pitch-stack,
   .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-pitch-tape,
   .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-hud-tools,
-  .immersive:has(.vf-capture-capsule.is-panel-open) .moon-preview-hud-credit,
   .immersive:has(.vf-capture-capsule.is-panel-open) .immersive__hint {
     visibility: hidden !important;
     pointer-events: none !important;
@@ -11460,10 +11429,6 @@ button.ov-capsule:hover {
   .moon-preview-hud-tool svg {
     width: 15px;
     height: 15px;
-  }
-
-  .moon-preview-hud-tool__halpha {
-    font-size: 10px;
   }
 
   .moon-preview-hud-tool__atmo {
@@ -11721,7 +11686,6 @@ button.ov-capsule:hover {
   .immersive.immersive--loading .moon-preview-pitch-stack,
   .immersive.immersive--loading .moon-preview-pitch-tape,
   .immersive.immersive--loading .moon-preview-hud-tools,
-  .immersive.immersive--loading .moon-preview-hud-credit,
   .immersive.immersive--loading .photo-frame,
   .immersive.immersive--loading .photo-frame__meta,
   .immersive.immersive--loading .photo-frame__actions,

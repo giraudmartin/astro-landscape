@@ -728,8 +728,6 @@ export const fr = {
     layersAria: 'Couches célestes',
     layer: {
       milkyWay: 'Voie lactée',
-      halphaTitle: 'Hα : émission hydrogène',
-      halpha: 'Hα',
       constellations: 'Constellations',
       radec: 'Grille RA/Dec',
       az: 'Grille azimutale',
@@ -738,7 +736,6 @@ export const fr = {
     toolCapsuleAria: 'Réglages de scène et projection',
     framings: 'Cadrages',
     exit: 'Quitter la vue trépied',
-    halphaCredit: 'reprojeté galactique → ICRF/J2000',
     hint: {
       zoom: 'Molette pour zoomer',
       look: 'Drag pour regarder',

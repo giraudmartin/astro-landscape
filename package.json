@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:halpha": "python scripts/build_halpha_texture.py",
     "build:milkyway-globe": "python scripts/build_milkyway_globe.py",
     "build:viirs-bortle": "python scripts/build-viirs-bortle-cog-rasterio.py --from-gibs",
     "build:viirs-bortle:eog": "python scripts/build-viirs-bortle-cog-rasterio.py",

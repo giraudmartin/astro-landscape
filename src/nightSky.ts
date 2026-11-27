@@ -30,8 +30,6 @@ export const MILKY_WAY_EXPOSURE_NO_ATMO = 10
 export const MILKY_WAY_EXPOSURE_NEB = DEFAULT_MILKY_WAY_NEB_LOOK.exposure
 export const MILKY_WAY_EXPOSURE_NEB_NO_ATMO =
   DEFAULT_MILKY_WAY_NEB_LOOK.exposure * MILKY_WAY_NEB_EXPOSURE_NO_ATMO_RATIO
-export const HALPHA_GAIN = 2.4
-export const HALPHA_TEXTURE_URL = '/sky/halpha_j2000.webp?v=5'
 /** Shipping immersive MW tile layer (NASA SVS #4851 + photo nebulae). */
 export const MILKY_WAY_TILE_LAYER: NasaSkyTileLayerId = 'milkyway'
 
@@ -114,7 +112,6 @@ export type NightSkyHandle = {
     showMilkyWay?: boolean
     /** Session grade from the VL settings card. */
     milkyWayNebLook?: MilkyWayNebLook
-    showHalpha?: boolean
     /** Rayleigh amount 0…1 (legacy: showAtmosphere true/false). */
     atmosphereAmount?: number
     showAtmosphere?: boolean
@@ -149,16 +146,7 @@ export type NightSkyHandle = {
       maxDist: number,
     ) => boolean
   }) => void
-  /** Lazy-load the Hα equirect on first enable. */
-  ensureHalphaLoaded: () => Promise<void>
   dispose: () => void
-}
-
-function createBlackDataTexture(): THREE.DataTexture {
-  const texture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1)
-  texture.colorSpace = THREE.LinearSRGBColorSpace
-  texture.needsUpdate = true
-  return texture
 }
 
 /**
@@ -209,19 +197,12 @@ export function createNightSky(opts?: {
   let lastRotation: { utcMs: number; lat: number; lon: number; elevationM: number } | undefined
   let disposed = false
 
-  const blackHalpha = createBlackDataTexture()
   const exposureUniform = { value: MILKY_WAY_EXPOSURE }
   const milkyWayAmountUniform = { value: 1 }
   const mwGradeOnUniform = { value: 0 }
   const mwBrightnessUniform = { value: 1 }
   const mwContrastUniform = { value: 1 }
   const mwSaturationUniform = { value: 1 }
-  const halphaAmountUniform = { value: 0 }
-  const halphaGainUniform = { value: HALPHA_GAIN }
-  const halphaMapUniform: { value: THREE.Texture } = { value: blackHalpha }
-
-  let halphaLoad: Promise<void> | null = null
-  let halphaTexture: THREE.Texture | null = null
 
   const milkyShaderHook = (material: THREE.MeshBasicMaterial) => {
     material.onBeforeCompile = (shader) => {
@@ -231,25 +212,6 @@ export function createNightSky(opts?: {
       shader.uniforms.uMwBrightness = mwBrightnessUniform
       shader.uniforms.uMwContrast = mwContrastUniform
       shader.uniforms.uMwSaturation = mwSaturationUniform
-      shader.uniforms.uHalphaAmount = halphaAmountUniform
-      shader.uniforms.uHalphaGain = halphaGainUniform
-      shader.uniforms.uHalphaMap = halphaMapUniform
-
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          '#include <common>',
-          /* glsl */ `
-            #include <common>
-            varying vec3 vHalphaDir;
-          `,
-        )
-        .replace(
-          '#include <begin_vertex>',
-          /* glsl */ `
-            #include <begin_vertex>
-            vHalphaDir = position;
-          `,
-        )
 
       shader.fragmentShader = shader.fragmentShader
         .replace(
@@ -262,17 +224,13 @@ export function createNightSky(opts?: {
             uniform float uMwBrightness;
             uniform float uMwContrast;
             uniform float uMwSaturation;
-            uniform float uHalphaAmount;
-            uniform float uHalphaGain;
-            uniform sampler2D uHalphaMap;
-            varying vec3 vHalphaDir;
           `,
         )
         .replace(
           '#include <map_fragment>',
           /* glsl */ `
             #include <map_fragment>
-            // Same MW path as before Hα: exposure only; thinness = material opacity.
+            // Exposure only; thinness = material opacity.
             diffuseColor.rgb *= uMilkyWayAmount;
             diffuseColor.rgb *= uMilkyWayExposure;
 
@@ -286,20 +244,10 @@ export function createNightSky(opts?: {
               diffuseColor.rgb = mix(vec3(luma), diffuseColor.rgb, uMwSaturation);
               diffuseColor.rgb = max(diffuseColor.rgb, vec3(0.0));
             }
-
-            if (uHalphaAmount > 0.001) {
-              vec3 haDir = normalize(vHalphaDir);
-              float haU = atan(haDir.z, -haDir.x) / (2.0 * 3.141592653589793);
-              haU = fract(1.0 - haU);
-              float haV = acos(clamp(haDir.y, -1.0, 1.0)) / 3.141592653589793;
-              float ha = texture2D(uHalphaMap, vec2(haU, haV)).r;
-              // Additive crimson only — does not rewrite MW rgb.
-              diffuseColor.rgb += vec3(1.0, 0.12, 0.04) * ha * uHalphaGain * uHalphaAmount;
-            }
           `,
         )
     }
-    material.customProgramCacheKey = () => 'astro-milky-way-halpha-v8'
+    material.customProgramCacheKey = () => 'astro-milky-way-v9'
     material.depthWrite = false
     material.needsUpdate = true
     attachStelProjector(material)
@@ -343,44 +291,6 @@ export function createNightSky(opts?: {
     return true
   }
 
-  const ensureHalphaLoaded = (): Promise<void> => {
-    if (halphaTexture) return Promise.resolve()
-    if (halphaLoad) return halphaLoad
-    halphaLoad = new Promise((resolve, reject) => {
-      const loader = new THREE.TextureLoader()
-      loader.load(
-        HALPHA_TEXTURE_URL,
-        (texture) => {
-          if (disposed) {
-            texture.dispose()
-            resolve()
-            return
-          }
-          // Match NASA EXR tiles (flipY=false): file top/NCP → WebGL v=0 with
-          // haV=acos(y)/π. TextureLoader default flipY=true inverted the sky.
-          texture.flipY = false
-          texture.colorSpace = THREE.LinearSRGBColorSpace
-          texture.wrapS = THREE.RepeatWrapping
-          texture.wrapT = THREE.ClampToEdgeWrapping
-          // No mipmaps: averaging sparse nebulae into empty sky creates a red fog.
-          texture.generateMipmaps = false
-          texture.minFilter = THREE.LinearFilter
-          texture.magFilter = THREE.LinearFilter
-          texture.needsUpdate = true
-          halphaTexture = texture
-          halphaMapUniform.value = texture
-          resolve()
-        },
-        undefined,
-        () => {
-          halphaLoad = null
-          reject(new Error(`Failed to load ${HALPHA_TEXTURE_URL}`))
-        },
-      )
-    })
-    return halphaLoad
-  }
-
   void loadNasaSkyTilesManifest().then((manifest) => {
     if (disposed || !manifest) return
     milkyManifest = manifest
@@ -393,7 +303,6 @@ export function createNightSky(opts?: {
 
   return {
     root,
-    ensureHalphaLoaded,
     update: ({
       utcMs,
       lat,
@@ -403,7 +312,6 @@ export function createNightSky(opts?: {
       camera,
       showMilkyWay = true,
       milkyWayNebLook = DEFAULT_MILKY_WAY_NEB_LOOK,
-      showHalpha = false,
       showAtmosphere = true,
       atmosphereAmount,
       showConstellations = false,
@@ -507,7 +415,6 @@ export function createNightSky(opts?: {
       azimuthGrid.setOpacity(azOn ? 0.55 + deepNight * 0.45 : 0)
 
       milkyWayAmountUniform.value = showMilkyWay ? 1 : 0
-      halphaAmountUniform.value = showHalpha && halphaTexture ? 1 : 0
       if (milkyManifest) remountMilkyFolder(MILKY_WAY_TILE_LAYER)
       const nebExp = milkyWayNebLook.exposure
       const expNoAtmo =
@@ -528,13 +435,8 @@ export function createNightSky(opts?: {
       mwSaturationUniform.value = gradeLive ? milkyWayNebLook.saturation : 1
 
       if (milkyWayTiles && milkyReady) {
-        // Hα lives in the MW shader — keep the dome up if either layer is on.
-        // Bortle ≥7: MW invisible; still allow Hα alone if the user forces it.
         const mwVisible = showMilkyWay && lpMwMul > 0.02
-        const showDome =
-          nightOn &&
-          deepNight > 0.05 &&
-          (mwVisible || (showHalpha && !!halphaTexture))
+        const showDome = nightOn && deepNight > 0.05 && mwVisible
         const baseOp =
           deepNight *
           THREE.MathUtils.lerp(
@@ -542,10 +444,8 @@ export function createNightSky(opts?: {
             MILKY_WAY_DOME_OPACITY,
             atmoAmt,
           )
-        const opacity =
-          showHalpha && !mwVisible ? baseOp : baseOp * lpMwMul
         milkyWayTiles.setVisible(showDome)
-        milkyWayTiles.setOpacity(opacity)
+        milkyWayTiles.setOpacity(baseOp * lpMwMul)
         // Preload cover tiles as soon as night falls (don't wait for showDome).
         if (nightOn || showDome) milkyWayTiles.update(camera)
       }
@@ -560,12 +460,6 @@ export function createNightSky(opts?: {
       milkyFolderMounted = null
       milkyManifest = null
       milkyReady = false
-      if (halphaTexture) {
-        halphaTexture.dispose()
-        halphaTexture = null
-      }
-      halphaMapUniform.value = blackHalpha
-      blackHalpha.dispose()
     },
   }
 }

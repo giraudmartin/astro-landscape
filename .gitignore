@@ -28,7 +28,7 @@ scripts/diag-*.json
 scripts/sample-*.json
 scripts/bench-render-passes.mjs
 
-# Offline Hα source (53 MB TIFF) — rebuild with scripts/build_halpha_texture.py
+# Offline sky source rasters (local bake inputs)
 raw-sky/
 
 # EOG VIIRS Bortle COG — bake with npm run build:viirs-bortle

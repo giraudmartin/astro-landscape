@@ -140,7 +140,6 @@ export type ImmersiveSettings = {
   /** Halo on bright stars (0 = cores only, 1 = default). */
   starGlow: number
   showMilkyWay: boolean
-  showHalpha: boolean
   /** Sun + Moon day-arc guides in the immersive sky. */
   showTrajectories: boolean
   /** Rayleigh sky amount 0…1 (replaces the old on/off Atmo toggle). */
@@ -244,7 +243,6 @@ export const DEFAULT_IMMERSIVE_SETTINGS: ImmersiveSettings = {
   starBrightness: STAR_BRIGHTNESS_DEFAULT,
   starGlow: STAR_GLOW_DEFAULT,
   showMilkyWay: true,
-  showHalpha: false,
   showTrajectories: true,
   atmosphereAmount: ATMOSPHERE_AMOUNT_DEFAULT,
   moonlightEnabled: true,
@@ -449,10 +447,6 @@ function normalizeImmersive(value: unknown): ImmersiveSettings {
     showMilkyWay: readBoolean(
       row.showMilkyWay,
       DEFAULT_IMMERSIVE_SETTINGS.showMilkyWay,
-    ),
-    showHalpha: readBoolean(
-      row.showHalpha,
-      DEFAULT_IMMERSIVE_SETTINGS.showHalpha,
     ),
     showTrajectories: readBoolean(
       row.showTrajectories,

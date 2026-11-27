@@ -721,8 +721,6 @@ export const en = {
     layersAria: 'Sky layers',
     layer: {
       milkyWay: 'Milky Way',
-      halphaTitle: 'Hα: hydrogen emission',
-      halpha: 'Hα',
       constellations: 'Constellations',
       radec: 'RA/Dec grid',
       az: 'Azimuth grid',
@@ -731,7 +729,6 @@ export const en = {
     toolCapsuleAria: 'Scene settings and projection',
     framings: 'Framings',
     exit: 'Exit tripod view',
-    halphaCredit: 'reprojected galactic → ICRF/J2000',
     hint: {
       zoom: 'Scroll to zoom',
       look: 'Drag to look around',

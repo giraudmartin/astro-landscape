@@ -539,7 +539,6 @@ export function ImmersiveView({
   const patchMilkyWayNebLook = (patch: Partial<MilkyWayNebLook>) => {
     setMilkyWayNebLook((prev) => normalizeMilkyWayNebLook({ ...prev, ...patch }))
   }
-  const [showHalpha, setShowHalpha] = useState(savedImmersive.showHalpha)
   const [atmosphereAmount, setAtmosphereAmount] = useState(() =>
     clampAtmosphereAmount(savedImmersive.atmosphereAmount),
   )
@@ -716,7 +715,6 @@ export function ImmersiveView({
   const skyTogglesRef = useRef({
     showMilkyWay: savedImmersive.showMilkyWay,
     milkyWayNebLook: DEFAULT_MILKY_WAY_NEB_LOOK,
-    showHalpha: savedImmersive.showHalpha,
     atmosphereAmount: clampAtmosphereAmount(savedImmersive.atmosphereAmount),
     moonlightEnabled: savedImmersive.moonlightEnabled,
     showTrajectories: savedImmersive.showTrajectories,
@@ -734,7 +732,6 @@ export function ImmersiveView({
   skyTogglesRef.current = {
     showMilkyWay,
     milkyWayNebLook,
-    showHalpha,
     atmosphereAmount,
     moonlightEnabled,
     showTrajectories,
@@ -779,7 +776,6 @@ export function ImmersiveView({
         starBrightness,
         starGlow,
         showMilkyWay,
-        showHalpha,
         showTrajectories,
         atmosphereAmount,
         moonlightEnabled,
@@ -832,7 +828,6 @@ export function ImmersiveView({
     starBrightness,
     starGlow,
     showMilkyWay,
-    showHalpha,
     showTrajectories,
     atmosphereAmount,
     moonlightEnabled,
@@ -881,7 +876,6 @@ export function ImmersiveView({
     lon,
   ])
 
-  const nightSkyApiRef = useRef<ReturnType<typeof createNightSky> | null>(null)
   const renderDiagLiveRef = useRef<RenderDiagLive>(createRenderDiagLive())
 
   const apiRef = useRef<{
@@ -1169,11 +1163,7 @@ export function ImmersiveView({
     const eclipticPoleLocal = new THREE.Vector3()
 
     const nightSky = createNightSky({ labelHost: host })
-    nightSkyApiRef.current = nightSky
     scene.add(nightSky.root)
-    if (skyTogglesRef.current.showHalpha) {
-      void nightSky.ensureHalphaLoaded()
-    }
 
     // Sun/Moon discs + day arcs — same models/sampling as PlanetStudio.
     const skyBodies = createSkyBodies()
@@ -2269,7 +2259,6 @@ export function ImmersiveView({
         camera,
         showMilkyWay: skyToggles.showMilkyWay,
         milkyWayNebLook: skyToggles.milkyWayNebLook,
-        showHalpha: skyToggles.showHalpha,
         atmosphereAmount: skyToggles.atmosphereAmount,
         showConstellations: skyToggles.showConstellations,
         showCelestialGrid: skyToggles.showCelestialGrid,
@@ -2438,7 +2427,6 @@ export function ImmersiveView({
       host.removeEventListener('touchend', onTouchEnd)
       host.removeEventListener('touchcancel', onTouchEnd)
       apiRef.current = null
-      nightSkyApiRef.current = null
       sky.geometry.dispose()
       if (sky.lightPollutionMesh.geometry !== sky.geometry) {
         sky.lightPollutionMesh.geometry.dispose()
@@ -3002,26 +2990,6 @@ export function ImmersiveView({
           <button
             type="button"
             className={
-              showHalpha
-                ? 'moon-preview-hud-tool is-active'
-                : 'moon-preview-hud-tool'
-            }
-            aria-pressed={showHalpha}
-            title={t('immersive.layer.halphaTitle')}
-            aria-label={t('immersive.layer.halpha')}
-            onClick={() => {
-              setShowHalpha((v) => {
-                const next = !v
-                if (next) void nightSkyApiRef.current?.ensureHalphaLoaded()
-                return next
-              })
-            }}
-          >
-            <span className="moon-preview-hud-tool__halpha">Hα</span>
-          </button>
-          <button
-            type="button"
-            className={
               showConstellations
                 ? 'moon-preview-hud-tool is-active'
                 : 'moon-preview-hud-tool'
@@ -3062,28 +3030,6 @@ export function ImmersiveView({
             <AzimuthGridIcon />
           </button>
         </div>
-        {showHalpha ? (
-          <p className="moon-preview-hud-credit" role="note">
-            Hα{' '}
-            <a
-              href="https://noirlab.edu/public/images/AllSky-17_Optical656nm-Halpha-WHAM-SHASSA-VTSS/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              WHAM/VTSS/SHASSA/Douglas Finkbeiner
-            </a>
-            {' · '}
-            <a
-              href="https://creativecommons.org/licenses/by/4.0/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              CC BY 4.0
-            </a>
-            {' · '}
-            {t('immersive.halphaCredit')}
-          </p>
-        ) : null}
       </div>
 
       <div className="immersive__top-bar">

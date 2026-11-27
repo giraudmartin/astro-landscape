@@ -3,7 +3,9 @@
 .onboarding-intro-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  /* Above phone chrome (mobile-top-drawer 86, sheets 88) so the top
+     languette cannot peek through the intro. */
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;

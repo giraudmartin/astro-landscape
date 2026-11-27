@@ -1,0 +1,39 @@
+---
+description: Frontend changes must be adapted for every Operate breakpoint (phone, laptop, desktop) — state what was adapted; ask if unsure
+globs: src/**/*.{ts,tsx,css}
+alwaysApply: true
+---
+
+# Frontend — all Operate breakpoints
+
+Any UI / front change must be checked and adapted for **every layout band** this app ships, not desktop-only and not phone-only by default.
+
+## Bands (keep CSS ↔ JS in sync)
+
+| Band | Approx. width | JS | CSS |
+|------|---------------|----|-----|
+| Phone | ≤720px (some onboarding sheets ≤700px) | `OPERATE_PHONE_MQ` / `useMatchMedia` | `@media (max-width: 720px)` |
+| Laptop Operate | 1025–1440px | `OPERATE_LAPTOP_MQ` | `@media (max-width: 1440px) and (min-width: 1025px)` |
+| Desktop / wide | ≥1441px (and tablet 721–1024 where patterns exist) | neither phone nor laptop MQ | base styles + any existing mid-band rules |
+
+Prefer `OPERATE_PHONE_MQ` / `OPERATE_LAPTOP_MQ` over one-off magic widths. If you add a new band, update `useMatchMedia.ts` **and** the matching CSS.
+
+## Required workflow
+
+1. **Assume multi-layout** — chrome, copy, sheets/drawers vs rails, hit targets, overlays, and tour/coach marks often differ by band.
+2. **Phone first among gaps** — if a change only landed on desktop, also do phone (and laptop when that band has a distinct pattern). Skip a band only when it truly does not apply.
+3. **Doubt → ask** — e.g. unclear if a control exists on phone, or whether laptop should follow phone or desktop. Do not guess a layout that does not exist on that band.
+4. **Say it out loud** — in the reply, state which bands you adapted (phone / laptop / desktop) and what differed (copy keys, sheet vs rail, z-index, scroll-vs-click, etc.).
+
+## Forbidden
+
+| Hack | Why |
+|------|-----|
+| Desktop-only JSX/CSS with no phone pass | Burns on real devices (drawers, bottom sheets, “à gauche”) |
+| Phone-only hardcode that breaks laptop/desktop | Same product, three layouts |
+| Copy that describes the wrong chrome (`À gauche` while phone uses the top drawer) | Needs `bodyMobile` / band-specific keys |
+| Leaving tour/overlay/drawer state open when changing step/band | Cross-step UI leaks |
+
+## Rule of landing
+
+A front change that was not considered on phone **and** on laptop/desktop (or explicitly scoped with a user-confirmed exception) is a failed change. Always report the bands covered when you finish.

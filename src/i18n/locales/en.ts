@@ -183,18 +183,26 @@ export const en = {
         panels: {
           title: 'Overview, weather, and sky',
           body: 'On the left: overview (place, date, time), weather, and the Bortle / light-pollution index for this spot.',
+          bodyMobile:
+            'The top panel (swipe down from the top of the screen): overview (place, date, time), weather, and the Bortle / light-pollution index for this spot.',
         },
         pl: {
           title: 'Light pollution on the map',
           body: 'This control (on the right) toggles the light-pollution heatmap. Handy when you want a truly dark sky.',
+          bodyMobile:
+            'This control in the right-hand stack toggles the light-pollution heatmap. Handy when you want a truly dark sky.',
         },
         spots: {
           title: 'Your spots',
           body: 'On the right, open My spots to find, rename, or hide your saved locations.',
+          bodyMobile:
+            'Here is your list at the bottom. You can find, rename, or hide your saved locations.',
         },
         framings: {
           title: 'Your framings',
           body: 'Just below the spots button: saved framings (composition, date, viewpoint) so you can replay a scene later.',
+          bodyMobile:
+            'Here are your saved framings (composition, date, viewpoint) so you can replay a scene.',
         },
         exampleFraming: {
           title: 'An example framing',

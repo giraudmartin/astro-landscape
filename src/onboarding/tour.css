@@ -5,7 +5,9 @@
 .onboarding-tour-root {
   position: fixed;
   inset: 0;
-  z-index: 85;
+  /* Above phone chrome (mobile-top-drawer 86) so the top languette
+     cannot peek through the tour scrim. */
+  z-index: 100;
   pointer-events: none;
 }
 
@@ -24,7 +26,7 @@
 
 .onboarding-tour__scrim-hit {
   position: absolute;
-  z-index: 85;
+  z-index: 100;
   pointer-events: auto;
   /* Transparent hit layer: blocks map / panels / markers under the tour. */
   background: transparent;
@@ -51,9 +53,29 @@ html.is-tour-scroll-map-ui .map-ui * {
   pointer-events: none !important;
 }
 
+/*
+ * Phone panels step: drawer above the tour scrim (100) so it can scroll, but
+ * BELOW the portaled tour card (110). Clicks killed in JS.
+ */
+html.is-tour-scroll-info-drawer .mobile-top-drawer {
+  z-index: 105;
+  pointer-events: none;
+}
+
+html.is-tour-scroll-info-drawer .mobile-top-drawer__panel,
+html.is-tour-scroll-info-drawer .mobile-top-drawer__body {
+  pointer-events: auto;
+  touch-action: pan-y;
+}
+
+html.is-tour-scroll-info-drawer .mobile-top-drawer__backdrop,
+html.is-tour-scroll-info-drawer .mobile-top-drawer__tab {
+  pointer-events: none !important;
+}
+
 .onboarding-tour__ring {
   position: fixed;
-  z-index: 86;
+  z-index: 101;
   border: 2px solid rgba(var(--ui-accent-rgb), 0.85);
   border-radius: 14px;
   pointer-events: none;
@@ -69,9 +91,10 @@ html.is-tour-scroll-map-ui .map-ui * {
   border-radius: 999px;
 }
 
+/* Portaled to document.body so it can sit above the phone info drawer. */
 .onboarding-tour__card {
   position: fixed;
-  z-index: 87;
+  z-index: 110;
   width: min(360px, calc(100vw - 32px));
   padding: 18px 18px 16px;
   border: 1px solid var(--ui-border-strong);
@@ -122,7 +145,7 @@ html.is-tour-scroll-map-ui .map-ui * {
   margin: 0 0 2px;
 }
 
-/* Laptop: explanations only — live radial is on the map. */
+/* Phone + laptop: explanations only — live radial is on the map. */
 .onboarding-tour__marker-layout--list {
   margin: 0 0 12px;
 }
@@ -437,6 +460,44 @@ html.is-tour-scroll-map-ui .map-ui * {
   .onboarding-tour__card--wide {
     max-height: min(72svh, 480px);
     overflow-y: auto;
+  }
+
+  /*
+   * Marker step: keep the live radial visible above the card.
+   * Cap height to leave ~half the short viewport free; scroll the action list.
+   */
+  .onboarding-tour__card--marker-list {
+    display: flex;
+    flex-direction: column;
+    max-height: min(46svh, 300px);
+    overflow: hidden;
+    padding-bottom: 14px;
+  }
+
+  .onboarding-tour__card--marker-list .onboarding-tour__body {
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+  }
+
+  .onboarding-tour__card--marker-list .onboarding-tour__marker-layout--list {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0 0 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .onboarding-tour__card--marker-list .onboarding-tour__marker-layout--list
+    .onboarding-tour__action-list {
+    gap: 12px;
+    margin: 0;
+    padding-right: 2px;
+  }
+
+  .onboarding-tour__card--marker-list .onboarding-tour__actions {
+    flex: 0 0 auto;
   }
 }
 

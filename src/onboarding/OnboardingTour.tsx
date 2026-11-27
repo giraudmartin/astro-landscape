@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { useT } from '../i18n'
 import { createSpotActionMarkerElement } from '../spotActionMarker'
 import {
@@ -114,7 +115,14 @@ export type OnboardingTourProps = {
   onOpenImmersive: () => void
   /** Prepare UI for a step (open rails, enable PL, open marker menu…). */
   onStepEnter: (stepId: TourStepId) => void
+  /** Phone spots beat: open the Mes spots sheet after the icon is ringed. */
+  onPhoneOpenSpots: () => void
+  /** Phone framings beat: open the cadrages sheet after the icon is ringed. */
+  onPhoneOpenFramings: () => void
 }
+
+/** Phone rail steps: point at icon → open sheet → show card. */
+type PhoneRailBeat = 'off' | 'point' | 'open' | 'card'
 
 type HoleRect = {
   top: number
@@ -131,7 +139,7 @@ const GAP = 12
 const BOTTOM_CLEAR = 108
 /** Right map control stack — leave room when docking bottom-right. */
 const RIGHT_RAIL_CLEAR = 72
-const SCRIM = 'rgba(2, 6, 7, 0.42)'
+const SCRIM = 'rgba(2, 6, 7, 0.28)'
 
 /** Layout truth: overview column is LEFT; map control stack is RIGHT. */
 type Side = 'left' | 'right'
@@ -258,13 +266,15 @@ function measureAnchorHole(anchor: TourAnchor): HoleRect | null {
 }
 
 function measureTourPanelHole(
-  panel: 'my-spots-rail' | 'framings-rail',
+  panel: 'my-spots-rail' | 'framings-rail' | 'mobile-info-drawer',
 ): HoleRect | null {
   if (typeof document === 'undefined') return null
   const el = document.querySelector<HTMLElement>(`[data-tour-panel="${panel}"]`)
   if (!el) return null
   const r = el.getBoundingClientRect()
   if (r.width < 8 || r.height < 8) return null
+  // Closed / off-screen top drawer (translateY fully up).
+  if (r.bottom < 24) return null
   return {
     top: r.top,
     left: r.left,
@@ -283,6 +293,12 @@ function collectHoles(step: TourStepDef): HoleRect[] {
     const pin = measureSpotMarkerHole()
     if (pin) holes.push(pin)
     return holes
+  }
+
+  // Phone panels: undim the open top drawer (no left overview column).
+  if (step.id === 'panels') {
+    const drawer = measureTourPanelHole('mobile-info-drawer')
+    if (drawer) return [drawer]
   }
 
   if (!step.anchor) return []
@@ -421,6 +437,8 @@ export function OnboardingTour({
   onAddExampleFraming,
   onOpenImmersive,
   onStepEnter,
+  onPhoneOpenSpots,
+  onPhoneOpenFramings,
 }: OnboardingTourProps) {
   const t = useT()
   const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
@@ -437,6 +455,8 @@ export function OnboardingTour({
   /** After place / add-framing CTAs, stay on the same card with Continuer. */
   const [placeDone, setPlaceDone] = useState(false)
   const [exampleFramingAdded, setExampleFramingAdded] = useState(false)
+  /** Phone: hide card while pointing at Mes spots / Cadrages icon. */
+  const [phoneRailBeat, setPhoneRailBeat] = useState<PhoneRailBeat>('off')
   const [viewport, setViewport] = useState(() => ({
     w: typeof window !== 'undefined' ? window.innerWidth : 1200,
     h: typeof window !== 'undefined' ? window.innerHeight : 800,
@@ -472,18 +492,106 @@ export function OnboardingTour({
     setIndex(0)
     setPlaceDone(false)
     setExampleFramingAdded(false)
+    setPhoneRailBeat('off')
   }, [open])
+
+  /**
+   * Phone spots / framings: close top drawer (via step enter) → hide card →
+   * ring the stack icon → open the bottom sheet → show this step’s card.
+   */
+  useEffect(() => {
+    if (!open || !isPhone) {
+      setPhoneRailBeat('off')
+      return
+    }
+    if (step.id !== 'spots' && step.id !== 'framings') {
+      setPhoneRailBeat('off')
+      return
+    }
+    setPhoneRailBeat('point')
+    const openPanel = step.id === 'spots' ? onPhoneOpenSpots : onPhoneOpenFramings
+    const tOpen = window.setTimeout(() => {
+      openPanel()
+      setPhoneRailBeat('open')
+      refreshHoles()
+    }, 1100)
+    const tCard = window.setTimeout(() => {
+      setPhoneRailBeat('card')
+      refreshHoles()
+      refreshCardBox()
+    }, 1750)
+    const tHoles = [
+      window.setTimeout(refreshHoles, 60),
+      window.setTimeout(refreshHoles, 320),
+      window.setTimeout(refreshHoles, 700),
+    ]
+    return () => {
+      window.clearTimeout(tOpen)
+      window.clearTimeout(tCard)
+      for (const id of tHoles) window.clearTimeout(id)
+    }
+  }, [
+    open,
+    isPhone,
+    step.id,
+    onPhoneOpenSpots,
+    onPhoneOpenFramings,
+    refreshHoles,
+    refreshCardBox,
+  ])
+
+  const showTourCard =
+    !isPhone ||
+    phoneRailBeat === 'off' ||
+    phoneRailBeat === 'card'
 
   /** Laptop panels: punch a scroll hole over .map-ui; clicks stay blocked. */
   const allowMapUiScroll = open && isLaptop && step.id === 'panels'
+  /** Phone panels: same idea over the open top info drawer. */
+  const allowInfoDrawerScroll = open && isPhone && step.id === 'panels'
+  const allowScrollHole = allowMapUiScroll || allowInfoDrawerScroll
 
   useEffect(() => {
     const root = document.documentElement
     root.classList.toggle('is-tour-scroll-map-ui', allowMapUiScroll)
+    root.classList.toggle('is-tour-scroll-info-drawer', allowInfoDrawerScroll)
     return () => {
       root.classList.remove('is-tour-scroll-map-ui')
+      root.classList.remove('is-tour-scroll-info-drawer')
     }
-  }, [allowMapUiScroll])
+  }, [allowMapUiScroll, allowInfoDrawerScroll])
+
+  // Phone panels: scroll OK, clicks killed (pointer-events:none on * breaks iOS scroll).
+  useEffect(() => {
+    if (!allowInfoDrawerScroll) return
+    const panel = document.querySelector<HTMLElement>(
+      '[data-tour-panel="mobile-info-drawer"]',
+    )
+    if (!panel) return
+    const interactive =
+      'button, a, input, select, textarea, label, summary, [role="button"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"], [role="menuitem"]'
+    const blockActivate = (event: Event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    const blockInteractivePointer = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (!target.closest(interactive)) return
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    panel.addEventListener('click', blockActivate, true)
+    panel.addEventListener('auxclick', blockActivate, true)
+    panel.addEventListener('keydown', blockActivate, true)
+    panel.addEventListener('pointerdown', blockInteractivePointer, true)
+    return () => {
+      panel.removeEventListener('click', blockActivate, true)
+      panel.removeEventListener('auxclick', blockActivate, true)
+      panel.removeEventListener('keydown', blockActivate, true)
+      panel.removeEventListener('pointerdown', blockInteractivePointer, true)
+    }
+  }, [allowInfoDrawerScroll, primaryHole])
 
   useEffect(() => {
     if (step.id !== 'place') setPlaceDone(false)
@@ -496,17 +604,25 @@ export function OnboardingTour({
     if (step.id === 'welcome' || step.id === 'place') {
       requestTourFlyToDemo()
     }
+    // Phone marker: card height changes — reframe pin after the capped card lays out.
+    const frameMarker =
+      step.id === 'marker' && isPhone
+        ? window.setTimeout(() => {
+            requestAnimationFrame(() => requestTourFlyToDemo())
+          }, 220)
+        : 0
     const t1 = window.setTimeout(refreshHoles, 60)
     const t2 = window.setTimeout(refreshHoles, 320)
     const t3 = window.setTimeout(refreshHoles, 700)
     const t4 = window.setTimeout(refreshHoles, 1600)
     return () => {
+      window.clearTimeout(frameMarker)
       window.clearTimeout(t1)
       window.clearTimeout(t2)
       window.clearTimeout(t3)
       window.clearTimeout(t4)
     }
-  }, [open, step.id, onStepEnter, refreshHoles])
+  }, [open, step.id, isPhone, onStepEnter, refreshHoles])
 
   useLayoutEffect(() => {
     if (!open) return
@@ -616,13 +732,22 @@ export function OnboardingTour({
             ? 'onboarding.tour.steps.place.bodyMobile'
             : 'onboarding.tour.steps.place.bodyDesktop',
         )
-      : step.id === 'marker'
+      : step.id === 'panels' ||
+          step.id === 'spots' ||
+          step.id === 'framings' ||
+          step.id === 'pl'
         ? t(
-            isLaptop
-              ? 'onboarding.tour.steps.marker.bodyDesktop'
-              : 'onboarding.tour.steps.marker.body',
+            isPhone
+              ? `onboarding.tour.steps.${step.id}.bodyMobile`
+              : `onboarding.tour.steps.${step.id}.body`,
           )
-        : t(`onboarding.tour.steps.${step.id}.body`)
+        : step.id === 'marker'
+          ? t(
+              isPhone || isLaptop
+                ? 'onboarding.tour.steps.marker.bodyDesktop'
+                : 'onboarding.tour.steps.marker.body',
+            )
+          : t(`onboarding.tour.steps.${step.id}.body`)
   const bodyFollow =
     step.id === 'welcome'
       ? t('onboarding.tour.steps.welcome.body2')
@@ -658,33 +783,66 @@ export function OnboardingTour({
     step.id === 'spots' ||
     step.id === 'framings' ||
     step.id === 'exampleFraming'
+  // Phone panels: undim the top drawer without a giant green frame.
+  const isPhonePanelsDrawer = step.id === 'panels' && isPhone
+  /** Phone: green ring only while pointing at the stack icon (before sheet covers it). */
+  const phoneRailPointing =
+    isPhone &&
+    (step.id === 'spots' || step.id === 'framings') &&
+    (phoneRailBeat === 'point' || phoneRailBeat === 'open')
   // Ring the toggle only — the open rail is undimmed without a giant frame.
-  const ringHoles = isRailStep ? holes.slice(0, 1) : holes
+  // Phone open-sheet steps: never ring the buried stack icon (clips at screen edge).
+  const ringHoles = isPhonePanelsDrawer
+    ? []
+    : phoneRailPointing
+      ? holes.slice(0, 1)
+      : isPhone && isRailStep
+        ? []
+        : isRailStep
+          ? holes.slice(0, 1)
+          : holes
   // Laptop map-centric steps: corner park so the pin stays clear. Finale centered.
   const mapCornerStep =
     isLaptop &&
     (step.id === 'welcome' || step.id === 'place' || step.id === 'marker')
+  // Phone + laptop: live radial on the map; card is the action list only.
+  const liveMarkerOnMap = isMarkerStep && (isPhone || isLaptop)
   const styleCardW =
-    isMarkerStep && isPhone
-      ? Math.max(cardBox.w, Math.min(328, viewport.w - 48))
-      : isMarkerStep && isLaptop
-        ? Math.max(cardBox.w, Math.min(300, viewport.w - 48))
+    liveMarkerOnMap
+      ? Math.max(cardBox.w, Math.min(isPhone ? 328 : 300, viewport.w - 48))
+      : isMarkerStep && !isLaptop
+        ? Math.max(cardBox.w, Math.min(328, viewport.w - 48))
         : isLaptop && step.id === 'done'
           ? Math.max(cardBox.w, Math.min(300, viewport.w - 48))
           : cardBox.w
-  const cardStyle =
-    isLaptop && step.id === 'done'
+  // Phone rail sheets: card low so the list / example row stays readable above.
+  const phoneRailCard =
+    isPhone &&
+    isRailStep &&
+    (step.id === 'exampleFraming' || phoneRailBeat === 'card')
+  const cardStyle = phoneRailCard
+    ? (() => {
+        const vw = viewport.w
+        const vh = viewport.h
+        const width = Math.min(styleCardW, vw - MARGIN * 2)
+        const height = Math.max(cardBox.h, 120)
+        const bottomPad = Math.max(MARGIN, 20)
+        return {
+          left: clamp((vw - width) / 2, MARGIN, vw - width - MARGIN),
+          top: clamp(vh - height - bottomPad, MARGIN, vh - height - MARGIN),
+        }
+      })()
+    : isLaptop && step.id === 'done'
       ? parkCenterStyle(styleCardW, cardBox.h)
       : mapCornerStep
         ? parkClearOfMapCenterStyle(null, styleCardW, cardBox.h)
         : cardStyleFor(primaryHole, step, styleCardW, cardBox.h)
   const maskId = 'onboarding-tour-mask'
-  // Laptop marker: live radial on the map → list card (no cropped demo).
   const cardClass = [
     'onboarding-tour__card',
     isLaptop ? 'onboarding-tour__card--laptop' : '',
-    isMarkerStep && (isPhone || !isLaptop) ? 'onboarding-tour__card--wide' : '',
-    isMarkerStep && isLaptop ? 'onboarding-tour__card--marker-list' : '',
+    isMarkerStep && !liveMarkerOnMap ? 'onboarding-tour__card--wide' : '',
+    liveMarkerOnMap ? 'onboarding-tour__card--marker-list' : '',
     step.id === 'done' ? 'onboarding-tour__card--finale' : '',
   ]
     .filter(Boolean)
@@ -755,10 +913,11 @@ export function OnboardingTour({
       </svg>
 
       {/*
-        Hit lock: full-screen by default. On desktop panels step, leave a hole over
-        .map-ui so wheel/trackpad can scroll — controls stay inert via CSS.
+        Hit lock: full-screen by default. Panels step: leave a hole over the
+        overview column (laptop) or top info drawer (phone) so it can scroll —
+        controls stay inert via CSS.
       */}
-      {allowMapUiScroll && primaryHole ? (
+      {allowScrollHole && primaryHole ? (
         <>
           <div
             className="onboarding-tour__scrim-hit onboarding-tour__scrim-hit--band"
@@ -824,63 +983,79 @@ export function OnboardingTour({
         />
       ))}
 
-      <div ref={cardRef} className={cardClass} style={cardStyle}>
-        <p className="onboarding-tour__step">
-          {t('onboarding.tour.progress', {
-            current: String(index + 1),
-            total: String(total),
-          })}
-        </p>
-        <h2 id="onboarding-tour-title" className="onboarding-tour__title">
-          {title}
-        </h2>
-        <p className="onboarding-tour__body">{body}</p>
-        {bodyFollow ? (
-          <p className="onboarding-tour__body onboarding-tour__body--follow">
-            {bodyFollow}
-          </p>
-        ) : null}
-        {isMarkerStep ? (
-          <div
-            className={
-              isLaptop
-                ? 'onboarding-tour__marker-layout onboarding-tour__marker-layout--list'
-                : 'onboarding-tour__marker-layout'
-            }
-          >
-            {!isLaptop ? <TourMarkerPanelDemo /> : null}
-            <ul className="onboarding-tour__action-list">
-              {MARKER_ACTION_IDS.map((id) => (
-                <li key={id} className="onboarding-tour__action-row">
-                  <span className="onboarding-tour__action-icon" aria-hidden="true">
-                    <TourActionIcon name={id} />
-                  </span>
-                  <span className="onboarding-tour__action-copy">
-                    <span className="onboarding-tour__action-label">
-                      {t(`onboarding.tour.steps.marker.actions.${id}.label`)}
-                    </span>
-                    <span className="onboarding-tour__action-hint">
-                      {t(`onboarding.tour.steps.marker.actions.${id}.hint`)}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        <div className="onboarding-tour__actions">
-          <button
-            type="button"
-            className="onboarding-tour__skip"
-            onClick={() => onClose('skip')}
-          >
-            {t('onboarding.tour.skip')}
-          </button>
-          <button type="button" className="onboarding-tour__next" onClick={onPrimary}>
-            {ctaLabel}
-          </button>
-        </div>
-      </div>
+      {showTourCard
+        ? createPortal(
+            <div ref={cardRef} className={cardClass} style={cardStyle}>
+              <p className="onboarding-tour__step">
+                {t('onboarding.tour.progress', {
+                  current: String(index + 1),
+                  total: String(total),
+                })}
+              </p>
+              <h2 id="onboarding-tour-title" className="onboarding-tour__title">
+                {title}
+              </h2>
+              <p className="onboarding-tour__body">{body}</p>
+              {bodyFollow ? (
+                <p className="onboarding-tour__body onboarding-tour__body--follow">
+                  {bodyFollow}
+                </p>
+              ) : null}
+              {isMarkerStep ? (
+                <div
+                  className={
+                    liveMarkerOnMap
+                      ? 'onboarding-tour__marker-layout onboarding-tour__marker-layout--list'
+                      : 'onboarding-tour__marker-layout'
+                  }
+                >
+                  {!liveMarkerOnMap ? <TourMarkerPanelDemo /> : null}
+                  <ul className="onboarding-tour__action-list">
+                    {MARKER_ACTION_IDS.map((id) => (
+                      <li key={id} className="onboarding-tour__action-row">
+                        <span
+                          className="onboarding-tour__action-icon"
+                          aria-hidden="true"
+                        >
+                          <TourActionIcon name={id} />
+                        </span>
+                        <span className="onboarding-tour__action-copy">
+                          <span className="onboarding-tour__action-label">
+                            {t(
+                              `onboarding.tour.steps.marker.actions.${id}.label`,
+                            )}
+                          </span>
+                          <span className="onboarding-tour__action-hint">
+                            {t(
+                              `onboarding.tour.steps.marker.actions.${id}.hint`,
+                            )}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <div className="onboarding-tour__actions">
+                <button
+                  type="button"
+                  className="onboarding-tour__skip"
+                  onClick={() => onClose('skip')}
+                >
+                  {t('onboarding.tour.skip')}
+                </button>
+                <button
+                  type="button"
+                  className="onboarding-tour__next"
+                  onClick={onPrimary}
+                >
+                  {ctaLabel}
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }

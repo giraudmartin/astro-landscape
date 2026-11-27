@@ -12,6 +12,8 @@ export {
   OPEN_ONBOARDING_TOUR_EVENT,
   openOnboardingTour,
   TOUR_FLY_TO_DEMO_EVENT,
+  TOUR_CLEAR_MAP_FRAME_EVENT,
+  clearTourMapFrame,
 } from './tourEvents'
 export {
   PENDING_IMMERSIVE_TOUR_EVENT,

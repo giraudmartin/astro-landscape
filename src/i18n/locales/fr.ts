@@ -185,18 +185,26 @@ export const fr = {
         panels: {
           title: 'Overview, météo et ciel',
           body: 'À gauche : l’overview (lieu, date, heure), la météo, et l’indice Bortle / pollution lumineuse pour ce spot.',
+          bodyMobile:
+            'Le panneau du haut (glisse depuis le haut de l’écran) : overview (lieu, date, heure), météo, et indice Bortle / pollution lumineuse pour ce spot.',
         },
         pl: {
           title: 'Pollution lumineuse sur la carte',
           body: 'Ce bouton (à droite) active la heatmap de pollution lumineuse. Utile pour choisir un ciel vraiment sombre.',
+          bodyMobile:
+            'Ce bouton dans la pile à droite active la heatmap de pollution lumineuse. Utile pour choisir un ciel vraiment sombre.',
         },
         spots: {
           title: 'Tes spots',
           body: 'À droite, ouvre Mes spots pour retrouver, renommer ou masquer tes points enregistrés.',
+          bodyMobile:
+            'Voici ta liste en bas. Tu peux y retrouver, renommer ou masquer tes points enregistrés.',
         },
         framings: {
           title: 'Tes cadrages',
           body: 'Juste en dessous du bouton spots : les cadrages sauvegardés (composition, date, point de vue) pour rejouer une scène.',
+          bodyMobile:
+            'Voici tes cadrages sauvegardés (composition, date, point de vue) pour rejouer une scène.',
         },
         exampleFraming: {
           title: 'Un cadrage d’exemple',

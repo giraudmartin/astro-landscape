@@ -169,6 +169,7 @@ export function MobileTopDrawer({
             ? 'mobile-top-drawer__panel is-dragging'
             : 'mobile-top-drawer__panel'
         }
+        data-tour-panel="mobile-info-drawer"
         role="dialog"
         aria-modal={open}
         aria-labelledby={titleId}

@@ -9794,6 +9794,13 @@ button.ov-capsule:hover {
   --mtd-offset: -72dvh;
 }
 
+/* Intro / tour scrim is translucent — hide the top languette so it can’t peek. */
+html:has(.onboarding-intro-backdrop) .mobile-top-drawer__tab,
+html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .mobile-top-drawer__backdrop {
   position: absolute;
   inset: 0;

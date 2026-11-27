@@ -29,6 +29,7 @@ import {
   tourDemoUtcMs,
 } from './onboarding/tourDemoSpot'
 import {
+  clearTourMapFrame,
   OPEN_ONBOARDING_TOUR_EVENT,
   shouldStartTourAfterIntro,
 } from './onboarding/tourEvents'
@@ -481,6 +482,8 @@ export default function App() {
   const onTourStepEnter = useCallback(
     (stepId: TourStepId) => {
       setTourStepId(stepId)
+      // Phone: top info drawer only on the panels step — always close otherwise.
+      if (isPhone) setInfoDrawerOpen(stepId === 'panels')
       switch (stepId) {
         case 'welcome':
         case 'place':
@@ -493,21 +496,25 @@ export default function App() {
           setMySpotsOpen(false)
           setFramingsOpen(false)
           setOverviewCollapsed(false)
-          if (isPhone) setInfoDrawerOpen(true)
           break
         case 'pl':
           setMarkerMenuOpen(false)
           setMySpotsOpen(false)
           setFramingsOpen(false)
           setPlHeatmapEnabled(true)
-          if (isPhone) setInfoDrawerOpen(false)
           break
         case 'spots':
           setMarkerMenuOpen(false)
           setFramingsOpen(false)
-          setMySpotsOpen(true)
+          // Phone: tour points at the Mes spots icon first, then opens the sheet.
+          setMySpotsOpen(!isPhone)
           break
         case 'framings':
+          setMarkerMenuOpen(false)
+          setMySpotsOpen(false)
+          // Phone: same icon → sheet beat as spots.
+          setFramingsOpen(!isPhone)
+          break
         case 'exampleFraming':
           setMarkerMenuOpen(false)
           setMySpotsOpen(false)
@@ -516,8 +523,8 @@ export default function App() {
         case 'marker':
           setMySpotsOpen(false)
           setFramingsOpen(false)
-          // Desktop: open the live radial on the map. Phone: keep closed + in-card demo.
-          setMarkerMenuOpen(!isPhone)
+          // Live radial on the map (phone + desktop). Card is explanations only.
+          setMarkerMenuOpen(true)
           break
         case 'done':
           setMarkerMenuOpen(false)
@@ -530,6 +537,14 @@ export default function App() {
     },
     [isPhone],
   )
+
+  const onPhoneOpenSpots = useCallback(() => {
+    setMySpotsOpen(true)
+  }, [])
+
+  const onPhoneOpenFramings = useCallback(() => {
+    setFramingsOpen(true)
+  }, [])
 
   /** Immersive night scene (Mirador demo look). Not used on the map — Open-Meteo needs “today”. */
   const applyTourDemoClock = useCallback(() => {
@@ -635,6 +650,10 @@ export default function App() {
     setTourOpen(false)
     setTourStepId(null)
     setMarkerMenuOpen(false)
+    setInfoDrawerOpen(false)
+    setMySpotsOpen(false)
+    setFramingsOpen(false)
+    clearTourMapFrame()
   }, [])
 
   const onImmersiveTourStepEnter = useCallback(
@@ -1599,9 +1618,7 @@ export default function App() {
           onRequestEditSpot={onRequestEditSpot}
           markerMenuOpen={markerMenuOpen}
           onMarkerMenuOpenChange={setMarkerMenuOpen}
-          markerActionsLocked={
-            tourOpen && !isPhone && tourStepId === 'marker'
-          }
+          markerActionsLocked={tourOpen && tourStepId === 'marker'}
         />
       </div>
       {mountImmersive && spot != null ? (
@@ -1974,6 +1991,8 @@ export default function App() {
         onAddExampleFraming={addTourExampleFraming}
         onOpenImmersive={openTourImmersive}
         onStepEnter={onTourStepEnter}
+        onPhoneOpenSpots={onPhoneOpenSpots}
+        onPhoneOpenFramings={onPhoneOpenFramings}
       />
 
       <OnboardingImmersiveTour

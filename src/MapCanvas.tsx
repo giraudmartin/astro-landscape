@@ -49,7 +49,10 @@ import { MapControlsStack } from './MapControlsStack'
 import { MapSettingsPanel } from './MapSettingsPanel'
 import { OnboardingIntroHost } from './onboarding'
 import { TOUR_DEMO_SPOT } from './onboarding/tourDemoSpot'
-import { TOUR_FLY_TO_DEMO_EVENT } from './onboarding/tourEvents'
+import {
+  TOUR_CLEAR_MAP_FRAME_EVENT,
+  TOUR_FLY_TO_DEMO_EVENT,
+} from './onboarding/tourEvents'
 import {
   filterMapVisiblePersonalSpots,
   fitPersonalSpots,
@@ -82,6 +85,43 @@ setWorkerUrl(maplibreWorkerUrl)
 
 /** Drop a previous in-flight settle when a new fly starts (avoids stacked polls). */
 let cancelActiveGroundSkySettle: (() => void) | null = null
+
+/**
+ * Phone tour: bottom padding so MapLibre centers in the free band between the
+ * top of the canvas and the top of the coach card (= 50% of that band).
+ * One camera call with this padding — no chase offset / second ease.
+ */
+function tourPhoneCardBottomPadding(map: Map): number {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 0
+  if (!window.matchMedia('(max-width: 700px)').matches) return 0
+  if (!document.querySelector('.onboarding-tour-root')) return 0
+
+  const canvas = map.getCanvas()
+  const mapRect = canvas.getBoundingClientRect()
+  const card = document.querySelector<HTMLElement>('.onboarding-tour__card')
+  const cardRect = card?.getBoundingClientRect()
+  if (!cardRect || cardRect.height < 40) return 0
+
+  return Math.max(0, Math.round(mapRect.bottom - cardRect.top))
+}
+
+function tourPhonePaddingOptions(map: Map): {
+  top: number
+  bottom: number
+  left: number
+  right: number
+} {
+  return {
+    top: 0,
+    bottom: tourPhoneCardBottomPadding(map),
+    left: 0,
+    right: 0,
+  }
+}
+
+function clearTourPhonePadding(map: Map): void {
+  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+}
 
 /**
  * After globe→spot flyTo, apply night dim once the camera is in ground framing.
@@ -862,6 +902,7 @@ export function MapCanvas({
       // oceans (black void, looks like no camera move then a pop-in).
       cancelActiveGroundSkySettle?.()
       map.stop()
+      const tourPad = tourPhonePaddingOptions(map)
       map.flyTo({
         center: [saved.lon, saved.lat],
         zoom: targetZoom,
@@ -870,6 +911,7 @@ export function MapCanvas({
         essential: true,
         duration: 1800,
         curve: 1.42,
+        padding: tourPad,
       })
 
       settleGroundSkyAfterFly(map, Math.min(targetZoom - 0.5, 10), () => {
@@ -897,7 +939,10 @@ export function MapCanvas({
       fitPersonalSpots(map, spots)
     }
 
-    /** Tour: fly to Mirador without placing a pin (place step comes next). */
+    /**
+     * Tour: one camera move to Mirador, framed with bottom padding = card stack
+     * so the pin lands at 50% of (screen top → card top). No second chase ease.
+     */
     const flyToTourDemo = () => {
       onModeChangeRef.current('orbit')
       if (!threeDimensionalRef.current) {
@@ -911,11 +956,34 @@ export function MapCanvas({
         lon: TOUR_DEMO_SPOT.lon,
         elevM: TOUR_DEMO_SPOT.heightM,
       }
+
+      const padding = tourPhonePaddingOptions(map)
+      const here = map.getCenter()
+      const alreadyThere =
+        Math.abs(here.lng - TOUR_DEMO_SPOT.lon) < 0.003 &&
+        Math.abs(here.lat - TOUR_DEMO_SPOT.lat) < 0.003 &&
+        Math.abs(map.getZoom() - TOUR_DEMO_SPOT.zoom) < 1.25
+
+      map.stop()
+      if (alreadyThere) {
+        map.easeTo({
+          center: [TOUR_DEMO_SPOT.lon, TOUR_DEMO_SPOT.lat],
+          zoom: TOUR_DEMO_SPOT.zoom,
+          pitch,
+          bearing: TOUR_DEMO_SPOT.bearingDeg,
+          padding,
+          duration: 320,
+          essential: true,
+        })
+        return
+      }
+
       map.flyTo({
         center: [TOUR_DEMO_SPOT.lon, TOUR_DEMO_SPOT.lat],
         zoom: TOUR_DEMO_SPOT.zoom,
         pitch,
         bearing: TOUR_DEMO_SPOT.bearingDeg,
+        padding,
         essential: true,
         duration: 1600,
       })
@@ -1522,8 +1590,16 @@ export function MapCanvas({
     const onTourFly = () => {
       apiRef.current?.flyToTourDemo()
     }
+    const onTourClearFrame = () => {
+      const map = mapRef.current
+      if (map) clearTourPhonePadding(map)
+    }
     window.addEventListener(TOUR_FLY_TO_DEMO_EVENT, onTourFly)
-    return () => window.removeEventListener(TOUR_FLY_TO_DEMO_EVENT, onTourFly)
+    window.addEventListener(TOUR_CLEAR_MAP_FRAME_EVENT, onTourClearFrame)
+    return () => {
+      window.removeEventListener(TOUR_FLY_TO_DEMO_EVENT, onTourFly)
+      window.removeEventListener(TOUR_CLEAR_MAP_FRAME_EVENT, onTourClearFrame)
+    }
   }, [])
 
   useEffect(() => {

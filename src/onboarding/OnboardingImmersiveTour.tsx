@@ -34,7 +34,7 @@ type HoleRect = {
 const PAD = 8
 const MARGIN = 16
 const GAP = 12
-const SCRIM = 'rgba(2, 6, 7, 0.42)'
+const SCRIM = 'rgba(2, 6, 7, 0.28)'
 
 const ROUND_ANCHORS: ReadonlySet<ImmersiveTourAnchor> = new Set([
   'immersive-save',

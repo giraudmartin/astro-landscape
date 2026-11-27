@@ -13,7 +13,7 @@
  */
 
 /** Bump when the composite shader changes so ImmersiveView remounts the pass. */
-export const LOCAL_HALO_PASS_REV = 55
+export const LOCAL_HALO_PASS_REV = 56
 import * as THREE from 'three'
 import { EARTH_RADIUS_M } from '../../globeConstants'
 import { stelModeUniform } from '../../stelProjector'
@@ -235,9 +235,12 @@ float cloudLayer(vec3 p, int k) {
     float threshold = mix(0.78, 0.18, layer.z);
     if (k == 1) {
       // A broad footprint feeds several rising lobes above a common cloud base.
-      vec2 footprint = (xy + 2.4 * warp) * 0.046;
-      float core = texture(uNoise, vec3(footprint, 0.42 + h * 0.09)).g;
-      vec3 lobePos = vec3(footprint * 2.65, 0.31 + h * 0.16);
+      // An oblique slice through the volume avoids repeating the same row of cells.
+      vec2 footprint = (xy + 8.0 * warp) * 0.046;
+      vec3 bankPos = vec3(0.86, 0.48, 0.17) * footprint.x
+                   + vec3(-0.39, 0.83, -0.40) * footprint.y;
+      float core = texture(uNoise, bankPos + vec3(0.0, 0.0, 0.42 + h * 0.09)).g;
+      vec3 lobePos = bankPos.yzx * 2.65 + vec3(0.19, 0.37, 0.31 + h * 0.16);
       float lobes = texture(uNoise, lobePos).g;
       float surface = 0.44 * core + 0.23 * envelope + 0.33 * lobes;
       // Strong updrafts fill the slab vertically; their flanks taper sooner.
@@ -251,7 +254,8 @@ float cloudLayer(vec3 p, int k) {
       float humidity = texture(uNoise, vec3(xy * 0.0013 + warp * 0.018, 0.63)).r;
       float dry = 1.0 - smoothstep(0.25, 0.72, humidity);
       float base = 0.04 + 0.22 * dry + 0.14 * (1.0 - lobes) * (1.0 - core);
-      surface -= dry * 0.13 * (1.0 - layer.z);
+      // Cluster neighbouring cumulus in humid patches and open wider clearings between them.
+      surface += (0.10 - 0.33 * dry) * (1.0 - layer.z);
       return smoothstep(base, base + 0.13, h) * (1.0 - smoothstep(0.90, 1.0, h))
         * smoothstep(threshold - 0.14, threshold + 0.10, surface) * layer.w;
     }

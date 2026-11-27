@@ -14,7 +14,6 @@ import {
   FrameModeLibreIcon,
   FrameModePanoIcon,
   FrameModePhotoIcon,
-  SettingsSlidersIcon,
   TimelapseIcon,
 } from './psIcons'
 import type { CelestialObject } from './celestialObjects'
@@ -73,7 +72,7 @@ type ViewfinderCaptureCapsuleProps = {
 
 /**
  * Horizontal capture capsule (validated « Icônes + texte » layout):
- * LED · camera summary · Libre/Photo/Pano · pano settings · Timelapse.
+ * LED · camera summary · Libre/Photo/Pano · Timelapse.
  */
 export function ViewfinderCaptureCapsule({
   focalMm,
@@ -338,25 +337,6 @@ export function ViewfinderCaptureCapsule({
                   )
                 })}
               </div>
-
-              {/* Desktop only — on phone, tapping Pano already opens the settings card. */}
-              {!compact && frameMode === 'pano' ? (
-                <button
-                  type="button"
-                  className={
-                    settingsPanel === 'pano'
-                      ? 'vf-capture-capsule__icon-btn is-active'
-                      : 'vf-capture-capsule__icon-btn'
-                  }
-                  aria-expanded={settingsPanel === 'pano'}
-                  aria-haspopup="dialog"
-                  title={t('viewfinder.capture.panoSettings')}
-                  aria-label={t('viewfinder.capture.panoSettings')}
-                  onClick={() => toggleSettings('pano')}
-                >
-                  <SettingsSlidersIcon size={16} />
-                </button>
-              ) : null}
             </div>
 
             <div className="vf-capture-capsule__divider" aria-hidden="true" />

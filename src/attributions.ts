@@ -48,6 +48,13 @@ export const APP_ATTRIBUTIONS: readonly AttributionEntry[] = [
     url: 'https://blackmarble.gsfc.nasa.gov/',
   },
   {
+    id: 'nasa-milky-way',
+    nameKey: 'settings.attr.milkyWay',
+    credit:
+      'Immersive Milky Way backdrop based on NASA SVS #4851 (All-Sky Milky Way Mosaic / Gaia + MSS). Enhanced with additional nebulae from Martin Giraud photographs. NASA Earth science data — attribute NASA; do not imply NASA endorsement.',
+    url: 'https://svs.gsfc.nasa.gov/4851/',
+  },
+  {
     id: 'mapterhorn',
     nameKey: 'settings.attr.mapterhorn',
     credit: 'Terrain DEM tiles © Mapterhorn.',

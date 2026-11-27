@@ -78,11 +78,7 @@ import {
   clampStarMagDepth,
   clampStarZoomSpan,
 } from './starRevealSettings'
-import {
-  createNightSky,
-  DEFAULT_MILKY_WAY_TILE_VARIANT,
-  type MilkyWayTileVariant,
-} from './nightSky'
+import { createNightSky } from './nightSky'
 import {
   DEFAULT_MILKY_WAY_NEB_LOOK,
   normalizeMilkyWayNebLook,
@@ -537,8 +533,6 @@ export function ImmersiveView({
   const [pointerHeld, setPointerHeld] = useState(emptyMoveHeld)
   const moveRepeatRef = useRef<Partial<Record<MoveDir, number>>>({})
   const [showMilkyWay, setShowMilkyWay] = useState(savedImmersive.showMilkyWay)
-  const [milkyWayTileVariant, setMilkyWayTileVariant] =
-    useState<MilkyWayTileVariant>(DEFAULT_MILKY_WAY_TILE_VARIANT)
   const [milkyWayNebLook, setMilkyWayNebLook] = useState<MilkyWayNebLook>(
     DEFAULT_MILKY_WAY_NEB_LOOK,
   )
@@ -721,7 +715,6 @@ export function ImmersiveView({
 
   const skyTogglesRef = useRef({
     showMilkyWay: savedImmersive.showMilkyWay,
-    milkyWayTileVariant: DEFAULT_MILKY_WAY_TILE_VARIANT as MilkyWayTileVariant,
     milkyWayNebLook: DEFAULT_MILKY_WAY_NEB_LOOK,
     showHalpha: savedImmersive.showHalpha,
     atmosphereAmount: clampAtmosphereAmount(savedImmersive.atmosphereAmount),
@@ -740,7 +733,6 @@ export function ImmersiveView({
   })
   skyTogglesRef.current = {
     showMilkyWay,
-    milkyWayTileVariant,
     milkyWayNebLook,
     showHalpha,
     atmosphereAmount,
@@ -2276,7 +2268,6 @@ export function ImmersiveView({
         sunAltitudeDeg: latestSunAltDeg,
         camera,
         showMilkyWay: skyToggles.showMilkyWay,
-        milkyWayTileVariant: skyToggles.milkyWayTileVariant,
         milkyWayNebLook: skyToggles.milkyWayNebLook,
         showHalpha: skyToggles.showHalpha,
         atmosphereAmount: skyToggles.atmosphereAmount,
@@ -3007,34 +2998,6 @@ export function ImmersiveView({
             onClick={() => setShowMilkyWay((v) => !v)}
           >
             <MilkyWayIcon />
-          </button>
-          <button
-            type="button"
-            className={
-              showMilkyWay
-                ? 'moon-preview-hud-tool is-active'
-                : 'moon-preview-hud-tool'
-            }
-            aria-pressed={milkyWayTileVariant === 'milkyway-neb'}
-            title={t('immersive.layer.milkyWayCompareTitle')}
-            aria-label={t('immersive.layer.milkyWayCompareAria', {
-              source:
-                milkyWayTileVariant === 'milkyway-neb'
-                  ? t('immersive.layer.milkyWayNeb')
-                  : t('immersive.layer.milkyWayNasa'),
-            })}
-            onClick={() => {
-              setMilkyWayTileVariant((v) =>
-                v === 'milkyway-neb' ? 'milkyway' : 'milkyway-neb',
-              )
-              setShowMilkyWay(true)
-            }}
-          >
-            <span className="moon-preview-hud-tool__halpha">
-              {milkyWayTileVariant === 'milkyway-neb'
-                ? t('immersive.layer.milkyWayNeb')
-                : t('immersive.layer.milkyWayNasa')}
-            </span>
           </button>
           <button
             type="button"

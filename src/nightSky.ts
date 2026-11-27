@@ -17,12 +17,6 @@ import {
   type MilkyWayNebLook,
 } from './milkyWayNebLook'
 
-/** Shipping NASA tiles vs enhanced nebulae rebuild (A/B). */
-export type MilkyWayTileVariant = Extract<
-  NasaSkyTileLayerId,
-  'milkyway' | 'milkyway-neb'
->
-
 /**
  * With atmosphere: keep the translucent glow in the sky (not a solid sheet).
  * Bumped slightly vs the old 0.34 / 5 so the band is less washed out.
@@ -32,25 +26,14 @@ export const MILKY_WAY_DOME_OPACITY = 0.72
 /** Atmosphere off: stronger read on a black sky. */
 export const MILKY_WAY_DOME_OPACITY_NO_ATMO = 0.96
 export const MILKY_WAY_EXPOSURE_NO_ATMO = 10
-/** @deprecated Prefer milkyWayNebLook.exposure from the temp grade card. */
+/** @deprecated Prefer milkyWayNebLook.exposure from the VL settings card. */
 export const MILKY_WAY_EXPOSURE_NEB = DEFAULT_MILKY_WAY_NEB_LOOK.exposure
 export const MILKY_WAY_EXPOSURE_NEB_NO_ATMO =
   DEFAULT_MILKY_WAY_NEB_LOOK.exposure * MILKY_WAY_NEB_EXPOSURE_NO_ATMO_RATIO
 export const HALPHA_GAIN = 2.4
 export const HALPHA_TEXTURE_URL = '/sky/halpha_j2000.webp?v=5'
-/** When true, Néb. reuses NASA tiles (A/B plumbing only). Keep false for custom. */
-export const MILKY_WAY_NEB_ALIAS_NASA_TILES = false
-/** Open on the custom enhanced VL. */
-export const DEFAULT_MILKY_WAY_TILE_VARIANT: MilkyWayTileVariant = 'milkyway-neb'
-
-function tileFolderForVariant(
-  variant: MilkyWayTileVariant,
-): NasaSkyTileLayerId {
-  if (variant === 'milkyway-neb' && MILKY_WAY_NEB_ALIAS_NASA_TILES) {
-    return 'milkyway'
-  }
-  return variant
-}
+/** Shipping immersive MW tile layer (NASA SVS #4851 + photo nebulae). */
+export const MILKY_WAY_TILE_LAYER: NasaSkyTileLayerId = 'milkyway'
 
 /**
  * Astronomy Engine J2000 → Three local (X=east, Y=up, Z=south).
@@ -129,9 +112,7 @@ export type NightSkyHandle = {
     sunAltitudeDeg: number
     camera: THREE.PerspectiveCamera
     showMilkyWay?: boolean
-    /** Which MW tile folder to show (`milkyway` vs `milkyway-neb`). */
-    milkyWayTileVariant?: MilkyWayTileVariant
-    /** Temporary grade for `milkyway-neb` only. */
+    /** Session grade from the VL settings card. */
     milkyWayNebLook?: MilkyWayNebLook
     showHalpha?: boolean
     /** Rayleigh amount 0…1 (legacy: showAtmosphere true/false). */
@@ -343,7 +324,7 @@ export function createNightSky(opts?: {
       blending: THREE.NormalBlending,
       transparent: true,
       depthTest: true,
-      cacheTag: folder === 'milkyway' ? 'nasa-v1' : 'neb-v8-custom',
+      cacheTag: 'milky-v12-exr',
       configureMaterial: milkyShaderHook,
     })
     if (!milkyWayTiles) {
@@ -403,24 +384,12 @@ export function createNightSky(opts?: {
   void loadNasaSkyTilesManifest().then((manifest) => {
     if (disposed || !manifest) return
     milkyManifest = manifest
-    remountMilkyFolder(tileFolderForVariant(DEFAULT_MILKY_WAY_TILE_VARIANT))
+    remountMilkyFolder(MILKY_WAY_TILE_LAYER)
   })
 
   root.traverse((obj) => {
     obj.frustumCulled = false
   })
-
-  // Temporary QA probe for the custom VL A/B (remove after lock-in).
-  ;(window as unknown as { __astroMilkyDebug?: () => unknown }).__astroMilkyDebug =
-    () => ({
-      disposed,
-      milkyReady,
-      milkyFolderMounted,
-      hasHandle: !!milkyWayTiles,
-      manifestLayers: milkyManifest ? Object.keys(milkyManifest.layers) : null,
-      aliasNasa: MILKY_WAY_NEB_ALIAS_NASA_TILES,
-      defaultVariant: DEFAULT_MILKY_WAY_TILE_VARIANT,
-    })
 
   return {
     root,
@@ -433,7 +402,6 @@ export function createNightSky(opts?: {
       sunAltitudeDeg,
       camera,
       showMilkyWay = true,
-      milkyWayTileVariant = DEFAULT_MILKY_WAY_TILE_VARIANT,
       milkyWayNebLook = DEFAULT_MILKY_WAY_NEB_LOOK,
       showHalpha = false,
       showAtmosphere = true,
@@ -540,30 +508,23 @@ export function createNightSky(opts?: {
 
       milkyWayAmountUniform.value = showMilkyWay ? 1 : 0
       halphaAmountUniform.value = showHalpha && halphaTexture ? 1 : 0
-      const useNeb = milkyWayTileVariant === 'milkyway-neb'
-      const wantFolder = tileFolderForVariant(milkyWayTileVariant)
-      if (milkyManifest) remountMilkyFolder(wantFolder)
-      // At defaults, use the exact NASA exposure path so A/B only differs by tiles.
+      if (milkyManifest) remountMilkyFolder(MILKY_WAY_TILE_LAYER)
       const nebExp = milkyWayNebLook.exposure
-      const expNoAtmo = useNeb
-        ? Math.abs(nebExp - MILKY_WAY_EXPOSURE) < 0.05
+      const expNoAtmo =
+        Math.abs(nebExp - MILKY_WAY_EXPOSURE) < 0.05
           ? MILKY_WAY_EXPOSURE_NO_ATMO
           : nebExp * MILKY_WAY_NEB_EXPOSURE_NO_ATMO_RATIO
-        : MILKY_WAY_EXPOSURE_NO_ATMO
-      const expAtmo = useNeb
-        ? Math.abs(nebExp - MILKY_WAY_EXPOSURE) < 0.05
+      const expAtmo =
+        Math.abs(nebExp - MILKY_WAY_EXPOSURE) < 0.05
           ? MILKY_WAY_EXPOSURE
           : nebExp
-        : MILKY_WAY_EXPOSURE
       exposureUniform.value = THREE.MathUtils.lerp(expNoAtmo, expAtmo, atmoAmt)
       const gradeLive =
-        useNeb &&
-        (Math.abs(milkyWayNebLook.brightness - 1) > 0.001 ||
-          Math.abs(milkyWayNebLook.contrast - 1) > 0.001 ||
-          Math.abs(milkyWayNebLook.saturation - 1) > 0.001)
+        Math.abs(milkyWayNebLook.brightness - 1) > 0.001 ||
+        Math.abs(milkyWayNebLook.saturation - 1) > 0.001
       mwGradeOnUniform.value = gradeLive ? 1 : 0
       mwBrightnessUniform.value = gradeLive ? milkyWayNebLook.brightness : 1
-      mwContrastUniform.value = gradeLive ? milkyWayNebLook.contrast : 1
+      mwContrastUniform.value = 1
       mwSaturationUniform.value = gradeLive ? milkyWayNebLook.saturation : 1
 
       if (milkyWayTiles && milkyReady) {

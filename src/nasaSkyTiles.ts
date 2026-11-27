@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js'
 
-export type NasaSkyTileLayerId = 'milkyway' | 'milkyway-neb' | 'hiptyc'
+export type NasaSkyTileLayerId = 'milkyway' | 'hiptyc'
 
 export type NasaSkyTilesManifest = {
   version: number
@@ -182,7 +182,11 @@ export function tileLoadPriority(
 
 function configureTileTexture(texture: THREE.Texture): void {
   texture.colorSpace = THREE.LinearSRGBColorSpace
-  texture.wrapS = THREE.RepeatWrapping
+  // Clamp (not Repeat): bilinear at u/v=0|1 must not sample the opposite
+  // edge of the *same* tile — that draws the curved “couture” seams.
+  texture.wrapS = THREE.ClampToEdgeWrapping
+  texture.wrapT = THREE.ClampToEdgeWrapping
+  // Mirror RA (NASA tile content) without wrapping across the seam.
   texture.repeat.x = -1
   texture.offset.x = 1
   texture.generateMipmaps = false
@@ -191,11 +195,27 @@ function configureTileTexture(texture: THREE.Texture): void {
   texture.needsUpdate = true
 }
 
+/** Keep bilinear filters inside the tile so neighboring patches don't gap. */
+export function insetTileUVs(
+  geometry: THREE.BufferGeometry,
+  texSize: number,
+): void {
+  const uv = geometry.getAttribute('uv')
+  if (!uv || texSize <= 1) return
+  const inset = 0.5 / texSize
+  const span = 1 - 2 * inset
+  for (let i = 0; i < uv.count; i++) {
+    uv.setXY(i, inset + uv.getX(i) * span, inset + uv.getY(i) * span)
+  }
+  uv.needsUpdate = true
+}
+
 function createTileMesh(input: {
   radius: number
   z: number
   imageX: number
   y: number
+  tileSize: number
   material: THREE.MeshBasicMaterial
 }): THREE.Mesh {
   const { cols, rows } = gridForZ(input.z)
@@ -215,6 +235,7 @@ function createTileMesh(input: {
     v0 * Math.PI,
     (v1 - v0) * Math.PI,
   )
+  insetTileUVs(geometry, input.tileSize)
   const mesh = new THREE.Mesh(geometry, input.material)
   mesh.frustumCulled = false
   return mesh
@@ -352,6 +373,7 @@ export function createNasaSkyTileLayer(input: {
             z: next.z,
             imageX: next.x,
             y: next.y,
+            tileSize: meta.tileSize || input.manifest.tileSize || 1024,
             material,
           })
           mesh.name = `tile:${next.key}`

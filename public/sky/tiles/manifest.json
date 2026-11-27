@@ -7,21 +7,13 @@
   "layers": {
     "milkyway": {
       "layer": "milkyway",
-      "source": "milkyway_2020_32k.exr",
+      "source": "milkyway_2020_32k_enhanced.exr",
       "width": 32768,
       "height": 16384,
       "tileSize": 1024,
       "maxZ": 1,
-      "minZ": 0
-    },
-    "milkyway-neb": {
-      "layer": "milkyway-neb",
-      "source": "NASA_VL_ENHANCED.tif",
-      "width": 32768,
-      "height": 16384,
-      "tileSize": 1024,
-      "maxZ": 1,
-      "minZ": 0
+      "minZ": 0,
+      "note": "NASA SVS #4851 base + Martin Giraud photo nebulae"
     }
   }
 }

@@ -37,6 +37,13 @@ Celestial catalog build notes: `public/catalogs/ATTRIBUTION.md`.
 - **Terms**: NASA Earth science data — open for commercial use with attribution; do **not** imply NASA endorsement.
 - **Fallback**: If the COG is missing, Bortle is estimated from live Black Marble tiles.
 
+## NASA SVS #4851 Milky Way (+ photo nebulae)
+
+- **What**: Immersive night-sky Milky Way tile set (`public/sky/tiles/milkyway`).
+- **Base**: [NASA SVS #4851](https://svs.gsfc.nasa.gov/4851/) All-Sky Milky Way Mosaic (Gaia + MSS), equirect J2000.
+- **Enhancement**: Additional nebulae composited from Martin Giraud photographs onto the NASA linear HDR master.
+- **Terms**: NASA Earth science data — attribute NASA; do **not** imply NASA endorsement.
+
 ## Mapterhorn
 
 - Terrain DEM tiles — see [Mapterhorn attribution](https://mapterhorn.com/attribution).

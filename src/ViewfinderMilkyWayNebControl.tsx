@@ -2,14 +2,11 @@ import { useRef, useState, type RefObject } from 'react'
 import { useT } from './i18n'
 import {
   clampMilkyWayNebBrightness,
-  clampMilkyWayNebContrast,
   clampMilkyWayNebExposure,
   clampMilkyWayNebSaturation,
   DEFAULT_MILKY_WAY_NEB_LOOK,
   MILKY_WAY_NEB_BRIGHTNESS_MAX,
   MILKY_WAY_NEB_BRIGHTNESS_MIN,
-  MILKY_WAY_NEB_CONTRAST_MAX,
-  MILKY_WAY_NEB_CONTRAST_MIN,
   MILKY_WAY_NEB_EXPOSURE_MAX,
   MILKY_WAY_NEB_EXPOSURE_MIN,
   MILKY_WAY_NEB_SATURATION_MAX,
@@ -32,7 +29,7 @@ const FLOAT_POS_STORAGE_KEY = 'vf-milkyway-neb-panel-float-pos'
 const DEFAULT_FLOAT_POS = { x: 24, y: 120 }
 
 /**
- * Temporary A/B grade card for enhanced milky-way tiles.
+ * Scene settings card for the shipping milky-way grade.
  */
 export function ViewfinderMilkyWayNebControl({
   look,
@@ -169,37 +166,6 @@ export function ViewfinderMilkyWayNebControl({
 
             <label className="vf-landscape-menu__field">
               <span className="vf-landscape-menu__label">
-                <span>{t('viewfinder.milkyWayNeb.contrast')}</span>
-                <span className="vf-landscape-menu__value">
-                  {look.contrast.toFixed(2)}
-                </span>
-              </span>
-              <input
-                type="range"
-                className="vf-landscape-menu__range"
-                min={MILKY_WAY_NEB_CONTRAST_MIN}
-                max={MILKY_WAY_NEB_CONTRAST_MAX}
-                step={0.05}
-                value={look.contrast}
-                style={rangeProgressStyle(
-                  look.contrast,
-                  MILKY_WAY_NEB_CONTRAST_MIN,
-                  MILKY_WAY_NEB_CONTRAST_MAX,
-                )}
-                aria-label={t('viewfinder.milkyWayNeb.contrastAria')}
-                title={t('viewfinder.milkyWayNeb.contrastTip')}
-                onChange={(event) =>
-                  onChange({
-                    contrast: clampMilkyWayNebContrast(
-                      Number(event.target.value),
-                    ),
-                  })
-                }
-              />
-            </label>
-
-            <label className="vf-landscape-menu__field">
-              <span className="vf-landscape-menu__label">
                 <span>{t('viewfinder.milkyWayNeb.saturation')}</span>
                 <span className="vf-landscape-menu__value">
                   {look.saturation.toFixed(2)}
@@ -240,7 +206,6 @@ export function ViewfinderMilkyWayNebControl({
               {t('viewfinder.milkyWayNeb.defaults', {
                 exposure: DEFAULT_MILKY_WAY_NEB_LOOK.exposure.toFixed(2),
                 brightness: DEFAULT_MILKY_WAY_NEB_LOOK.brightness.toFixed(2),
-                contrast: DEFAULT_MILKY_WAY_NEB_LOOK.contrast.toFixed(2),
                 saturation: DEFAULT_MILKY_WAY_NEB_LOOK.saturation.toFixed(2),
               })}
             </p>

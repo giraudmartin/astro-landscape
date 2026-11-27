@@ -24,7 +24,7 @@ import OpenEXR
 import tifffile
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUT = ROOT / "public" / "sky" / "tiles" / "milkyway-neb"
+DEFAULT_OUT = ROOT / "public" / "sky" / "tiles" / "milkyway"
 DEFAULT_MANIFEST = ROOT / "public" / "sky" / "tiles" / "manifest.json"
 TILE_SIZE = 1024
 
@@ -161,7 +161,7 @@ def main() -> None:
     default=DEFAULT_OUT,
     help=f"tile root (default {DEFAULT_OUT})",
   )
-  parser.add_argument("--layer", default="milkyway-neb")
+  parser.add_argument("--layer", default="milkyway")
   parser.add_argument("--max-z", type=int, default=1)
   parser.add_argument(
     "--scale",

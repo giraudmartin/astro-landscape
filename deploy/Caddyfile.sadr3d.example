@@ -5,6 +5,8 @@
 #   sudo systemctl reload caddy
 #
 # DNS (registrar):
+#   sadr3d.com          A     51.75.124.117   # apex → VPS (leave parking IP and redirect breaks)
+#   www.sadr3d.com      A     51.75.124.117   # optional; same redirect block
 #   horizon.sadr3d.com  A     51.75.124.117
 #   sphere.sadr3d.com   A     51.75.124.117
 #   (optional) AAAA → 2001:41d0:305:2100::1:9b44
@@ -19,6 +21,12 @@
 #   /assets/*      → immutable year (Vite content hashes in filenames)
 #   sky/models/…   → 1 day + must-revalidate (fixed URLs, rarely change)
 #   COG            → 30 days (replaced rarely; Range requests still work)
+
+# Temporary apex / www → Sphere until a real sadr3d.com home exists.
+# Preserve path + query; permanent (301) so browsers / Search Console cache it.
+sadr3d.com, www.sadr3d.com {
+	redir https://sphere.sadr3d.com{uri} permanent
+}
 
 horizon.sadr3d.com {
 	encode gzip zstd

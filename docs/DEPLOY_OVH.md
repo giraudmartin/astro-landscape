@@ -75,11 +75,18 @@ sudo systemctl reload caddy
 
 | Name | Type | Value |
 |------|------|--------|
+| `@` (apex `sadr3d.com`) | A | `51.75.124.117` |
+| `www` | A | `51.75.124.117` |
 | `horizon` | A | `51.75.124.117` |
 | `sphere` | A | `51.75.124.117` |
 | (optional) | AAAA | `2001:41d0:305:2100::1:9b44` |
 
 Wait for propagation; Caddy issues HTTPS certificates automatically.
+
+**Apex today:** until a real home page exists, Caddy redirects
+`https://sadr3d.com/` and `https://www.sadr3d.com/` → `https://sphere.sadr3d.com{uri}`
+(301). The apex must point at the VPS (`51.75.124.117`), not OVH parking
+(`213.186.33.5`), or HTTPS and the redirect never hit Caddy.
 
 ### 6. GitHub Actions secrets (Sphere repo)
 

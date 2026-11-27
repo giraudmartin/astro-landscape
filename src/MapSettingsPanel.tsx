@@ -150,8 +150,8 @@ export function MapSettingsPanel() {
     }
   }, [])
 
-  /* Hide bug/settings FABs only while the right stack actually covers them
-     (PL expand on short Mac desktops). Phone FABs live in the drawer. */
+  /* Hide bug/settings FABs on any non-phone width while the right stack
+     actually covers them (PL expand). Phone FABs live in the drawer. */
   useEffect(() => {
     if (isPhone) {
       setRailObscured(false)

@@ -9,7 +9,11 @@ import {
 } from 'react'
 import { useT } from '../i18n'
 import { createSpotActionMarkerElement } from '../spotActionMarker'
-import { OPERATE_PHONE_MQ, useMatchMedia } from '../useMatchMedia'
+import {
+  OPERATE_LAPTOP_MQ,
+  OPERATE_PHONE_MQ,
+  useMatchMedia,
+} from '../useMatchMedia'
 import { requestTourFlyToDemo } from './tourEvents'
 import {
   TOUR_STEPS,
@@ -420,9 +424,16 @@ export function OnboardingTour({
 }: OnboardingTourProps) {
   const t = useT()
   const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
+  /** Compact Mac laptop tour chrome — only 1025–1440. */
+  const isLaptop = useMatchMedia(OPERATE_LAPTOP_MQ)
   const [index, setIndex] = useState(0)
   const [holes, setHoles] = useState<HoleRect[]>([])
-  const [cardBox, setCardBox] = useState({ w: 280, h: 160 })
+  const [cardBox, setCardBox] = useState(() =>
+    typeof window !== 'undefined' &&
+    window.matchMedia(OPERATE_LAPTOP_MQ).matches
+      ? { w: 280, h: 160 }
+      : { w: 360, h: 200 },
+  )
   /** After place / add-framing CTAs, stay on the same card with Continuer. */
   const [placeDone, setPlaceDone] = useState(false)
   const [exampleFramingAdded, setExampleFramingAdded] = useState(false)
@@ -463,8 +474,8 @@ export function OnboardingTour({
     setExampleFramingAdded(false)
   }, [open])
 
-  /** Desktop panels: punch a scroll hole over .map-ui; clicks stay blocked. */
-  const allowMapUiScroll = open && !isPhone && step.id === 'panels'
+  /** Laptop panels: punch a scroll hole over .map-ui; clicks stay blocked. */
+  const allowMapUiScroll = open && isLaptop && step.id === 'panels'
 
   useEffect(() => {
     const root = document.documentElement
@@ -607,9 +618,9 @@ export function OnboardingTour({
         )
       : step.id === 'marker'
         ? t(
-            isPhone
-              ? 'onboarding.tour.steps.marker.body'
-              : 'onboarding.tour.steps.marker.bodyDesktop',
+            isLaptop
+              ? 'onboarding.tour.steps.marker.bodyDesktop'
+              : 'onboarding.tour.steps.marker.body',
           )
         : t(`onboarding.tour.steps.${step.id}.body`)
   const bodyFollow =
@@ -649,29 +660,31 @@ export function OnboardingTour({
     step.id === 'exampleFraming'
   // Ring the toggle only — the open rail is undimmed without a giant frame.
   const ringHoles = isRailStep ? holes.slice(0, 1) : holes
-  // Map-centric steps: bottom-right (pin stays clear). Finale is centered.
+  // Laptop map-centric steps: corner park so the pin stays clear. Finale centered.
   const mapCornerStep =
-    step.id === 'welcome' || step.id === 'place' || step.id === 'marker'
+    isLaptop &&
+    (step.id === 'welcome' || step.id === 'place' || step.id === 'marker')
   const styleCardW =
     isMarkerStep && isPhone
       ? Math.max(cardBox.w, Math.min(328, viewport.w - 48))
-      : isMarkerStep && !isPhone
+      : isMarkerStep && isLaptop
         ? Math.max(cardBox.w, Math.min(300, viewport.w - 48))
-        : step.id === 'done'
+        : isLaptop && step.id === 'done'
           ? Math.max(cardBox.w, Math.min(300, viewport.w - 48))
           : cardBox.w
   const cardStyle =
-    step.id === 'done'
+    isLaptop && step.id === 'done'
       ? parkCenterStyle(styleCardW, cardBox.h)
       : mapCornerStep
         ? parkClearOfMapCenterStyle(null, styleCardW, cardBox.h)
         : cardStyleFor(primaryHole, step, styleCardW, cardBox.h)
   const maskId = 'onboarding-tour-mask'
-  // Desktop marker: live radial on the map → list card (no cropped demo).
+  // Laptop marker: live radial on the map → list card (no cropped demo).
   const cardClass = [
     'onboarding-tour__card',
-    isMarkerStep && isPhone ? 'onboarding-tour__card--wide' : '',
-    isMarkerStep && !isPhone ? 'onboarding-tour__card--marker-list' : '',
+    isLaptop ? 'onboarding-tour__card--laptop' : '',
+    isMarkerStep && (isPhone || !isLaptop) ? 'onboarding-tour__card--wide' : '',
+    isMarkerStep && isLaptop ? 'onboarding-tour__card--marker-list' : '',
     step.id === 'done' ? 'onboarding-tour__card--finale' : '',
   ]
     .filter(Boolean)
@@ -830,12 +843,12 @@ export function OnboardingTour({
         {isMarkerStep ? (
           <div
             className={
-              isPhone
-                ? 'onboarding-tour__marker-layout'
-                : 'onboarding-tour__marker-layout onboarding-tour__marker-layout--list'
+              isLaptop
+                ? 'onboarding-tour__marker-layout onboarding-tour__marker-layout--list'
+                : 'onboarding-tour__marker-layout'
             }
           >
-            {isPhone ? <TourMarkerPanelDemo /> : null}
+            {!isLaptop ? <TourMarkerPanelDemo /> : null}
             <ul className="onboarding-tour__action-list">
               {MARKER_ACTION_IDS.map((id) => (
                 <li key={id} className="onboarding-tour__action-row">

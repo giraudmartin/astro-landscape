@@ -1,5 +1,5 @@
-/* Interactive onboarding tour — coach marks
- * Scale ~0.78 of the original 360px card (width + type + padding together).
+/* Interactive onboarding tour — coach marks.
+ * Compact ~0.78 scale lives under `.onboarding-tour__card--laptop` (1025–1440).
  */
 
 .onboarding-tour-root {
@@ -55,7 +55,7 @@ html.is-tour-scroll-map-ui .map-ui * {
   position: fixed;
   z-index: 86;
   border: 2px solid rgba(var(--ui-accent-rgb), 0.85);
-  border-radius: 11px;
+  border-radius: 14px;
   pointer-events: none;
   box-sizing: border-box;
   transition:
@@ -72,10 +72,10 @@ html.is-tour-scroll-map-ui .map-ui * {
 .onboarding-tour__card {
   position: fixed;
   z-index: 87;
-  width: min(280px, calc(100vw - 32px));
-  padding: 14px 14px 12px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 18px 18px 16px;
   border: 1px solid var(--ui-border-strong);
-  border-radius: 14px;
+  border-radius: var(--r-xl);
   background: rgba(14, 16, 22, 0.94);
   box-shadow: var(--ui-shadow);
   backdrop-filter: blur(16px);
@@ -84,27 +84,27 @@ html.is-tour-scroll-map-ui .map-ui * {
 }
 
 .onboarding-tour__step {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   color: var(--ui-accent);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .onboarding-tour__title {
-  margin: 0 0 6px;
-  font-size: 14px;
+  margin: 0 0 8px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.25;
 }
 
 .onboarding-tour__body {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   color: var(--ui-text-muted);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .onboarding-tour__body--follow {
@@ -112,7 +112,7 @@ html.is-tour-scroll-map-ui .map-ui * {
 }
 
 .onboarding-tour__card--wide {
-  width: min(328px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - 32px));
 }
 
 .onboarding-tour__marker-layout {
@@ -122,7 +122,7 @@ html.is-tour-scroll-map-ui .map-ui * {
   margin: 0 0 2px;
 }
 
-/* Desktop: explanations only — live radial is on the map. */
+/* Laptop: explanations only — live radial is on the map. */
 .onboarding-tour__marker-layout--list {
   margin: 0 0 12px;
 }
@@ -156,11 +156,11 @@ html.is-tour-scroll-map-ui .map-ui * {
   display: grid;
   place-items: center;
   width: 100%;
-  height: 170px;
-  margin: 2px 0 14px;
+  height: 220px;
+  margin: 4px 0 18px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 11px;
+  border-radius: 14px;
   background:
     linear-gradient(
       145deg,
@@ -221,8 +221,8 @@ html.is-tour-scroll-map-ui .map-ui * {
 .onboarding-tour__action-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 0 0 14px;
+  gap: 16px;
+  margin: 0 0 20px;
   padding: 0;
   list-style: none;
 }
@@ -230,15 +230,15 @@ html.is-tour-scroll-map-ui .map-ui * {
 .onboarding-tour__action-row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 14px;
 }
 
 .onboarding-tour__action-icon {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 42px;
+  height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
   background: rgba(17, 19, 26, 0.92);
@@ -246,8 +246,8 @@ html.is-tour-scroll-map-ui .map-ui * {
 }
 
 .onboarding-tour__action-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 
 .onboarding-tour__action-copy {
@@ -255,46 +255,41 @@ html.is-tour-scroll-map-ui .map-ui * {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 3px;
-  padding-top: 2px;
+  gap: 4px;
+  padding-top: 4px;
 }
 
 .onboarding-tour__action-label {
   color: var(--ui-text);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
 }
 
 .onboarding-tour__action-hint {
   color: var(--ui-text-muted);
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .onboarding-tour__actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
-  width: 100%;
 }
 
 .onboarding-tour__skip {
-  margin: 0;
-  padding: 6px 2px;
+  margin-right: auto;
+  padding: 8px 4px;
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
   color: #9caaa6;
   font: inherit;
-  font-size: 10px;
-  line-height: 1.2;
+  font-size: 12px;
   cursor: pointer;
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: nowrap;
 }
 
 .onboarding-tour__skip:hover {
@@ -309,23 +304,19 @@ html.is-tour-scroll-map-ui .map-ui * {
 
 .onboarding-tour__next {
   margin: 0;
-  padding: 8px 12px;
+  padding: 11px 18px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 9px;
   background: var(--ui-accent);
   color: #10271d;
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.25;
   cursor: pointer;
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: nowrap;
 }
 
-.onboarding-tour__card--finale {
-  width: min(300px, calc(100vw - 32px));
+.onboarding-tour__next:hover {
+  background: var(--ui-accent-hover);
 }
 
 .onboarding-tour__card--finale .onboarding-tour__actions {
@@ -333,8 +324,99 @@ html.is-tour-scroll-map-ui .map-ui * {
   align-items: center;
 }
 
-.onboarding-tour__next:hover {
-  background: var(--ui-accent-hover);
+/* Laptop Operate (1025–1440): compact Mac tour chrome (~0.78 of base). */
+.onboarding-tour__card--laptop {
+  width: min(280px, calc(100vw - 32px));
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__step {
+  margin: 0 0 6px;
+  font-size: 9px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__title {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__body {
+  margin: 0 0 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.onboarding-tour__card--laptop.onboarding-tour__card--wide {
+  width: min(328px, calc(100vw - 32px));
+}
+
+.onboarding-tour__card--laptop.onboarding-tour__card--marker-list {
+  width: min(300px, calc(100vw - 48px));
+  max-width: min(300px, calc(100vw - 48px));
+}
+
+.onboarding-tour__card--laptop.onboarding-tour__card--finale {
+  width: min(300px, calc(100vw - 32px));
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__action-list {
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__action-row {
+  gap: 10px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__action-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__action-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__action-copy {
+  gap: 3px;
+  padding-top: 2px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__action-label {
+  font-size: 11px;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__action-hint {
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__actions {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__skip {
+  margin: 0;
+  padding: 6px 2px;
+  font-size: 10px;
+  line-height: 1.2;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.onboarding-tour__card--laptop .onboarding-tour__next {
+  padding: 8px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.25;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -358,33 +440,9 @@ html.is-tour-scroll-map-ui .map-ui * {
   }
 }
 
-@media (min-width: 701px) {
-  .onboarding-tour__card {
-    max-width: min(280px, calc(100vw - 40px));
-  }
-
-  /* Marker list (desktop): a bit wider so hints aren’t crushed. */
-  .onboarding-tour__card--marker-list {
-    width: min(300px, calc(100vw - 48px));
-    max-width: min(300px, calc(100vw - 48px));
-  }
-
-  /* Phone-wide marker demo only. */
-  .onboarding-tour__card--wide {
-    width: min(328px, calc(100vw - 48px));
-    max-width: min(328px, calc(100vw - 48px));
-  }
-
-  .onboarding-tour__marker-layout:not(.onboarding-tour__marker-layout--list) {
-    display: grid;
-    grid-template-columns: minmax(100px, 118px) minmax(0, 1fr);
-    gap: 11px;
-    align-items: start;
-    margin: 2px 0 12px;
-  }
-
-  .onboarding-tour__marker-demo {
-    height: 118px;
-    margin: 0;
+/* Keep in sync with OPERATE_LAPTOP_MQ (1025–1440). */
+@media (max-width: 1440px) and (min-width: 1025px) {
+  .onboarding-tour__ring {
+    border-radius: 11px;
   }
 }

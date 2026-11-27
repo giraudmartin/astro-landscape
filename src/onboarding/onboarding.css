@@ -14,8 +14,8 @@
 
 .onboarding-intro {
   position: relative;
-  width: min(920px, 100%);
-  height: min(520px, calc(100svh - 80px));
+  width: min(1080px, 100%);
+  height: min(610px, calc(100svh - 48px));
   max-height: 100%;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -26,8 +26,8 @@
   outline: none;
 }
 
-/* Desktop: contained dialog with air around it, not a near-fullscreen sheet. */
-@media (min-width: 901px) {
+/* Laptop Operate (1025–1440): contained dialog with air around it. */
+@media (max-width: 1440px) and (min-width: 1025px) {
   .onboarding-intro-backdrop {
     padding: 56px 64px;
   }

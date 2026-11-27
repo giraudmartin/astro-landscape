@@ -27,3 +27,7 @@ export function useMatchMedia(query: string): boolean {
 
 /** Phone band — keep in sync with App.css `@media (max-width: 720px)`. */
 export const OPERATE_PHONE_MQ = '(max-width: 720px)'
+
+/** Laptop Operate band — keep in sync with App.css `@media (max-width: 1440px) and (min-width: 1025px)`. */
+export const OPERATE_LAPTOP_MQ =
+  '(max-width: 1440px) and (min-width: 1025px)'

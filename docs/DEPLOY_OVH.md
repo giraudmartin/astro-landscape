@@ -27,6 +27,8 @@ Caddy maps:
 App default (see `src/lightPollution/cogConfig.ts`):  
 `/light-pollution/viirs-vnl-2024-500m.cog.tif` — same-origin, works locally via `public/light-pollution/` and in prod via Caddy. Optional override: `VITE_LIGHT_POLLUTION_COG_URL` (see `.env.example`).
 
+Bug reports (FormSubmit): deliveries go to `bugs@sadr3d.com` (OVH redirect). The client posts to the opaque form id `APP_BUG_REPORT_FORMSUBMIT_ID` (not the naked email). Each new public origin (e.g. `sphere.sadr3d.com`) needs a one-time FormSubmit “Activate Form” click on first submit.
+
 ## One-shot setup (do once on the VPS)
 
 ### 1. Clone + Node

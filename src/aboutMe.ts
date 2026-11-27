@@ -1,3 +1,5 @@
+import { APP_CONTACT_EMAIL } from './appMeta'
+
 /**
  * Author / product blurb shown in Settings → About.
  * Display text (tagline, paragraphs) lives in the i18n catalogs
@@ -22,6 +24,11 @@ export const APP_ABOUT_PARAGRAPH_KEYS: readonly string[] = [
 
 /** Optional external links (site, Instagram, GitHub…). Leave empty to hide. */
 export const APP_ABOUT_LINKS: readonly AboutLink[] = [
+  {
+    id: 'contact',
+    label: APP_CONTACT_EMAIL,
+    url: `mailto:${APP_CONTACT_EMAIL}`,
+  },
   {
     id: 'instagram',
     label: '@tinmar_g',

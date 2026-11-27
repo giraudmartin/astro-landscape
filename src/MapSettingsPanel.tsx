@@ -379,17 +379,24 @@ export function MapSettingsPanel() {
                         ))}
                         {APP_ABOUT_LINKS.length > 0 ? (
                           <ul className="settings-panel__about-links">
-                            {APP_ABOUT_LINKS.map((link) => (
-                              <li key={link.id}>
-                                <a
-                                  href={link.url}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                >
-                                  {link.label}
-                                </a>
-                              </li>
-                            ))}
+                            {APP_ABOUT_LINKS.map((link) => {
+                              const external = /^https?:/i.test(link.url)
+                              return (
+                                <li key={link.id}>
+                                  <a
+                                    href={link.url}
+                                    {...(external
+                                      ? {
+                                          target: '_blank',
+                                          rel: 'noreferrer noopener',
+                                        }
+                                      : {})}
+                                  >
+                                    {link.label}
+                                  </a>
+                                </li>
+                              )
+                            })}
                           </ul>
                         ) : null}
                         <p className="settings-panel__about-meta">

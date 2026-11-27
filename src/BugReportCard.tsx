@@ -1,21 +1,21 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  BUG_REPORT_MAX_IMAGE_BYTES,
+  BugReportSubmitError,
+  submitBugReport,
+  type BugReportPayload,
+} from './bugReportSubmit'
 import { useT } from './i18n'
 
-export type BugReportPayload = {
-  title: string
-  description: string
-  screenshot: File | null
-}
+export type { BugReportPayload }
 
 type BugReportCardProps = {
   open: boolean
   onClose: () => void
-  /** Wire to email / Formspree / Resend later. Defaults to a no-op stub. */
+  /** Override submit (tests). Defaults to FormSubmit → bugs@sadr3d.com. */
   onSubmit?: (payload: BugReportPayload) => void | Promise<void>
 }
-
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
 function CloseIcon() {
   return (
@@ -40,7 +40,7 @@ function isImageFile(file: File | null | undefined): file is File {
 
 /**
  * Bug report dialog — same glass card language as SpotSaveCard.
- * Submit is stubbed until a mail / feedback endpoint is wired.
+ * Title + description + optional image (FormSubmit, max 10 Mo).
  */
 export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
   const t = useT()
@@ -94,7 +94,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
       setError('settings.bug.errImageType')
       return
     }
-    if (file.size > MAX_IMAGE_BYTES) {
+    if (file.size > BUG_REPORT_MAX_IMAGE_BYTES) {
       setError('settings.bug.errImageSize')
       return
     }
@@ -132,23 +132,16 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
       if (onSubmit) {
         await onSubmit(payload)
       } else {
-        // Stub until mail / Formspree / Resend is connected.
-        console.info('[bug-report]', {
-          title: payload.title,
-          description: payload.description,
-          screenshot: payload.screenshot
-            ? {
-                name: payload.screenshot.name,
-                size: payload.screenshot.size,
-                type: payload.screenshot.type,
-              }
-            : null,
-        })
+        await submitBugReport(payload)
       }
       setSent(true)
       window.setTimeout(() => onClose(), 900)
-    } catch {
-      setError('settings.bug.errSend')
+    } catch (err) {
+      setError(
+        err instanceof BugReportSubmitError && err.code === 'activation'
+          ? 'settings.bug.errActivate'
+          : 'settings.bug.errSend',
+      )
     } finally {
       setSending(false)
     }
@@ -190,9 +183,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
           </header>
 
           <div className="map-card__body">
-            <p className="spot-save-card__intro">
-              {t('settings.bug.intro')}
-            </p>
+            <p className="spot-save-card__intro">{t('settings.bug.intro')}</p>
 
             <label className="spot-save-card__field">
               <span>{t('settings.bug.fieldTitle')}</span>

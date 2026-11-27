@@ -32,7 +32,7 @@ Those services see your IP and the tile/query parameters required for the reques
 
 ## Bug reports
 
-The in-app bug form may collect a title, description, and optional screenshot. Until a submit endpoint is wired, submissions stay on the device (local stub).
+The in-app bug form sends a title, a description and an optional image screenshot (max 10 MB) via [FormSubmit](https://formsubmit.co/) to `bugs@sadr3d.com`. App version, locale, page URL and user-agent are included.
 
 ## Contact
 

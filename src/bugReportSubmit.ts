@@ -21,12 +21,15 @@ const FORMSUBMIT_BASE = 'https://formsubmit.co/'
 export const BUG_REPORT_MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 export class BugReportSubmitError extends Error {
+  readonly code: 'activation' | 'generic'
+
   constructor(
     message: string,
-    readonly code: 'activation' | 'generic' = 'generic',
+    code: 'activation' | 'generic' = 'generic',
   ) {
     super(message)
     this.name = 'BugReportSubmitError'
+    this.code = code
   }
 }
 

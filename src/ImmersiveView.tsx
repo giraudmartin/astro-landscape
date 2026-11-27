@@ -1209,6 +1209,18 @@ export function ImmersiveView({
       | THREE.MeshStandardMaterial
       | null = null
     let latestSkyUtc = skyUtcMs
+    let cachedWeatherSettings: ViewfinderWeather | undefined
+    let cachedWeatherUtc: number | null = null
+    let cachedWeather = weatherSettingsRef.current
+    const weatherAt = (utc: number | null) => {
+      const settings = weatherSettingsRef.current
+      if (settings !== cachedWeatherSettings || utc !== cachedWeatherUtc) {
+        cachedWeather = resolveViewfinderWeatherAt(settings, utc)
+        cachedWeatherSettings = settings
+        cachedWeatherUtc = utc
+      }
+      return cachedWeather
+    }
     let latestSunAltDeg = 0
 
     const localHaloPass = createLocalHaloPass()
@@ -1508,10 +1520,7 @@ export function ImmersiveView({
         sunFill.intensity = sunLight.intensity * 0.85
       }
 
-      const weatherLive = resolveViewfinderWeatherAt(
-        weatherSettingsRef.current,
-        utcMs,
-      )
+      const weatherLive = weatherAt(utcMs)
       // Dim ground only when volumetric clouds actually cover — not merely when
       // the Météo master switch is on (that made ON≠OFF with no visible clouds).
       if (localHaloSourceRef.current !== 'reference' && weatherWantsVolumePass(weatherLive)) {
@@ -2305,10 +2314,7 @@ export function ImmersiveView({
       // Sum whole frame (cubemap = 6 faces + composite).
       renderer.info.autoReset = false
       renderer.info.reset()
-      const weatherLive = resolveViewfinderWeatherAt(
-        weatherSettingsRef.current,
-        latestSkyUtc,
-      )
+      const weatherLive = weatherAt(latestSkyUtc)
       const nowMs = performance.now()
       const weatherDt = Math.min(0.1, (nowMs - weatherLastFrameAt) / 1000)
       weatherLastFrameAt = nowMs
@@ -2756,6 +2762,7 @@ export function ImmersiveView({
 
       <ViewBearingHud
         bearingDeg={yawDeg}
+        weatherEnabled={weatherForPlayhead.enabled}
         altitudeMslM={groundElevationM + eyeHeightM}
         altitudeAriaLabel={t('immersive.altAria', {
           m: Math.round(groundElevationM + eyeHeightM),

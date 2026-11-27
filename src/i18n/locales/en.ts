@@ -1010,6 +1010,7 @@ export const en = {
     weather: {
       title: 'Weather',
       settingsTitle: 'Weather settings',
+      active: 'Weather on',
       clouds: 'Clouds',
       enable: 'Enable',
       enableVolumetric: 'Enable volumetric clouds',

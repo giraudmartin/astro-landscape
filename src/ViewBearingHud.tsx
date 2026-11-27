@@ -10,6 +10,7 @@ type ViewBearingHudProps = {
   /** Lens altitude above mean sea level (DEM ground + eye height). */
   altitudeMslM?: number | null
   altitudeAriaLabel?: string
+  weatherEnabled?: boolean
 }
 
 const PX_PER_DEG = 2.6
@@ -34,6 +35,7 @@ export function ViewBearingHud({
   bearingDeg,
   altitudeMslM = null,
   altitudeAriaLabel,
+  weatherEnabled = false,
 }: ViewBearingHudProps) {
   const t = useT()
   const bearing = normalizeBearingDeg(bearingDeg)
@@ -87,6 +89,14 @@ export function ViewBearingHud({
             · {altitudeText}
           </span>
         ) : null}
+        {weatherEnabled && (
+          <svg className="moon-preview-bearing-tape__weather" width="13" height="13"
+            viewBox="0 4 24 16" fill="none" stroke="currentColor" strokeWidth="1.8"
+            role="img" aria-label={t('viewfinder.weather.active')}>
+              <title>{t('viewfinder.weather.active')}</title>
+              <path d="M6.5 18.5a4.5 4.5 0 0 1-.4-9 6 6 0 0 1 11.6-.6 4.8 4.8 0 0 1-.5 9.6Z" />
+          </svg>
+        )}
       </span>
     </div>
   )

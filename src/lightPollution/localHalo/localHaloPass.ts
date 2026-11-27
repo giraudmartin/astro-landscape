@@ -13,7 +13,7 @@
  */
 
 /** Bump when the composite shader changes so ImmersiveView remounts the pass. */
-export const LOCAL_HALO_PASS_REV = 49
+export const LOCAL_HALO_PASS_REV = 55
 import * as THREE from 'three'
 import { EARTH_RADIUS_M } from '../../globeConstants'
 import { stelModeUniform } from '../../stelProjector'
@@ -233,11 +233,31 @@ float cloudLayer(vec3 p, int k) {
     vec2 local = vec2(dot(vec2(0.95, 0.31), xy), dot(vec2(-0.31, 0.95), xy));
     float envelope = texture(uNoise, vec3(xy * 0.006 + warp * 0.07, 0.38)).r;
     float threshold = mix(0.78, 0.18, layer.z);
-    if (k < 2) {
+    if (k == 1) {
+      // A broad footprint feeds several rising lobes above a common cloud base.
+      vec2 footprint = (xy + 2.4 * warp) * 0.046;
+      float core = texture(uNoise, vec3(footprint, 0.42 + h * 0.09)).g;
+      vec3 lobePos = vec3(footprint * 2.65, 0.31 + h * 0.16);
+      float lobes = texture(uNoise, lobePos).g;
+      float surface = 0.44 * core + 0.23 * envelope + 0.33 * lobes;
+      // Strong updrafts fill the slab vertically; their flanks taper sooner.
+      float updraft = smoothstep(0.40, 0.77, 0.58 * core + 0.42 * lobes);
+      float crownHeight = mix(0.44, 1.0, updraft);
+      surface -= 0.21 * pow(h / crownHeight, 2.0);
+      surface += 0.13 * updraft * smoothstep(0.15, 0.6, h);
+      vec2 detail = texture(uNoise, lobePos * 2.3).rg;
+      surface += 0.12 * (detail.g - 0.5) + 0.035 * (detail.r - 0.5);
+      // Moist regions sustain a lower base; drier gaps lift and fray the bank.
+      float humidity = texture(uNoise, vec3(xy * 0.0013 + warp * 0.018, 0.63)).r;
+      float dry = 1.0 - smoothstep(0.25, 0.72, humidity);
+      float base = 0.04 + 0.22 * dry + 0.14 * (1.0 - lobes) * (1.0 - core);
+      surface -= dry * 0.13 * (1.0 - layer.z);
+      return smoothstep(base, base + 0.13, h) * (1.0 - smoothstep(0.90, 1.0, h))
+        * smoothstep(threshold - 0.14, threshold + 0.10, surface) * layer.w;
+    }
+    if (k == 0) {
       // Rounded updrafts share a condensation level, but reach different tops.
-      // The finer mid-level cells cluster inside the same broad weather envelope.
-      float frequency = k == 0 ? 0.14 : 0.29;
-      vec3 cellPos = vec3((xy + warp * 2.2) * frequency, h * 0.14 + float(k) * 0.37);
+      vec3 cellPos = vec3((xy + warp * 2.2) * 0.14, h * 0.14);
       float turret = texture(uNoise, cellPos).g;
       float smallLobes = texture(uNoise, cellPos * 2.13 + vec3(0.19, 0.33, 0.51)).g;
       float billows = 0.72 * turret + 0.28 * smallLobes;
@@ -403,6 +423,11 @@ void main() {
   }
   if (total > 0.0 && (uHaloAir > 0.0 || uCloudOn > 0.5)) {
     int steps = int(uCloudSteps + 0.5);
+    if (uCloudOn > 0.5 && uHaloAir <= 0.0 && uReference < 0.5) {
+      // Short paths need fewer samples; grazing rays retain the full budget.
+      float metres = total * length(vec3(rd.x, rd.y / uExag, rd.z));
+      steps = int(clamp(ceil(metres / 35.0), 40.0, uCloudSteps));
+    }
     float stride = total / float(steps);
     float strideKm = stride * 0.001 * length(vec3(rd.x, rd.y / uExag, rd.z));
     // A common midpoint keeps adjacent cloud rays coherent at grazing angles.
@@ -430,7 +455,7 @@ void main() {
       }
       // Prototype edge / lighting coefficients — verbatim from chamonix-threejs.html.
       float edge = 1.0 - smoothstep(11.0, 12.0, max(abs(p.x), abs(p.z)));
-      float ill = uHasVolume > 0.5 && max(abs(p.x), abs(p.z)) <= 12.0 ? fieldLight(p) : 0.0;
+      float ill = uHasVolume > 0.5 && uHaloAir > 0.0 && max(abs(p.x), abs(p.z)) <= 12.0 ? fieldLight(p) : 0.0;
       // Air glow ONLY when local halo is enabled — not when clouds alone boost power.
       float air = uHaloAir > 0.0
         ? exp(-max(p.y - uRefAltKm, 0.0) / max(uVertical, 1e-3)) * uHaloAir * uHaze * edge * 0.045
@@ -464,6 +489,13 @@ void main() {
             vec3 sunColor = mix(vec3(1.0, 0.53, 0.28), vec3(1.0, 0.97, 0.90),
                                 smoothstep(0.0, 0.32, uSunDir.y));
             daylight += sunColor * sun * exp(-tau) * (0.50 + 0.55 * silver) * mix(0.28, 1.0, occ.x);
+            // Diffuse skylight reaches the underside even where the direct sun is blocked.
+            float midShare = midDensity / density;
+            vec3 skyFill = vec3(0.28, 0.34, 0.46) * (0.55 + 0.45 * occ.x);
+            daylight += midShare * (skyFill + sunColor * sun * 0.45 * exp(-0.55 * tau));
+            // Aerial perspective softens the dark, closely spaced banks near the horizon.
+            float haze = midShare * (1.0 - exp(-rangeKm / 36.0));
+            daylight = mix(daylight, vec3(0.58, 0.68, 0.83) * (0.45 + 0.55 * sun), haze);
           }
           ambient = mix(ambient, daylight, smoothstep(0.0, 0.65, uDayFactor));
         }
@@ -650,6 +682,7 @@ export function createLocalHaloPass(): LocalHaloPass {
   let groundTex: THREE.DataTexture | null = null
   let current: LocalHaloField | null = null
   let cloudTimeSec = 0
+  let packedWeather: ViewfinderWeather | undefined
 
   const uniforms = {
     uScene: { value: target.texture as THREE.Texture },
@@ -909,12 +942,12 @@ export function createLocalHaloPass(): LocalHaloPass {
         1,
         Math.max(0, clouds.dayFactor ?? 1 - night01),
       )
-      const packed = weatherLayersForShader(clouds.weather)
-      const layers = uniforms.uLayers.value as THREE.Vector4[]
-      layers[0]!.copy(packed[0])
-      layers[1]!.copy(packed[1])
-      layers[2]!.copy(packed[2])
+      if (clouds.weather !== packedWeather) {
+        uniforms.uLayers.value = weatherLayersForShader(clouds.weather)
+        packedWeather = clouds.weather
+      }
     } else {
+      packedWeather = undefined
       uniforms.uSkyLp.value = 0
       uniforms.uDayFactor.value = 0
       const layers = uniforms.uLayers.value as THREE.Vector4[]

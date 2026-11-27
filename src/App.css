@@ -11938,3 +11938,11 @@ button.ov-capsule:hover {
   }
 }
 
+.moon-preview-bearing-tape__weather {
+  height: 1cap;
+  width: auto;
+  pointer-events: auto;
+  margin-inline-start: 0.35em;
+  color: #8ee4b6;
+  vertical-align: baseline;
+}

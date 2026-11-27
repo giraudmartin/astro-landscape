@@ -1021,6 +1021,7 @@ export const fr = {
     weather: {
       title: 'Météo',
       settingsTitle: 'Réglages météo',
+      active: 'Météo active',
       clouds: 'Nuages',
       enable: 'Activer',
       enableVolumetric: 'Activer les nuages volumétriques',

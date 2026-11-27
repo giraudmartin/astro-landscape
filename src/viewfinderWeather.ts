@@ -58,7 +58,7 @@ export const WEATHER_LAYER_DEFAULTS = {
     enabled: true,
     cover: 30,
     altKm: 4.6,
-    thickKm: 1.4,
+    thickKm: 2.6,
     densityPct: 70,
   },
   high: {

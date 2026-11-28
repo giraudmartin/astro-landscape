@@ -9,9 +9,16 @@ type MapZoomControlsProps = {
 
 const ZOOM_STEP = 1
 const CLICK_FLASH_MS = 280
+/** Enter aside when in-stack bottom would cross the dock by this much. */
+const ASIDE_ENTER_PX = 8
+/** Leave aside only once the stack clears the dock by this much (hysteresis). */
+const ASIDE_LEAVE_PX = 36
+/** Cluster gap above zoom when it sits under the quick-actions pill. */
+const CLUSTER_GAP_PX = 10
 
 /**
  * Phone-only zoom — compact +/− pill under the map quick-actions cluster.
+ * On short viewports, parks left-center so the right rail clears the timeline.
  */
 export function MapZoomControls({ mapRef }: MapZoomControlsProps) {
   const t = useT()
@@ -19,7 +26,15 @@ export function MapZoomControls({ mapRef }: MapZoomControlsProps) {
   const [canZoomIn, setCanZoomIn] = useState(true)
   const [canZoomOut, setCanZoomOut] = useState(true)
   const [clicked, setClicked] = useState<'in' | 'out' | null>(null)
+  const [aside, setAside] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const asideRef = useRef(false)
+  const inFlowHeightRef = useRef(0)
   const clickTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    asideRef.current = aside
+  }, [aside])
 
   useEffect(() => {
     if (!isPhone) return
@@ -48,6 +63,123 @@ export function MapZoomControls({ mapRef }: MapZoomControlsProps) {
     }
   }, [])
 
+  /* Park +/− left-center when the right stack would sit on the timeline dock. */
+  useEffect(() => {
+    if (!isPhone) {
+      setAside(false)
+      return
+    }
+
+    let rafId = 0
+
+    const dockTop = (): number => {
+      const dock = document.querySelector<HTMLElement>(
+        '.moon-timeline-dock:not(.is-legend-covered), .moon-timeline-dock__collapsed:not(.is-legend-covered)',
+      )
+      if (dock) return dock.getBoundingClientRect().top
+      return (
+        window.innerHeight -
+        (parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            '--mobile-above-dock',
+          ),
+        ) || 162)
+      )
+    }
+
+    const measure = () => {
+      const el = rootRef.current
+      const stack = el?.closest('.map-controls-stack')
+      if (!el || !stack) {
+        setAside(false)
+        return
+      }
+
+      const stackRect = stack.getBoundingClientRect()
+      const zoomRect = el.getBoundingClientRect()
+      if (stackRect.height < 1) {
+        setAside(false)
+        return
+      }
+
+      if (!asideRef.current && zoomRect.height > 1) {
+        inFlowHeightRef.current = zoomRect.height
+      }
+
+      const zoomBlock =
+        (inFlowHeightRef.current || zoomRect.height || 84) + CLUSTER_GAP_PX
+      /* When aside, zoom is out of flow — project the bottom if it were back in the rail. */
+      const projectedBottom = asideRef.current
+        ? stackRect.bottom + zoomBlock
+        : stackRect.bottom
+
+      const limit = dockTop()
+      const overflow = projectedBottom - limit
+      const next = asideRef.current
+        ? overflow > -ASIDE_LEAVE_PX
+        : overflow > ASIDE_ENTER_PX
+
+      if (next !== asideRef.current) {
+        asideRef.current = next
+        setAside(next)
+      }
+    }
+
+    const schedule = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0
+        measure()
+      })
+    }
+
+    measure()
+
+    const stack = rootRef.current?.closest('.map-controls-stack')
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null
+    if (stack) ro?.observe(stack)
+    if (rootRef.current) ro?.observe(rootRef.current)
+
+    let dockObserved: Element | null = null
+    const syncDockObserve = () => {
+      const dock = document.querySelector(
+        '.moon-timeline-dock, .moon-timeline-dock__collapsed',
+      )
+      if (dock === dockObserved) return
+      if (dockObserved) ro?.unobserve(dockObserved)
+      dockObserved = dock
+      if (dock) ro?.observe(dock)
+    }
+    syncDockObserve()
+
+    /* Timeline mount / advanced toggle — avoid a body-wide class observer. */
+    const mo =
+      typeof MutationObserver !== 'undefined'
+        ? new MutationObserver(() => {
+            syncDockObserve()
+            schedule()
+          })
+        : null
+    const app = document.querySelector('.app')
+    if (app) {
+      mo?.observe(app, { childList: true, subtree: true })
+    }
+
+    window.addEventListener('resize', schedule)
+    window.visualViewport?.addEventListener('resize', schedule)
+    window.visualViewport?.addEventListener('scroll', schedule)
+
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId)
+      ro?.disconnect()
+      mo?.disconnect()
+      window.removeEventListener('resize', schedule)
+      window.visualViewport?.removeEventListener('resize', schedule)
+      window.visualViewport?.removeEventListener('scroll', schedule)
+    }
+  }, [isPhone])
+
   if (!isPhone) return null
 
   const flash = (which: 'in' | 'out') => {
@@ -73,7 +205,16 @@ export function MapZoomControls({ mapRef }: MapZoomControlsProps) {
   }
 
   return (
-    <div className="map-zoom-controls" role="group" aria-label={t('map.zoomAria')}>
+    <div
+      ref={rootRef}
+      className={
+        aside
+          ? 'map-zoom-controls map-zoom-controls--aside'
+          : 'map-zoom-controls'
+      }
+      role="group"
+      aria-label={t('map.zoomAria')}
+    >
       <button
         type="button"
         className="map-zoom-controls__btn"

@@ -10243,7 +10243,7 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 }
 
 /* —— App brand (bottom-left) · Settings FABs (bottom-right) —— */
-/* Lockup mirrors onboarding-intro__brand: Sphere + by on one baseline row. */
+/* Lockup: Sphere + version on one row, then by-line, then ©. */
 .app-brand-mark {
   position: absolute;
   z-index: 2;
@@ -10253,7 +10253,7 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 5px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -10277,7 +10277,9 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 }
 
 .app-brand-mark__product,
-.app-brand-mark__by {
+.app-brand-mark__version,
+.app-brand-mark__by,
+.app-brand-mark__meta {
   display: block;
   margin: 0;
   line-height: 1;
@@ -10290,21 +10292,19 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
   letter-spacing: -0.04em;
 }
 
-.app-brand-mark__by {
-  color: var(--ui-text-muted);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0;
-  transform: translateY(-1px);
-}
-
-.app-brand-mark__meta {
-  margin-top: 0;
+.app-brand-mark__version {
   color: rgba(210, 214, 222, 0.52);
   font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.01em;
-  line-height: 1.2;
+}
+
+.app-brand-mark__by,
+.app-brand-mark__meta {
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 /* —— Settings + bug FABs (bottom-right) —— */
@@ -10887,12 +10887,13 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
     font-size: 18px;
   }
 
-  .app-brand-mark__by {
-    font-size: 10px;
+  .app-brand-mark__version {
+    font-size: 9px;
   }
 
+  .app-brand-mark__by,
   .app-brand-mark__meta {
-    font-size: 9px;
+    font-size: 10px;
   }
 
   /* Manual map zoom — sits under search/3D/basemap/location pill. */

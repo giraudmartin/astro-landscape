@@ -10311,20 +10311,20 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
   z-index: 1300;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding: 20px;
   background: rgba(3, 5, 9, 0.52);
   backdrop-filter: blur(7px);
 }
 
-/* Desktop Mac: compact fixed card (phone overrides below fill the screen). */
+/* Desktop / laptop card. Phone (≤720) fills the overlay below. */
 .settings-panel {
-  width: min(520px, calc(100vw - 32px));
-  height: min(400px, calc(100vh - 32px));
+  width: min(720px, calc(100vw - 40px));
+  height: min(560px, calc(100vh - 40px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--ui-border);
-  border-radius: 14px;
+  border-radius: 20px;
   background: #11131a;
   color: var(--ui-text);
   box-shadow: var(--ui-shadow);
@@ -10334,15 +10334,15 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   flex: 0 0 auto;
-  padding: 10px 12px 8px;
+  padding: 16px 16px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .settings-panel__title {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 1rem;
   font-weight: 650;
   letter-spacing: -0.01em;
   color: #f5f5f7;
@@ -10350,8 +10350,8 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 
 .settings-panel__close {
   display: grid;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -10387,23 +10387,23 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 .settings-panel__nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  flex: 0 0 132px;
-  width: 132px;
-  padding: 8px 6px;
+  gap: 4px;
+  flex: 0 0 168px;
+  width: 168px;
+  padding: 12px 10px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.18);
 }
 
 .settings-panel__nav-btn {
   margin: 0;
-  padding: 7px 10px;
+  padding: 10px 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: rgba(255, 255, 255, 0.62);
   font: inherit;
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -10427,12 +10427,12 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 .settings-panel__content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 10px 12px 12px;
+  padding: 14px 16px 18px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
@@ -10458,7 +10458,7 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 .settings-panel__content-title {
   margin: 0;
   flex: 0 0 auto;
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 650;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -10467,39 +10467,39 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 
 .settings-panel__section {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .settings-panel__hint {
   margin: 0;
   color: rgba(255, 255, 255, 0.58);
-  font-size: 0.74rem;
-  line-height: 1.4;
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .settings-panel__lang-label {
   margin: 0;
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   font-weight: 650;
   color: #f5f5f7;
 }
 
 .settings-panel__lang-wrap {
-  width: min(100%, 200px);
+  width: min(100%, 220px);
 }
 
 .settings-panel__lang-wrap .moon-preview-select-trigger {
-  font-size: 0.76rem;
+  font-size: 0.82rem;
 }
 
 .settings-panel__lang-wrap .moon-preview-select-option {
-  font-size: 0.76rem;
+  font-size: 0.82rem;
 }
 
 @media (max-width: 560px) {
   .settings-panel {
-    width: min(100vw - 24px, 520px);
-    height: min(100vh - 24px, 400px);
+    width: min(100vw - 24px, 720px);
+    height: min(100vh - 24px, 560px);
   }
 
   .settings-panel__shell {
@@ -10526,31 +10526,31 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 
 .settings-panel__about-card {
   display: grid;
-  gap: 6px;
-  padding: 10px;
+  gap: 8px;
+  padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
 }
 
 .settings-panel__about-name {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: 0.95rem;
   font-weight: 650;
   color: #f5f5f7;
 }
 
 .settings-panel__about-tagline {
   margin: 0;
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   color: rgba(255, 255, 255, 0.55);
 }
 
 .settings-panel__about {
   margin: 0;
   color: rgba(255, 255, 255, 0.58);
-  font-size: 0.74rem;
-  line-height: 1.4;
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .settings-panel__about-links {
@@ -10583,14 +10583,14 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 
 .settings-panel__credits {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
   padding: 0;
 }
 
 .settings-panel__credit {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   overflow: hidden;
 }
@@ -10599,9 +10599,9 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   margin: 0;
-  padding: 8px 10px;
+  padding: 10px 12px;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -10616,7 +10616,7 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 }
 
 .settings-panel__credit-name {
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   font-weight: 650;
   color: #f5f5f7;
 }
@@ -10647,12 +10647,12 @@ html:has(.onboarding-tour-root) .mobile-top-drawer__tab {
 
 .settings-panel__credit-body {
   display: grid;
-  gap: 5px;
-  padding: 8px 10px 10px;
+  gap: 6px;
+  padding: 10px 12px 12px;
 }
 
 .settings-panel__credit-body span {
-  font-size: 0.7rem;
+  font-size: 0.74rem;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.55);
 }

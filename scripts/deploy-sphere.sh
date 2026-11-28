@@ -16,8 +16,14 @@ echo "==> Sync git"
 git fetch origin "${BRANCH}"
 git reset --hard "origin/${BRANCH}"
 
-echo "==> npm ci"
-npm ci
+echo "==> npm ci (devDeps required for tsc + vite)"
+# VPS / SSH sessions often export NODE_ENV=production. Plain `npm ci` then
+# omits typescript/vite and the build dies with `sh: tsc: not found`.
+npm ci --include=dev
+if [[ ! -x node_modules/.bin/tsc ]]; then
+  echo "ERROR: node_modules/.bin/tsc missing after npm ci — check NODE_ENV / .npmrc" >&2
+  exit 1
+fi
 
 echo "==> Build (tsc + vite)"
 # Default COG URL is /light-pollution/... (same-origin). Optional override via

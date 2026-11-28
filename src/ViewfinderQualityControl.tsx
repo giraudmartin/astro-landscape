@@ -12,8 +12,14 @@ type ViewfinderQualityControlProps = {
   onQualityChange: (quality: TerrainQuality) => void
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  onBack?: () => void
   showTrigger?: boolean
   anchorRef?: RefObject<HTMLElement | null>
+  /** Shared Réglages scène position (proto: one panel spot for every category). */
+  floatStorageKey?: string
+  floatDefaultPos?: { x: number; y: number }
+  /** Body only — parent owns the shared float shell. */
+  embed?: boolean
 }
 
 const FLOAT_POS_STORAGE_KEY = 'vf-quality-panel-float-pos'
@@ -27,8 +33,12 @@ export function ViewfinderQualityControl({
   onQualityChange,
   open: openProp,
   onOpenChange,
+  onBack,
   showTrigger = true,
   anchorRef,
+  floatStorageKey,
+  floatDefaultPos,
+  embed = false,
 }: ViewfinderQualityControlProps) {
   const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -39,6 +49,51 @@ export function ViewfinderQualityControl({
   }
   const rootRef = useRef<HTMLDivElement | null>(null)
   const panelAnchor = anchorRef ?? rootRef
+
+  const body = (
+    <section className="vf-sky-panel__section">
+      <h3 className="vf-sky-panel__section-title">
+        {t('viewfinder.quality.section')}
+      </h3>
+      <div className="vf-sky-panel__section-body">
+        <div
+          className="vf-quality-menu__options"
+          role="radiogroup"
+          aria-label={t('viewfinder.quality.section')}
+        >
+          {TERRAIN_QUALITY_IDS.map((id) => {
+            const active = id === quality
+            const mb = getApproxTerrainDownloadMb(id)
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                className={
+                  active
+                    ? 'vf-quality-menu__option is-active'
+                    : 'vf-quality-menu__option'
+                }
+                onClick={() => onQualityChange(id)}
+              >
+                <span className="vf-quality-menu__option-copy">
+                  <b>{t(`terrainQuality.level.${id}`)}</b>
+                  <small>{t(`terrainQuality.level.${id}Hint`)}</small>
+                </span>
+                <span className="vf-quality-menu__option-size">
+                  {t('terrainQuality.approxMb', { mb: String(mb) })}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <p className="vf-sky-panel__hint">{t('viewfinder.quality.hint')}</p>
+      </div>
+    </section>
+  )
+
+  if (embed) return open ? body : null
 
   return (
     <div
@@ -73,52 +128,14 @@ export function ViewfinderQualityControl({
       <ViewfinderFloatPanel
         open={open}
         onClose={() => setOpen(false)}
+        onBack={onBack}
         title={t('viewfinder.quality.title')}
-        storageKey={FLOAT_POS_STORAGE_KEY}
-        defaultPos={DEFAULT_FLOAT_POS}
+        storageKey={floatStorageKey ?? FLOAT_POS_STORAGE_KEY}
+        defaultPos={floatDefaultPos ?? DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}
         tourAnchor="vf-float-quality"
       >
-        <section className="vf-sky-panel__section">
-          <h3 className="vf-sky-panel__section-title">
-            {t('viewfinder.quality.section')}
-          </h3>
-          <div className="vf-sky-panel__section-body">
-            <div
-              className="vf-quality-menu__options"
-              role="radiogroup"
-              aria-label={t('viewfinder.quality.section')}
-            >
-              {TERRAIN_QUALITY_IDS.map((id) => {
-                const active = id === quality
-                const mb = getApproxTerrainDownloadMb(id)
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    className={
-                      active
-                        ? 'vf-quality-menu__option is-active'
-                        : 'vf-quality-menu__option'
-                    }
-                    onClick={() => onQualityChange(id)}
-                  >
-                    <span className="vf-quality-menu__option-copy">
-                      <b>{t(`terrainQuality.level.${id}`)}</b>
-                      <small>{t(`terrainQuality.level.${id}Hint`)}</small>
-                    </span>
-                    <span className="vf-quality-menu__option-size">
-                      {t('terrainQuality.approxMb', { mb: String(mb) })}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            <p className="vf-sky-panel__hint">{t('viewfinder.quality.hint')}</p>
-          </div>
-        </section>
+        {body}
       </ViewfinderFloatPanel>
     </div>
   )

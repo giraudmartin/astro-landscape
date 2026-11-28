@@ -98,8 +98,12 @@ type ViewfinderSkyControlProps = {
   onStarGlowChange: (value: number) => void
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  onBack?: () => void
   showTrigger?: boolean
   anchorRef?: RefObject<HTMLElement | null>
+  floatStorageKey?: string
+  floatDefaultPos?: { x: number; y: number }
+  embed?: boolean
 }
 
 const FLOAT_POS_STORAGE_KEY = 'vf-sky-panel-float-pos'
@@ -134,7 +138,14 @@ function SkySection({
 
 type SkyPanelBodyProps = Omit<
   ViewfinderSkyControlProps,
-  'open' | 'onOpenChange' | 'showTrigger' | 'anchorRef'
+  | 'open'
+  | 'onOpenChange'
+  | 'onBack'
+  | 'showTrigger'
+  | 'anchorRef'
+  | 'floatStorageKey'
+  | 'floatDefaultPos'
+  | 'embed'
 >
 
 function SkyPanelBody({
@@ -638,8 +649,12 @@ export function ViewfinderSkyControl(props: ViewfinderSkyControlProps) {
   const {
     open: openProp,
     onOpenChange,
+    onBack,
     showTrigger = true,
     anchorRef,
+    floatStorageKey,
+    floatDefaultPos,
+    embed = false,
     ...panelProps
   } = props
   const t = useT()
@@ -651,6 +666,8 @@ export function ViewfinderSkyControl(props: ViewfinderSkyControlProps) {
   }
   const rootRef = useRef<HTMLDivElement | null>(null)
   const panelAnchor = anchorRef ?? rootRef
+
+  if (embed) return open ? <SkyPanelBody {...panelProps} /> : null
 
   return (
     <div
@@ -686,9 +703,10 @@ export function ViewfinderSkyControl(props: ViewfinderSkyControlProps) {
       <ViewfinderFloatPanel
         open={open}
         onClose={() => setOpen(false)}
+        onBack={onBack}
         title={t('viewfinder.sky.title')}
-        storageKey={FLOAT_POS_STORAGE_KEY}
-        defaultPos={DEFAULT_FLOAT_POS}
+        storageKey={floatStorageKey ?? FLOAT_POS_STORAGE_KEY}
+        defaultPos={floatDefaultPos ?? DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}
         tourAnchor="vf-float-sky"
       >

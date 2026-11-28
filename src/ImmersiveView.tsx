@@ -122,6 +122,8 @@ import { ViewfinderSceneSettingsControl } from './ViewfinderSceneSettingsControl
 import { type LocalHaloControls } from './ViewfinderSkyControl'
 import { weatherControlsFromSettings } from './ViewfinderWeatherControl'
 import {
+  CLOSE_CELESTIAL_SEARCH_EVENT,
+  openImmersiveScenePanel,
   TOUR_DEMO_SKY_EVENT,
   TOUR_DEMO_WEATHER_EVENT,
 } from './onboarding/immersiveTourUi'
@@ -702,11 +704,17 @@ export function ImmersiveView({
         },
       })
     }
+    const onCloseCelestialSearch = () => setCelestialSearchOpen(false)
     window.addEventListener(TOUR_DEMO_WEATHER_EVENT, onTourWeather)
     window.addEventListener(TOUR_DEMO_SKY_EVENT, onTourSky)
+    window.addEventListener(CLOSE_CELESTIAL_SEARCH_EVENT, onCloseCelestialSearch)
     return () => {
       window.removeEventListener(TOUR_DEMO_WEATHER_EVENT, onTourWeather)
       window.removeEventListener(TOUR_DEMO_SKY_EVENT, onTourSky)
+      window.removeEventListener(
+        CLOSE_CELESTIAL_SEARCH_EVENT,
+        onCloseCelestialSearch,
+      )
     }
   }, [active])
 
@@ -3084,7 +3092,13 @@ export function ImmersiveView({
             aria-expanded={celestialSearchOpen}
             aria-label={t('immersive.searchCelestial')}
             title={t('immersive.searchCelestial')}
-            onClick={() => setCelestialSearchOpen((v) => !v)}
+            onClick={() => {
+              setCelestialSearchOpen((v) => {
+                const next = !v
+                if (next) openImmersiveScenePanel(null)
+                return next
+              })
+            }}
           >
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
               <circle

@@ -1092,6 +1092,7 @@ export const fr = {
       densityAria: 'Densité {title}',
     },
     float: {
+      back: 'Retour aux catégories',
       close: 'Fermer {title}',
     },
   },

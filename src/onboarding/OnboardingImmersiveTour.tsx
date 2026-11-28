@@ -18,7 +18,10 @@ import {
   type ImmersiveTourStepDef,
   type ImmersiveTourStepId,
 } from './immersiveTourSteps'
-import { prepareImmersiveTourStep } from './immersiveTourUi'
+import {
+  OPEN_SCENE_PANEL_EVENT,
+  prepareImmersiveTourStep,
+} from './immersiveTourUi'
 import './tour.css'
 
 export type OnboardingImmersiveTourProps = {
@@ -296,6 +299,8 @@ export function OnboardingImmersiveTour({
   }, [open, refreshHoles, refreshCardBox])
 
   // Panels / rails may mount after the step opens — retry hole measure.
+  // Qualité opens after QUALITY_OPEN_DELAY_MS (~1.8s); keep polling until the
+  // float anchor exists (or ~5s) so the ring does not stick on vf-scene.
   useEffect(() => {
     if (!open) return
     if (
@@ -311,10 +316,39 @@ export function OnboardingImmersiveTour({
     const id = window.setInterval(() => {
       tries += 1
       refreshHoles()
-      if (tries >= 16) window.clearInterval(id)
+      const anchorName = step.anchor
+      const el =
+        anchorName &&
+        document.querySelector<HTMLElement>(
+          `[data-tour-anchor="${anchorName}"]`,
+        )
+      const ready =
+        !!el &&
+        el.getBoundingClientRect().width >= 2 &&
+        el.getBoundingClientRect().height >= 2
+      if (ready || tries >= 42) window.clearInterval(id)
     }, 120)
     return () => window.clearInterval(id)
-  }, [open, step.id, refreshHoles])
+  }, [open, step.id, step.anchor, refreshHoles])
+
+  // Shared Réglages float mounts via portal after OPEN_SCENE_PANEL — remount
+  // holes after React commits so the ring tracks vf-float-* immediately.
+  useEffect(() => {
+    if (!open) return
+    const timers: number[] = []
+    const refresh = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => refreshHoles())
+      })
+      timers.push(window.setTimeout(refreshHoles, 50))
+      timers.push(window.setTimeout(refreshHoles, 200))
+    }
+    window.addEventListener(OPEN_SCENE_PANEL_EVENT, refresh)
+    return () => {
+      window.removeEventListener(OPEN_SCENE_PANEL_EVENT, refresh)
+      for (const id of timers) window.clearTimeout(id)
+    }
+  }, [open, refreshHoles])
 
   const goNext = useCallback(() => {
     setIndex((i) => Math.min(i + 1, total - 1))

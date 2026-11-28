@@ -29,8 +29,12 @@ type ViewfinderWeatherControlProps = {
   onWeatherChange: (next: ViewfinderWeather) => void
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  onBack?: () => void
   showTrigger?: boolean
   anchorRef?: RefObject<HTMLElement | null>
+  floatStorageKey?: string
+  floatDefaultPos?: { x: number; y: number }
+  embed?: boolean
 }
 
 const FLOAT_POS_STORAGE_KEY = 'vf-weather-panel-float-pos'
@@ -304,8 +308,12 @@ export function ViewfinderWeatherControl(props: ViewfinderWeatherControlProps) {
   const {
     open: openProp,
     onOpenChange,
+    onBack,
     showTrigger = true,
     anchorRef,
+    floatStorageKey,
+    floatDefaultPos,
+    embed = false,
     ...panelProps
   } = props
   const t = useT()
@@ -317,6 +325,8 @@ export function ViewfinderWeatherControl(props: ViewfinderWeatherControlProps) {
   }
   const rootRef = useRef<HTMLDivElement | null>(null)
   const panelAnchor = anchorRef ?? rootRef
+
+  if (embed) return open ? <WeatherPanelBody {...panelProps} /> : null
 
   return (
     <div
@@ -352,9 +362,10 @@ export function ViewfinderWeatherControl(props: ViewfinderWeatherControlProps) {
       <ViewfinderFloatPanel
         open={open}
         onClose={() => setOpen(false)}
+        onBack={onBack}
         title={t('viewfinder.weather.title')}
-        storageKey={FLOAT_POS_STORAGE_KEY}
-        defaultPos={DEFAULT_FLOAT_POS}
+        storageKey={floatStorageKey ?? FLOAT_POS_STORAGE_KEY}
+        defaultPos={floatDefaultPos ?? DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}
         tourAnchor="vf-float-weather"
       >

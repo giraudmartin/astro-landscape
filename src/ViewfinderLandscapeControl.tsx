@@ -28,8 +28,12 @@ type ViewfinderLandscapeControlProps = {
   onTintChange: (value: number) => void
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  onBack?: () => void
   showTrigger?: boolean
   anchorRef?: RefObject<HTMLElement | null>
+  floatStorageKey?: string
+  floatDefaultPos?: { x: number; y: number }
+  embed?: boolean
 }
 
 const FLOAT_POS_STORAGE_KEY = 'vf-landscape-panel-float-pos'
@@ -49,8 +53,12 @@ export function ViewfinderLandscapeControl({
   onTintChange,
   open: openProp,
   onOpenChange,
+  onBack,
   showTrigger = true,
   anchorRef,
+  floatStorageKey,
+  floatDefaultPos,
+  embed = false,
 }: ViewfinderLandscapeControlProps) {
   const t = useT()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -72,6 +80,131 @@ export function ViewfinderLandscapeControl({
       ['--range-progress' as string]: `${Math.min(100, Math.max(0, pct))}%`,
     }
   }
+
+  const body = (
+    <section className="vf-sky-panel__section">
+      <h3 className="vf-sky-panel__section-title">
+        {t('viewfinder.landscape.nightSoil')}
+      </h3>
+      <div className="vf-sky-panel__section-body">
+        <label className="vf-landscape-menu__field">
+          <span className="vf-landscape-menu__label">
+            <span>{t('viewfinder.landscape.brightness')}</span>
+            <span className="vf-landscape-menu__value">
+              {brightness.toFixed(2)}
+            </span>
+          </span>
+          <input
+            type="range"
+            className="vf-landscape-menu__range"
+            min={GROUND_NIGHT_BRIGHTNESS_MIN}
+            max={GROUND_NIGHT_BRIGHTNESS_MAX}
+            step={0.05}
+            value={brightness}
+            style={rangeProgressStyle(
+              brightness,
+              GROUND_NIGHT_BRIGHTNESS_MIN,
+              GROUND_NIGHT_BRIGHTNESS_MAX,
+            )}
+            aria-label={t('viewfinder.landscape.brightnessAria')}
+            title={t('viewfinder.landscape.brightnessTip')}
+            onChange={(event) =>
+              onBrightnessChange(
+                clampGroundNightBrightness(Number(event.target.value)),
+              )
+            }
+          />
+        </label>
+
+        <label className="vf-landscape-menu__field">
+          <span className="vf-landscape-menu__label">
+            <span>{t('viewfinder.landscape.contrast')}</span>
+            <span className="vf-landscape-menu__value">
+              {contrast.toFixed(2)}
+            </span>
+          </span>
+          <input
+            type="range"
+            className="vf-landscape-menu__range"
+            min={GROUND_NIGHT_CONTRAST_MIN}
+            max={GROUND_NIGHT_CONTRAST_MAX}
+            step={0.05}
+            value={contrast}
+            style={rangeProgressStyle(
+              contrast,
+              GROUND_NIGHT_CONTRAST_MIN,
+              GROUND_NIGHT_CONTRAST_MAX,
+            )}
+            aria-label={t('viewfinder.landscape.contrastAria')}
+            title={t('viewfinder.landscape.contrastTip')}
+            onChange={(event) =>
+              onContrastChange(
+                clampGroundNightContrast(Number(event.target.value)),
+              )
+            }
+          />
+        </label>
+
+        <label className="vf-landscape-menu__field">
+          <span className="vf-landscape-menu__label">
+            <span>{t('viewfinder.landscape.temperature')}</span>
+            <span className="vf-landscape-menu__value">
+              {signedLabel(temperature)}
+            </span>
+          </span>
+          <input
+            type="range"
+            className="vf-landscape-menu__range"
+            min={GROUND_NIGHT_TEMPERATURE_MIN}
+            max={GROUND_NIGHT_TEMPERATURE_MAX}
+            step={0.05}
+            value={temperature}
+            style={rangeProgressStyle(
+              temperature,
+              GROUND_NIGHT_TEMPERATURE_MIN,
+              GROUND_NIGHT_TEMPERATURE_MAX,
+            )}
+            aria-label={t('viewfinder.landscape.temperatureAria')}
+            title={t('viewfinder.landscape.temperatureTip')}
+            onChange={(event) =>
+              onTemperatureChange(
+                clampGroundNightTemperature(Number(event.target.value)),
+              )
+            }
+          />
+        </label>
+
+        <label className="vf-landscape-menu__field">
+          <span className="vf-landscape-menu__label">
+            <span>{t('viewfinder.landscape.tint')}</span>
+            <span className="vf-landscape-menu__value">
+              {signedLabel(tint)}
+            </span>
+          </span>
+          <input
+            type="range"
+            className="vf-landscape-menu__range"
+            min={GROUND_NIGHT_TINT_MIN}
+            max={GROUND_NIGHT_TINT_MAX}
+            step={0.05}
+            value={tint}
+            style={rangeProgressStyle(
+              tint,
+              GROUND_NIGHT_TINT_MIN,
+              GROUND_NIGHT_TINT_MAX,
+            )}
+            aria-label={t('viewfinder.landscape.tintAria')}
+            title={t('viewfinder.landscape.tintTip')}
+            onChange={(event) =>
+              onTintChange(clampGroundNightTint(Number(event.target.value)))
+            }
+          />
+        </label>
+      </div>
+    </section>
+  )
+
+  if (embed) return open ? body : null
 
   return (
     <div
@@ -107,131 +240,13 @@ export function ViewfinderLandscapeControl({
       <ViewfinderFloatPanel
         open={open}
         onClose={() => setOpen(false)}
+        onBack={onBack}
         title={t('viewfinder.landscape.title')}
-        storageKey={FLOAT_POS_STORAGE_KEY}
-        defaultPos={DEFAULT_FLOAT_POS}
+        storageKey={floatStorageKey ?? FLOAT_POS_STORAGE_KEY}
+        defaultPos={floatDefaultPos ?? DEFAULT_FLOAT_POS}
         triggerRef={panelAnchor}
       >
-        <section className="vf-sky-panel__section">
-          <h3 className="vf-sky-panel__section-title">
-            {t('viewfinder.landscape.nightSoil')}
-          </h3>
-          <div className="vf-sky-panel__section-body">
-            <label className="vf-landscape-menu__field">
-              <span className="vf-landscape-menu__label">
-                <span>{t('viewfinder.landscape.brightness')}</span>
-                <span className="vf-landscape-menu__value">
-                  {brightness.toFixed(2)}
-                </span>
-              </span>
-              <input
-                type="range"
-                className="vf-landscape-menu__range"
-                min={GROUND_NIGHT_BRIGHTNESS_MIN}
-                max={GROUND_NIGHT_BRIGHTNESS_MAX}
-                step={0.05}
-                value={brightness}
-                style={rangeProgressStyle(
-                  brightness,
-                  GROUND_NIGHT_BRIGHTNESS_MIN,
-                  GROUND_NIGHT_BRIGHTNESS_MAX,
-                )}
-                aria-label={t('viewfinder.landscape.brightnessAria')}
-                title={t('viewfinder.landscape.brightnessTip')}
-                onChange={(event) =>
-                  onBrightnessChange(
-                    clampGroundNightBrightness(Number(event.target.value)),
-                  )
-                }
-              />
-            </label>
-
-            <label className="vf-landscape-menu__field">
-              <span className="vf-landscape-menu__label">
-                <span>{t('viewfinder.landscape.contrast')}</span>
-                <span className="vf-landscape-menu__value">
-                  {contrast.toFixed(2)}
-                </span>
-              </span>
-              <input
-                type="range"
-                className="vf-landscape-menu__range"
-                min={GROUND_NIGHT_CONTRAST_MIN}
-                max={GROUND_NIGHT_CONTRAST_MAX}
-                step={0.05}
-                value={contrast}
-                style={rangeProgressStyle(
-                  contrast,
-                  GROUND_NIGHT_CONTRAST_MIN,
-                  GROUND_NIGHT_CONTRAST_MAX,
-                )}
-                aria-label={t('viewfinder.landscape.contrastAria')}
-                title={t('viewfinder.landscape.contrastTip')}
-                onChange={(event) =>
-                  onContrastChange(
-                    clampGroundNightContrast(Number(event.target.value)),
-                  )
-                }
-              />
-            </label>
-
-            <label className="vf-landscape-menu__field">
-              <span className="vf-landscape-menu__label">
-                <span>{t('viewfinder.landscape.temperature')}</span>
-                <span className="vf-landscape-menu__value">
-                  {signedLabel(temperature)}
-                </span>
-              </span>
-              <input
-                type="range"
-                className="vf-landscape-menu__range"
-                min={GROUND_NIGHT_TEMPERATURE_MIN}
-                max={GROUND_NIGHT_TEMPERATURE_MAX}
-                step={0.05}
-                value={temperature}
-                style={rangeProgressStyle(
-                  temperature,
-                  GROUND_NIGHT_TEMPERATURE_MIN,
-                  GROUND_NIGHT_TEMPERATURE_MAX,
-                )}
-                aria-label={t('viewfinder.landscape.temperatureAria')}
-                title={t('viewfinder.landscape.temperatureTip')}
-                onChange={(event) =>
-                  onTemperatureChange(
-                    clampGroundNightTemperature(Number(event.target.value)),
-                  )
-                }
-              />
-            </label>
-
-            <label className="vf-landscape-menu__field">
-              <span className="vf-landscape-menu__label">
-                <span>{t('viewfinder.landscape.tint')}</span>
-                <span className="vf-landscape-menu__value">
-                  {signedLabel(tint)}
-                </span>
-              </span>
-              <input
-                type="range"
-                className="vf-landscape-menu__range"
-                min={GROUND_NIGHT_TINT_MIN}
-                max={GROUND_NIGHT_TINT_MAX}
-                step={0.05}
-                value={tint}
-                style={rangeProgressStyle(
-                  tint,
-                  GROUND_NIGHT_TINT_MIN,
-                  GROUND_NIGHT_TINT_MAX,
-                )}
-                aria-label={t('viewfinder.landscape.tintAria')}
-                title={t('viewfinder.landscape.tintTip')}
-                onChange={(event) =>
-                  onTintChange(clampGroundNightTint(Number(event.target.value)))
-                }
-              />
-            </label>
-          </div>
-        </section>
+        {body}
       </ViewfinderFloatPanel>
     </div>
   )

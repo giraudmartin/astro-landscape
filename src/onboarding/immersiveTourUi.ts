@@ -4,6 +4,7 @@ import { TOUR_DEMO_AIRGLOW } from './tourDemoSpot'
 export type ImmersiveScenePanelId = 'quality' | 'sky' | 'weather'
 
 export const OPEN_SCENE_PANEL_EVENT = 'astro-planner:open-scene-panel'
+export const CLOSE_CELESTIAL_SEARCH_EVENT = 'astro-planner:close-celestial-search'
 export const EXPAND_CAPTURE_BAR_EVENT = 'astro-planner:expand-capture-bar'
 export const TOUR_DEMO_WEATHER_EVENT = 'astro-planner:tour-demo-weather'
 /** Apply tour airglow (green + structured waves) in ImmersiveView. */

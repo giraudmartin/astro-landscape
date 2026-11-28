@@ -1,6 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useT } from './i18n'
-import { ChevronDownIcon, SettingsSlidersIcon } from './psIcons'
+import {
+  ChevronRightIcon,
+  SettingsSlidersIcon,
+} from './psIcons'
 import {
   ViewfinderLandscapeControl,
 } from './ViewfinderLandscapeControl'
@@ -14,10 +17,17 @@ import {
 } from './ViewfinderWeatherControl'
 import { ViewfinderQualityControl } from './ViewfinderQualityControl'
 import { ViewfinderMilkyWayNebControl } from './ViewfinderMilkyWayNebControl'
+import {
+  clearFloatPos,
+  SCENE_SETTINGS_FLOAT_DEFAULT_POS,
+  SCENE_SETTINGS_FLOAT_STORAGE_KEY,
+  ViewfinderFloatPanel,
+} from './ViewfinderFloatPanel'
 import type { MilkyWayNebLook } from './milkyWayNebLook'
 import type { ViewfinderWeather } from './viewfinderWeather'
 import type { TerrainQuality } from './terrainQuality'
 import {
+  CLOSE_CELESTIAL_SEARCH_EVENT,
   OPEN_SCENE_PANEL_EVENT,
   type ImmersiveScenePanelId,
 } from './onboarding/immersiveTourUi'
@@ -98,9 +108,14 @@ const PANEL_IDS: ReadonlyArray<ScenePanelId> = [
   'weather',
 ]
 
+const TOUR_ANCHOR: Partial<Record<ScenePanelId, string>> = {
+  quality: 'vf-float-quality',
+  sky: 'vf-float-sky',
+  weather: 'vf-float-weather',
+}
+
 /**
- * Single Réglages trigger → menu card with Qualité / Paysage / Ciel / Météo,
- * each opening the existing floating settings panel.
+ * Single Réglages trigger → one floating panel (menu or category), like proto 01.
  */
 export function ViewfinderSceneSettingsControl({
   flatTerrain = false,
@@ -109,19 +124,33 @@ export function ViewfinderSceneSettingsControl({
   sky,
   weather,
   milkyWayNeb,
-  iconOnly = false,
+  iconOnly: _iconOnly = false,
 }: ViewfinderSceneSettingsControlProps) {
   const t = useT()
   const [menuOpen, setMenuOpen] = useState(false)
   const [panel, setPanel] = useState<ScenePanelId | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const menuListRef = useRef<HTMLDivElement | null>(null)
   const menuId = useId()
   const visiblePanelIds = (
     flatTerrain
       ? PANEL_IDS.filter((id) => id !== 'landscape' && id !== 'quality')
       : PANEL_IDS
   ).filter((id) => id !== 'milkyWayNeb' || milkyWayNeb != null)
-  const anyPanelOpen = panel != null
+  const chromeOpen = menuOpen || panel != null
+  const showingMenu = chromeOpen && panel == null
+
+  const closeAll = useCallback(() => {
+    clearFloatPos(SCENE_SETTINGS_FLOAT_STORAGE_KEY)
+    setPanel(null)
+    setMenuOpen(false)
+  }, [])
+
+  const backToMenu = useCallback(() => {
+    setPanel(null)
+    setMenuOpen(true)
+  }, [])
 
   useEffect(() => {
     if (
@@ -142,11 +171,12 @@ export function ViewfinderSceneSettingsControl({
         .detail?.panel
       if (next === undefined) return
       if (next == null) {
+        clearFloatPos(SCENE_SETTINGS_FLOAT_STORAGE_KEY)
         setPanel(null)
         setMenuOpen(false)
         return
       }
-      if (flatTerrain && (next === 'quality')) {
+      if (flatTerrain && next === 'quality') {
         setPanel(null)
         return
       }
@@ -158,138 +188,161 @@ export function ViewfinderSceneSettingsControl({
   }, [flatTerrain])
 
   useEffect(() => {
-    if (!menuOpen) return
+    if (!chromeOpen) return
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      if (!target) return
+      const target = event.target
+      if (!(target instanceof Element)) return
       if (rootRef.current?.contains(target)) return
-      setMenuOpen(false)
+      if (target.closest('[data-scene-settings-panel]')) return
+      // Immersive tour opens quality/sky/weather via events — do not dismiss
+      // those panels when the coach card / scrim receives the click.
+      if (target.closest('.onboarding-tour-root')) return
+      closeAll()
     }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false)
-    }
-    window.addEventListener('pointerdown', onPointerDown, true)
-    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointerDown)
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown, true)
-      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointerDown)
     }
-  }, [menuOpen])
+  }, [chromeOpen, closeAll])
+
+  useEffect(() => {
+    if (!showingMenu) return
+    const first = menuListRef.current?.querySelector<HTMLElement>(
+      '[role="menuitem"]',
+    )
+    first?.focus()
+  }, [showingMenu])
 
   const openPanel = (id: ScenePanelId) => {
     setPanel(id)
-    setMenuOpen(false)
+    setMenuOpen(true)
   }
+
+  const toggleChrome = () => {
+    if (chromeOpen) {
+      closeAll()
+      triggerRef.current?.focus()
+      return
+    }
+    // Close celestial search so the two popovers never stack on the tools.
+    window.dispatchEvent(new Event(CLOSE_CELESTIAL_SEARCH_EVENT))
+    setMenuOpen(true)
+    setPanel(null)
+  }
+
+  const panelTitle =
+    panel == null
+      ? t('viewfinder.scene.title')
+      : t(`viewfinder.scene.${panel}`)
 
   return (
     <div
       ref={rootRef}
-      className={
-        menuOpen || anyPanelOpen
-          ? 'vf-proj-control is-open'
-          : 'vf-proj-control'
-      }
+      className={chromeOpen ? 'vf-proj-control is-open' : 'vf-proj-control'}
     >
       <button
+        ref={triggerRef}
         type="button"
         data-tour-anchor="vf-scene"
         className={
-          menuOpen || anyPanelOpen
+          chromeOpen
             ? 'vf-proj-control__trigger is-active'
             : 'vf-proj-control__trigger'
         }
-        aria-expanded={menuOpen}
+        aria-expanded={chromeOpen}
         aria-controls={menuId}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-label={t('viewfinder.scene.title')}
         title={t('viewfinder.scene.title')}
-        onClick={() => setMenuOpen((value) => !value)}
+        onClick={toggleChrome}
       >
         <SettingsSlidersIcon size={16} />
-        {iconOnly ? null : (
-          <ChevronDownIcon className="vf-proj-control__chevron" size={12} />
-        )}
       </button>
 
-      {menuOpen ? (
-        <div
-          id={menuId}
-          className="vf-proj-control__menu"
-          role="menu"
-          aria-label={t('viewfinder.scene.title')}
-        >
-          {visiblePanelIds.map((id) => {
-            const selected = panel === id
-            const label = t(`viewfinder.scene.${id}`)
-            const hint = t(`viewfinder.scene.${id}Hint`)
-            return (
-              <button
-                key={id}
-                type="button"
-                role="menuitem"
-                className={
-                  selected
-                    ? 'vf-proj-control__option is-active'
-                    : 'vf-proj-control__option'
-                }
-                title={hint}
-                onClick={() => openPanel(id)}
-              >
-                <span className="vf-proj-control__option-copy">
-                  <b>{label}</b>
-                  <small>{hint}</small>
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
+      <ViewfinderFloatPanel
+        open={chromeOpen}
+        onClose={() => {
+          closeAll()
+          triggerRef.current?.focus()
+        }}
+        onBack={panel != null ? backToMenu : undefined}
+        title={panelTitle}
+        storageKey={SCENE_SETTINGS_FLOAT_STORAGE_KEY}
+        defaultPos={SCENE_SETTINGS_FLOAT_DEFAULT_POS}
+        triggerRef={rootRef}
+        tourAnchor={panel ? TOUR_ANCHOR[panel] : undefined}
+        panelDataAttrs={{ 'data-scene-settings-panel': '' }}
+      >
+        {showingMenu ? (
+          <div
+            id={menuId}
+            ref={menuListRef}
+            className="vf-proj-control__menu-list vf-proj-control__menu-list--embedded"
+            role="menu"
+            aria-label={t('viewfinder.scene.title')}
+          >
+            {visiblePanelIds.map((id) => {
+              const label = t(`viewfinder.scene.${id}`)
+              const hint = t(`viewfinder.scene.${id}Hint`)
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="menuitem"
+                  className="vf-proj-control__option"
+                  title={hint}
+                  onClick={() => openPanel(id)}
+                >
+                  <span className="vf-proj-control__option-copy">
+                    <b>{label}</b>
+                    <small>{hint}</small>
+                  </span>
+                  <ChevronRightIcon
+                    className="vf-proj-control__option-chevron"
+                    size={16}
+                  />
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
 
-      {!flatTerrain ? (
-        <ViewfinderQualityControl
-          quality={quality.value}
-          onQualityChange={quality.onChange}
-          open={panel === 'quality'}
-          onOpenChange={(next) => setPanel(next ? 'quality' : null)}
-          showTrigger={false}
-          anchorRef={rootRef}
+        {!flatTerrain ? (
+          <ViewfinderQualityControl
+            quality={quality.value}
+            onQualityChange={quality.onChange}
+            open={panel === 'quality'}
+            embed
+          />
+        ) : null}
+        {!flatTerrain ? (
+          <ViewfinderLandscapeControl
+            {...landscape}
+            open={panel === 'landscape'}
+            embed
+          />
+        ) : null}
+        <ViewfinderSkyControl
+          {...sky}
+          flatTerrain={flatTerrain}
+          open={panel === 'sky'}
+          embed
         />
-      ) : null}
-      {!flatTerrain ? (
-        <ViewfinderLandscapeControl
-          {...landscape}
-          open={panel === 'landscape'}
-          onOpenChange={(next) => setPanel(next ? 'landscape' : null)}
-          showTrigger={false}
-          anchorRef={rootRef}
+        {milkyWayNeb ? (
+          <ViewfinderMilkyWayNebControl
+            look={milkyWayNeb.look}
+            onChange={milkyWayNeb.onChange}
+            onReset={milkyWayNeb.onReset}
+            open={panel === 'milkyWayNeb'}
+            embed
+          />
+        ) : null}
+        <ViewfinderWeatherControl
+          {...weather}
+          open={panel === 'weather'}
+          embed
         />
-      ) : null}
-      <ViewfinderSkyControl
-        {...sky}
-        flatTerrain={flatTerrain}
-        open={panel === 'sky'}
-        onOpenChange={(next) => setPanel(next ? 'sky' : null)}
-        showTrigger={false}
-        anchorRef={rootRef}
-      />
-      {milkyWayNeb ? (
-        <ViewfinderMilkyWayNebControl
-          look={milkyWayNeb.look}
-          onChange={milkyWayNeb.onChange}
-          onReset={milkyWayNeb.onReset}
-          open={panel === 'milkyWayNeb'}
-          onOpenChange={(next) => setPanel(next ? 'milkyWayNeb' : null)}
-          showTrigger={false}
-          anchorRef={rootRef}
-        />
-      ) : null}
-      <ViewfinderWeatherControl
-        {...weather}
-        open={panel === 'weather'}
-        onOpenChange={(next) => setPanel(next ? 'weather' : null)}
-        showTrigger={false}
-        anchorRef={rootRef}
-      />
+      </ViewfinderFloatPanel>
     </div>
   )
 }

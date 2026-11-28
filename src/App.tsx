@@ -262,6 +262,10 @@ export default function App() {
   const [plHeatmapEnabled, setPlHeatmapEnabled] = useState(
     savedMap.plHeatmapEnabled,
   )
+  const plHeatmapEnabledRef = useRef(plHeatmapEnabled)
+  plHeatmapEnabledRef.current = plHeatmapEnabled
+  /** Snapshot PL toggle when a map tour starts — restore on close. */
+  const plHeatmapBeforeTourRef = useRef<boolean | null>(null)
   const [plHeatmapOpacity, setPlHeatmapOpacity] = useState(
     savedMap.plHeatmapOpacity,
   )
@@ -487,6 +491,9 @@ export default function App() {
       switch (stepId) {
         case 'welcome':
         case 'place':
+          if (plHeatmapBeforeTourRef.current === null) {
+            plHeatmapBeforeTourRef.current = plHeatmapEnabledRef.current
+          }
           setMarkerMenuOpen(false)
           setMySpotsOpen(false)
           setFramingsOpen(false)
@@ -653,6 +660,10 @@ export default function App() {
     setInfoDrawerOpen(false)
     setMySpotsOpen(false)
     setFramingsOpen(false)
+    if (plHeatmapBeforeTourRef.current !== null) {
+      setPlHeatmapEnabled(plHeatmapBeforeTourRef.current)
+      plHeatmapBeforeTourRef.current = null
+    }
     clearTourMapFrame()
   }, [])
 

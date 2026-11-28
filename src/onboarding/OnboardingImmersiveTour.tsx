@@ -8,6 +8,11 @@ import {
 } from 'react'
 import { useT } from '../i18n'
 import {
+  OPERATE_PHONE_MQ,
+  OPERATE_TOUR_COMPACT_MQ,
+  useMatchMedia,
+} from '../useMatchMedia'
+import {
   IMMERSIVE_TOUR_STEPS,
   type ImmersiveTourAnchor,
   type ImmersiveTourStepDef,
@@ -214,9 +219,16 @@ export function OnboardingImmersiveTour({
   onStepEnter,
 }: OnboardingImmersiveTourProps) {
   const t = useT()
+  const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
+  const isCompact = useMatchMedia(OPERATE_TOUR_COMPACT_MQ)
   const [index, setIndex] = useState(0)
   const [holes, setHoles] = useState<HoleRect[]>([])
-  const [cardBox, setCardBox] = useState({ w: 360, h: 200 })
+  const [cardBox, setCardBox] = useState(() =>
+    typeof window !== 'undefined' &&
+    window.matchMedia(OPERATE_TOUR_COMPACT_MQ).matches
+      ? { w: 280, h: 160 }
+      : { w: 360, h: 200 },
+  )
   const [viewport, setViewport] = useState(() => ({
     w: typeof window !== 'undefined' ? window.innerWidth : 1200,
     h: typeof window !== 'undefined' ? window.innerHeight : 800,
@@ -319,18 +331,51 @@ export function OnboardingImmersiveTour({
   if (!open) return null
 
   const title = t(`onboarding.immersiveTour.steps.${step.id}.title`)
-  const body = t(`onboarding.immersiveTour.steps.${step.id}.body`)
+  const body =
+    isPhone &&
+    (step.id === 'quality' ||
+      step.id === 'sky' ||
+      step.id === 'weather' ||
+      step.id === 'save' ||
+      step.id === 'done')
+      ? t(`onboarding.immersiveTour.steps.${step.id}.bodyMobile`)
+      : t(`onboarding.immersiveTour.steps.${step.id}.body`)
   const bodyFollow =
     step.id === 'done'
-      ? t('onboarding.immersiveTour.steps.done.body2')
+      ? t(
+          isPhone
+            ? 'onboarding.immersiveTour.steps.done.bodyMobile2'
+            : 'onboarding.immersiveTour.steps.done.body2',
+        )
       : null
   const ctaLabel =
     step.cta === 'finish'
       ? t('onboarding.immersiveTour.cta.finish')
       : t('onboarding.immersiveTour.cta.next')
 
-  const cardStyle = cardStyleFor(primaryHole, step, cardBox.w, cardBox.h)
+  const styleCardW = isCompact
+    ? Math.max(cardBox.w, Math.min(280, viewport.w - 48))
+    : cardBox.w
+  const cardStyle = isPhone
+    ? (() => {
+        const vw = viewport.w
+        const vh = viewport.h
+        const width = Math.min(styleCardW, vw - MARGIN * 2)
+        const height = Math.max(cardBox.h, 120)
+        const bottomPad = Math.max(MARGIN, 20)
+        return {
+          left: clamp((vw - width) / 2, MARGIN, vw - width - MARGIN),
+          top: clamp(vh - height - bottomPad, MARGIN, vh - height - MARGIN),
+        }
+      })()
+    : cardStyleFor(primaryHole, step, styleCardW, cardBox.h)
   const maskId = 'onboarding-immersive-tour-mask'
+  const cardClass = [
+    'onboarding-tour__card',
+    isCompact ? 'onboarding-tour__card--laptop' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div
@@ -421,7 +466,7 @@ export function OnboardingImmersiveTour({
         />
       ))}
 
-      <div ref={cardRef} className="onboarding-tour__card" style={cardStyle}>
+      <div ref={cardRef} className={cardClass} style={cardStyle}>
         <p className="onboarding-tour__step">
           {t('onboarding.immersiveTour.progress', {
             current: String(index + 1),

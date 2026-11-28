@@ -1,5 +1,5 @@
 /* Interactive onboarding tour — coach marks.
- * Compact ~0.78 scale lives under `.onboarding-tour__card--laptop` (1025–1440).
+ * Compact ~0.78 scale lives under `.onboarding-tour__card--laptop` (721–1440).
  */
 
 .onboarding-tour-root {
@@ -448,7 +448,8 @@ html.is-tour-scroll-info-drawer .mobile-top-drawer__tab {
   }
 }
 
-@media (max-width: 700px) {
+/* Keep in sync with OPERATE_PHONE_MQ (max-width: 720px). */
+@media (max-width: 720px) {
   .onboarding-tour__card {
     left: 16px !important;
     right: 16px;
@@ -501,8 +502,8 @@ html.is-tour-scroll-info-drawer .mobile-top-drawer__tab {
   }
 }
 
-/* Keep in sync with OPERATE_LAPTOP_MQ (1025–1440). */
-@media (max-width: 1440px) and (min-width: 1025px) {
+/* Keep in sync with OPERATE_TOUR_COMPACT_MQ (721–1440). */
+@media (max-width: 1440px) and (min-width: 721px) {
   .onboarding-tour__ring {
     border-radius: 11px;
   }

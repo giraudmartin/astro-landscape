@@ -11,8 +11,8 @@ import { createPortal } from 'react-dom'
 import { useT } from '../i18n'
 import { createSpotActionMarkerElement } from '../spotActionMarker'
 import {
-  OPERATE_LAPTOP_MQ,
   OPERATE_PHONE_MQ,
+  OPERATE_TOUR_COMPACT_MQ,
   useMatchMedia,
 } from '../useMatchMedia'
 import { requestTourFlyToDemo } from './tourEvents'
@@ -442,13 +442,13 @@ export function OnboardingTour({
 }: OnboardingTourProps) {
   const t = useT()
   const isPhone = useMatchMedia(OPERATE_PHONE_MQ)
-  /** Compact Mac laptop tour chrome — only 1025–1440. */
-  const isLaptop = useMatchMedia(OPERATE_LAPTOP_MQ)
+  /** Compact tour chrome — tablet + laptop Operate (721–1440). */
+  const isCompact = useMatchMedia(OPERATE_TOUR_COMPACT_MQ)
   const [index, setIndex] = useState(0)
   const [holes, setHoles] = useState<HoleRect[]>([])
   const [cardBox, setCardBox] = useState(() =>
     typeof window !== 'undefined' &&
-    window.matchMedia(OPERATE_LAPTOP_MQ).matches
+    window.matchMedia(OPERATE_TOUR_COMPACT_MQ).matches
       ? { w: 280, h: 160 }
       : { w: 360, h: 200 },
   )
@@ -546,7 +546,7 @@ export function OnboardingTour({
     phoneRailBeat === 'card'
 
   /** Laptop panels: punch a scroll hole over .map-ui; clicks stay blocked. */
-  const allowMapUiScroll = open && isLaptop && step.id === 'panels'
+  const allowMapUiScroll = open && isCompact && step.id === 'panels'
   /** Phone panels: same idea over the open top info drawer. */
   const allowInfoDrawerScroll = open && isPhone && step.id === 'panels'
   const allowScrollHole = allowMapUiScroll || allowInfoDrawerScroll
@@ -742,11 +742,8 @@ export function OnboardingTour({
               : `onboarding.tour.steps.${step.id}.body`,
           )
         : step.id === 'marker'
-          ? t(
-              isPhone || isLaptop
-                ? 'onboarding.tour.steps.marker.bodyDesktop'
-                : 'onboarding.tour.steps.marker.body',
-            )
+          ? // Radial is forced open on this step — never the “when you click” copy.
+            t('onboarding.tour.steps.marker.bodyDesktop')
           : t(`onboarding.tour.steps.${step.id}.body`)
   const bodyFollow =
     step.id === 'welcome'
@@ -803,16 +800,16 @@ export function OnboardingTour({
           : holes
   // Laptop map-centric steps: corner park so the pin stays clear. Finale centered.
   const mapCornerStep =
-    isLaptop &&
+    isCompact &&
     (step.id === 'welcome' || step.id === 'place' || step.id === 'marker')
   // Phone + laptop: live radial on the map; card is the action list only.
-  const liveMarkerOnMap = isMarkerStep && (isPhone || isLaptop)
+  const liveMarkerOnMap = isMarkerStep && (isPhone || isCompact)
   const styleCardW =
     liveMarkerOnMap
       ? Math.max(cardBox.w, Math.min(isPhone ? 328 : 300, viewport.w - 48))
-      : isMarkerStep && !isLaptop
+      : isMarkerStep && !isCompact
         ? Math.max(cardBox.w, Math.min(328, viewport.w - 48))
-        : isLaptop && step.id === 'done'
+        : isCompact && step.id === 'done'
           ? Math.max(cardBox.w, Math.min(300, viewport.w - 48))
           : cardBox.w
   // Phone rail sheets: card low so the list / example row stays readable above.
@@ -832,7 +829,7 @@ export function OnboardingTour({
           top: clamp(vh - height - bottomPad, MARGIN, vh - height - MARGIN),
         }
       })()
-    : isLaptop && step.id === 'done'
+    : isCompact && step.id === 'done'
       ? parkCenterStyle(styleCardW, cardBox.h)
       : mapCornerStep
         ? parkClearOfMapCenterStyle(null, styleCardW, cardBox.h)
@@ -840,7 +837,7 @@ export function OnboardingTour({
   const maskId = 'onboarding-tour-mask'
   const cardClass = [
     'onboarding-tour__card',
-    isLaptop ? 'onboarding-tour__card--laptop' : '',
+    isCompact ? 'onboarding-tour__card--laptop' : '',
     isMarkerStep && !liveMarkerOnMap ? 'onboarding-tour__card--wide' : '',
     liveMarkerOnMap ? 'onboarding-tour__card--marker-list' : '',
     step.id === 'done' ? 'onboarding-tour__card--finale' : '',

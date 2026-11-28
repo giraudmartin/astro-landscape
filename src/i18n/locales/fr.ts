@@ -214,7 +214,7 @@ export const fr = {
         },
         marker: {
           title: 'Actions du marqueur',
-          body: 'Quand tu cliques sur le marker, un menu radial s’ouvre autour. Voici ce que fait chaque action :',
+          body: 'Le menu radial est ouvert sur le marker. Voici ce que fait chaque action :',
           bodyDesktop:
             'Le menu radial est ouvert sur le marker. Voici ce que fait chaque action :',
           actions: {
@@ -263,23 +263,35 @@ export const fr = {
         quality: {
           title: 'Qualité du terrain',
           body: 'Regarde en haut à droite : le bouton Réglages. On l’ouvre sur Qualité pour choisir la résolution du relief. Plus c’est fin, plus le téléchargement est lourd.',
+          bodyMobile:
+            'En haut dans la barre : le bouton Réglages. On l’ouvre sur Qualité pour choisir la résolution du relief. Plus c’est fin, plus le téléchargement est lourd.',
         },
         sky: {
           title: 'Ciel et ambiance',
           body: 'Toujours dans Réglages → Ciel : pollution lumineuse, atmosphère, lumière de la Lune, lumière zodiacale. Active ou ajuste ce que tu veux pour simuler la nuit au mieux.',
+          bodyMobile:
+            'Toujours dans Réglages, onglet Ciel : pollution lumineuse, atmosphère, lumière de la Lune, lumière zodiacale. Active ou ajuste ce que tu veux pour simuler la nuit au mieux.',
         },
         weather: {
           title: 'Météo et nuages',
           body: 'Réglages → Météo pour activer les nuages. Ici on met des nuages bas en exemple : tu vois tout de suite l’effet sur le paysage et le ciel. Les nuages interagissent aussi avec la pollution lumineuse.',
+          bodyMobile:
+            'Dans Réglages, onglet Météo pour activer les nuages. Ici on met des nuages bas en exemple : tu vois tout de suite l’effet sur le paysage et le ciel. Les nuages interagissent aussi avec la pollution lumineuse.',
         },
         save: {
           title: 'Enregistre un cadrage',
           body: 'Ouvre Cadrages, puis Enregistrer pour garder la composition (orientation, focale, date). Tu pourras la rejouer plus tard depuis la carte.',
+          bodyMobile:
+            'Ouvre Cadrages (en haut), puis Enregistrer pour garder la composition (orientation, focale, date). Tu pourras la rejouer plus tard depuis la carte.',
         },
         done: {
           title: 'Guidage terminé',
           body: 'Tu as le parcours complet : carte, viseur, modes, réglages et sauvegarde. Explore, compose, et reviens quand tu veux.',
           body2: 'Tu peux tout relancer depuis Réglages → Onboarding.',
+          bodyMobile:
+            'Tu as le parcours complet : carte, viseur, modes, réglages et sauvegarde. Explore, compose, et reviens quand tu veux.',
+          bodyMobile2:
+            'Tu peux tout relancer depuis Paramètres → Onboarding (tiroir du haut).',
         },
       },
     },

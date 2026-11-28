@@ -93,7 +93,8 @@ let cancelActiveGroundSkySettle: (() => void) | null = null
  */
 function tourPhoneCardBottomPadding(map: Map): number {
   if (typeof window === 'undefined' || typeof document === 'undefined') return 0
-  if (!window.matchMedia('(max-width: 700px)').matches) return 0
+  // Keep in sync with OPERATE_PHONE_MQ / tour.css phone dock.
+  if (!window.matchMedia('(max-width: 720px)').matches) return 0
   if (!document.querySelector('.onboarding-tour-root')) return 0
 
   const canvas = map.getCanvas()

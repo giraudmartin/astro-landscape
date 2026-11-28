@@ -28,8 +28,9 @@
   outline: none;
 }
 
-/* Laptop Operate (1025–1440): contained dialog with air around it. */
-@media (max-width: 1440px) and (min-width: 1025px) {
+/* Tablet + laptop Operate (721–1440): contained dialog with air around it.
+ * Keep in sync with OPERATE_TOUR_COMPACT_MQ. */
+@media (max-width: 1440px) and (min-width: 721px) {
   .onboarding-intro-backdrop {
     padding: 56px 64px;
   }
@@ -442,7 +443,8 @@
   }
 }
 
-@media (max-width: 700px) {
+/* Keep in sync with OPERATE_PHONE_MQ (max-width: 720px). */
+@media (max-width: 720px) {
   .onboarding-intro-backdrop {
     padding: 12px;
     align-items: stretch;

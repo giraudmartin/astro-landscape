@@ -212,7 +212,7 @@ export const en = {
         },
         marker: {
           title: 'Marker actions',
-          body: 'When you click on the marker, a radial menu opens around it. Here’s what each action does:',
+          body: 'The radial menu is open on the marker. Here’s what each action does:',
           bodyDesktop:
             'The radial menu is open on the marker. Here’s what each action does:',
           actions: {
@@ -261,23 +261,35 @@ export const en = {
         quality: {
           title: 'Terrain quality',
           body: 'Look top-right: the Settings button. We open Quality so you can pick terrain resolution. Finer detail means a heavier download.',
+          bodyMobile:
+            'In the top bar: the Settings button. We open Quality so you can pick terrain resolution. Finer detail means a heavier download.',
         },
         sky: {
           title: 'Sky and atmosphere',
           body: 'Still in Settings → Sky: light pollution, atmosphere, moonlight, and zodiacal light. Turn on or tweak what you want to best simulate the night.',
+          bodyMobile:
+            'Still in Settings, Sky tab: light pollution, atmosphere, moonlight, and zodiacal light. Turn on or tweak what you want to best simulate the night.',
         },
         weather: {
           title: 'Weather and clouds',
           body: 'Settings → Weather turns clouds on. Here we enable low clouds as an example so you can see the effect on landscape and sky right away. Clouds also interact with light pollution.',
+          bodyMobile:
+            'In Settings, Weather tab turns clouds on. Here we enable low clouds as an example so you can see the effect on landscape and sky right away. Clouds also interact with light pollution.',
         },
         save: {
           title: 'Save a framing',
           body: 'Open Framings, then Save to keep the composition (look, focal length, date). You can replay it later from the map.',
+          bodyMobile:
+            'Open Framings (at the top), then Save to keep the composition (look, focal length, date). You can replay it later from the map.',
         },
         done: {
           title: 'Tour complete',
           body: 'You’ve finished the full guide: map, viewfinder, modes, settings, and save. Explore, compose, and come back anytime.',
           body2: 'You can replay it all from Settings → Onboarding.',
+          bodyMobile:
+            'You’ve finished the full guide: map, viewfinder, modes, settings, and save. Explore, compose, and come back anytime.',
+          bodyMobile2:
+            'You can replay it all from Settings → Onboarding (top drawer).',
         },
       },
     },

@@ -31,3 +31,11 @@ export const OPERATE_PHONE_MQ = '(max-width: 720px)'
 /** Laptop Operate band — keep in sync with App.css `@media (max-width: 1440px) and (min-width: 1025px)`. */
 export const OPERATE_LAPTOP_MQ =
   '(max-width: 1440px) and (min-width: 1025px)'
+
+/**
+ * Tour compact chrome (tablet + laptop Operate): 721–1440.
+ * Phone (≤720) has its own docked card; wide desktop (≥1441) keeps full size.
+ * Keep in sync with onboarding tour.css compact `@media`.
+ */
+export const OPERATE_TOUR_COMPACT_MQ =
+  '(max-width: 1440px) and (min-width: 721px)'

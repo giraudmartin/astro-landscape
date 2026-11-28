@@ -1,13 +1,26 @@
 /**
  * First-party Umami loader + thin track() helper.
  * No-ops unless VITE_UMAMI_WEBSITE_ID is set (prod .env.production on the VPS).
+ *
+ * Event catalog: docs/UMAMI.md
  */
 
 export type AnalyticsEvent =
   | 'immersive_enter'
+  | 'immersive_exit'
   | 'spot_save'
+  | 'framing_save'
   | 'bug_report'
   | 'onboarding_tour_done'
+  | 'pl_heatmap_toggle'
+  | 'basemap_change'
+  | 'map_3d_toggle'
+  | 'locate_me'
+  | 'place_search'
+  | 'terrain_quality_choose'
+  | 'settings_open'
+  | 'my_spots_open'
+  | 'framings_open'
 
 type UmamiClient = {
   track: (

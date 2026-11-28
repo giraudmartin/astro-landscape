@@ -5,6 +5,7 @@ import type { Map, MapMouseEvent, Marker, StyleSpecification } from 'maplibre-gl
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { AddressSearchResult } from './addressSearch'
+import { track } from './analytics/umami'
 import {
   DEM_MAX_ZOOM,
   IMAGERY_MAX_ZOOM,
@@ -800,6 +801,7 @@ export function MapCanvas({
     }
 
     const flyToAddress = (result: AddressSearchResult) => {
+      track('place_search')
       onModeChangeRef.current('orbit')
       if (!threeDimensionalRef.current) {
         onThreeDimensionalChangeRef.current(true)
@@ -847,6 +849,7 @@ export function MapCanvas({
       if (!navigator.geolocation) return
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
+          track('locate_me')
           const lat = coords.latitude
           const lon = coords.longitude
           onModeChangeRef.current('orbit')

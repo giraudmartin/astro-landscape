@@ -6,6 +6,7 @@ import {
   APP_AUTHOR,
   APP_AUTHOR_TAGLINE_KEY,
 } from './aboutMe'
+import { track } from './analytics/umami'
 import { APP_ATTRIBUTIONS } from './attributions'
 import { APP_COPYRIGHT, APP_NAME, APP_VERSION } from './appMeta'
 import { loadAppSettings, patchAppSettings } from './appSettings'
@@ -137,6 +138,7 @@ export function MapSettingsPanel() {
     const onOpenSettings = () => {
       setBugReportOpen(false)
       setOpen(true)
+      track('settings_open')
     }
     const onOpenBug = () => {
       setOpen(false)
@@ -733,7 +735,11 @@ export function MapSettingsPanel() {
             tabIndex={railObscured ? -1 : undefined}
             onClick={() => {
               setBugReportOpen(false)
-              setOpen((value) => !value)
+              setOpen((value) => {
+                const next = !value
+                if (next) track('settings_open')
+                return next
+              })
             }}
           >
             <SettingsIcon />

@@ -64,14 +64,25 @@ Redeploy Sphere (`bash scripts/deploy-sphere.sh` or Actions). Without
 
 ## Events (custom)
 
-Pageviews are automatic. The app also sends:
+Pageviews are automatic. Product events (no coords, no PII):
 
-| Name | When |
-|------|------|
-| `immersive_enter` | Enter immersive (ground) view |
-| `spot_save` | Save a personal spot |
-| `bug_report` | Bug form submitted successfully |
-| `onboarding_tour_done` | Map or immersive guide closed (`reason`: skip \| finish) |
+| Name | When | Props |
+|------|------|--------|
+| `immersive_enter` | Enter immersive (ground) view | — |
+| `immersive_exit` | Leave immersive back to map | — |
+| `spot_save` | Save a personal spot | — |
+| `framing_save` | Save / update a framing | `is_new` |
+| `bug_report` | Bug form submitted successfully | — |
+| `onboarding_tour_done` | Map or immersive guide closed | `reason`, `half` |
+| `pl_heatmap_toggle` | PL heatmap on/off | `enabled` |
+| `basemap_change` | Basemap mode changed | `mode` |
+| `map_3d_toggle` | Map 2D/3D tilt toggled | `enabled` |
+| `locate_me` | GPS “Locate me” succeeded | — |
+| `place_search` | Fly to an address search result | — |
+| `terrain_quality_choose` | Terrain quality picked (dialog) | `quality` |
+| `settings_open` | Settings panel opened | — |
+| `my_spots_open` | My spots rail/sheet opened | — |
+| `framings_open` | Framings rail/sheet opened | — |
 
 ## Ops
 

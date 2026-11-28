@@ -222,6 +222,7 @@ export default function App() {
     setTerrainQuality(quality)
     setTerrainQualityChosen(true)
     emitTerrainQualityChange(quality)
+    track('terrain_quality_choose', { quality })
     setTerrainQualityPromptOpen(false)
     const enter = pendingImmersiveEnterRef.current
     pendingImmersiveEnterRef.current = null
@@ -1343,6 +1344,7 @@ export default function App() {
         setPersonalFramings((list) => upsertPersonalFraming(list, created))
         setActiveFramingId(created.id)
       }
+      track('framing_save', { is_new: !draft.id })
       const nightDay = framingNightGroupDay(peakLocal)
       setFramingsCalendarDay(nightDay)
       setFramingsCalendarMonth(framingMonthFromDay(nightDay))
@@ -1482,6 +1484,7 @@ export default function App() {
   const wasImmersiveRef = useRef(false)
   useEffect(() => {
     if (immersive && !wasImmersiveRef.current) track('immersive_enter')
+    if (!immersive && wasImmersiveRef.current) track('immersive_exit')
     wasImmersiveRef.current = immersive
   }, [immersive])
 
@@ -1594,10 +1597,17 @@ export default function App() {
               Math.abs(saved.lon - next.lon) < 1e-6
             if (!same) setSelectedPersonalSpotId(null)
           }}
-          onThreeDimensionalChange={setThreeDimensional}
-          onBasemapModeChange={setBasemapMode}
+          onThreeDimensionalChange={(next) => {
+            setThreeDimensional(next)
+            track('map_3d_toggle', { enabled: next })
+          }}
+          onBasemapModeChange={(next) => {
+            setBasemapMode(next)
+            track('basemap_change', { mode: next })
+          }}
           onPlHeatmapEnabledChange={(next) => {
             setPlHeatmapEnabled(next)
+            track('pl_heatmap_toggle', { enabled: next })
             if (!next) setPlLegendOpen(false)
           }}
           onPlHeatmapOpacityChange={setPlHeatmapOpacity}
@@ -1608,6 +1618,7 @@ export default function App() {
             setMySpotsOpen(open)
             if (!open && !editingSpot) setPersonalSpotPicking(false)
             if (open) {
+              track('my_spots_open')
               setFramingsOpen(false)
               setAddressSearchOpen(false)
               setInfoDrawerOpen(false)
@@ -1617,6 +1628,7 @@ export default function App() {
           onFramingsOpenChange={(open) => {
             setFramingsOpen(open)
             if (open) {
+              track('framings_open')
               setMySpotsOpen(false)
               if (!editingSpot) setPersonalSpotPicking(false)
               setAddressSearchOpen(false)

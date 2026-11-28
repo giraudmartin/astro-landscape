@@ -25,6 +25,12 @@ export const MILKY_WAY_EXPOSURE = 8.5
 export const MILKY_WAY_DOME_OPACITY = 0.72
 /** Atmosphere off: stronger read on a black sky. */
 export const MILKY_WAY_DOME_OPACITY_NO_ATMO = 0.96
+/**
+ * No-VL night veil: uniform black NormalBlending stand-in for the dark
+ * sky texels the MW dome would have applied. Tuned 0.25 (was matching
+ * MILKY_WAY_DOME_OPACITY 0.72, too heavy).
+ */
+export const NIGHT_VEIL_OPACITY = 0.25
 export const MILKY_WAY_EXPOSURE_NO_ATMO = 10
 /** @deprecated Prefer milkyWayNebLook.exposure from the VL settings card. */
 export const MILKY_WAY_EXPOSURE_NEB = DEFAULT_MILKY_WAY_NEB_LOOK.exposure
@@ -187,6 +193,33 @@ export function createNightSky(opts?: {
     ? createConstellationHtmlLabels(opts.labelHost)
     : null
   htmlLabels?.setVisible(false)
+
+  /**
+   * When VL is off, a uniform black NormalBlending veil stands in for the
+   * dark sky texels the MW dome would apply — otherwise cutting VL unmasks
+   * the full atmosphere glow. Stars / figures stay above (renderOrder 23–24).
+   */
+  const nightVeilMaterial = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    side: THREE.BackSide,
+    transparent: true,
+    opacity: 0,
+    depthTest: true,
+    depthWrite: false,
+    fog: false,
+    blending: THREE.NormalBlending,
+    toneMapped: false,
+  })
+  attachStelProjector(nightVeilMaterial)
+  const nightVeil = new THREE.Mesh(
+    new THREE.SphereGeometry(CELESTIAL_SKY_DISTANCE_M * 0.995, 48, 32),
+    nightVeilMaterial,
+  )
+  nightVeil.name = 'nightSkyVeil'
+  nightVeil.frustumCulled = false
+  nightVeil.renderOrder = 20
+  nightVeil.visible = false
+  root.add(nightVeil)
 
   let milkyWayTiles: NasaSkyTileLayerHandle | null = null
   let milkyManifest: Awaited<
@@ -434,27 +467,40 @@ export function createNightSky(opts?: {
       mwContrastUniform.value = 1
       mwSaturationUniform.value = gradeLive ? milkyWayNebLook.saturation : 1
 
+      const deepEnough = nightOn && deepNight > 0.05
+      const mwBaseOp =
+        deepNight *
+        THREE.MathUtils.lerp(
+          MILKY_WAY_DOME_OPACITY_NO_ATMO,
+          MILKY_WAY_DOME_OPACITY,
+          atmoAmt,
+        )
+      const mwOp = mwBaseOp * lpMwMul
+      const veilOp = deepNight * NIGHT_VEIL_OPACITY * lpMwMul
+
       if (milkyWayTiles && milkyReady) {
         const mwVisible = showMilkyWay && lpMwMul > 0.02
-        const showDome = nightOn && deepNight > 0.05 && mwVisible
-        const baseOp =
-          deepNight *
-          THREE.MathUtils.lerp(
-            MILKY_WAY_DOME_OPACITY_NO_ATMO,
-            MILKY_WAY_DOME_OPACITY,
-            atmoAmt,
-          )
+        const showDome = deepEnough && mwVisible
         milkyWayTiles.setVisible(showDome)
-        milkyWayTiles.setOpacity(baseOp * lpMwMul)
+        milkyWayTiles.setOpacity(mwOp)
         // Preload cover tiles as soon as night falls (don't wait for showDome).
         if (nightOn || showDome) milkyWayTiles.update(camera)
       }
+
+      // Black veil only when the textured MW dome is off.
+      const showVeil = deepEnough && !showMilkyWay && lpMwMul > 0.02
+      nightVeil.visible = showVeil
+      nightVeilMaterial.opacity = showVeil ? veilOp : 0
     },
     dispose: () => {
       disposed = true
       htmlLabels?.dispose()
       vectorLayers.dispose()
       azimuthGrid.dispose()
+      nightVeil.visible = false
+      root.remove(nightVeil)
+      nightVeil.geometry.dispose()
+      nightVeilMaterial.dispose()
       milkyWayTiles?.dispose()
       milkyWayTiles = null
       milkyFolderMounted = null

@@ -118,7 +118,6 @@ import type {
   FramingViewSnapshot,
 } from './personalFramings'
 import { CompactCloseIcon, FramingsFocusIcon } from './psIcons'
-import { ViewfinderProjectionControl } from './ViewfinderProjectionControl'
 import { ViewfinderSceneSettingsControl } from './ViewfinderSceneSettingsControl'
 import { type LocalHaloControls } from './ViewfinderSkyControl'
 import { weatherControlsFromSettings } from './ViewfinderWeatherControl'
@@ -462,9 +461,8 @@ export function ImmersiveView({
       setNetBytes(Math.max(0, total - netBytesBaseRef.current))
     })
   }, [])
-  const [projection, setProjection] = useState<StageProjection>(
-    savedImmersive.projection,
-  )
+  /** Locked to stereographic in product UI; QA can still switch via hooks. */
+  const [projection, setProjection] = useState<StageProjection>('stereographic')
   /** Independent stage zoom (mouse wheel) — not tied to focal length. */
   const [stageVfovDeg, setStageVfovDeg] = useState(savedImmersive.stageVfovDeg)
   const stageVfovInitRef = useRef(savedImmersive.stageVfovDeg)
@@ -764,7 +762,7 @@ export function ImmersiveView({
         frameMode,
         panorama,
         timelapse,
-        projection,
+        projection: 'stereographic',
         stageVfovDeg,
         eyeHeightM,
         groundNightBrightness,
@@ -816,7 +814,6 @@ export function ImmersiveView({
     frameMode,
     panorama,
     timelapse,
-    projection,
     stageVfovDeg,
     eyeHeightM,
     groundNightBrightness,
@@ -3249,10 +3246,6 @@ export function ImmersiveView({
           <ViewfinderSceneSettingsControl
             iconOnly
             flatTerrain={flatTerrain}
-            projection={{
-              value: projection,
-              onChange: setProjection,
-            }}
             quality={{
               value: terrainQuality,
               onChange: (next) => {
@@ -3382,14 +3375,6 @@ export function ImmersiveView({
                 onChange: patchMilkyWayNebLook,
                 onReset: () => setMilkyWayNebLook(DEFAULT_MILKY_WAY_NEB_LOOK),
               }}
-            />
-            <span
-              className="immersive__tool-capsule__divider"
-              aria-hidden="true"
-            />
-            <ViewfinderProjectionControl
-              projection={projection}
-              onProjectionChange={setProjection}
             />
           </div>
         )}

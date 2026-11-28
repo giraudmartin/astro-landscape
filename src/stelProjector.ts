@@ -66,11 +66,9 @@ function modeUniformValue(mode: StageProjection): number {
   }
 }
 
-export function normalizeStageProjection(value: unknown): StageProjection {
-  // Legacy « orthographic » removed — fall back to stereo.
-  if (value === 'equirectangular' || value === 'rectilinear') {
-    return value
-  }
+export function normalizeStageProjection(_value: unknown): StageProjection {
+  // Stage projection UI removed — immersive is stereographic only.
+  // Legacy equirectangular / rectilinear / orthographic fall back to stereo.
   return 'stereographic'
 }
 

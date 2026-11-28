@@ -18,11 +18,6 @@ import type { MilkyWayNebLook } from './milkyWayNebLook'
 import type { ViewfinderWeather } from './viewfinderWeather'
 import type { TerrainQuality } from './terrainQuality'
 import {
-  STAGE_PROJECTIONS,
-  stageProjectionMeta,
-  type StageProjection,
-} from './stelProjector'
-import {
   OPEN_SCENE_PANEL_EVENT,
   type ImmersiveScenePanelId,
 } from './onboarding/immersiveTourUi'
@@ -91,11 +86,6 @@ type ViewfinderSceneSettingsControlProps = {
     onChange: (patch: Partial<MilkyWayNebLook>) => void
     onReset: () => void
   }
-  /** When set, projection choices live inside the settings card (phone bar). */
-  projection?: {
-    value: StageProjection
-    onChange: (projection: StageProjection) => void
-  }
   /** Icon-only trigger (no chevron) for the compact phone top bar. */
   iconOnly?: boolean
 }
@@ -119,7 +109,6 @@ export function ViewfinderSceneSettingsControl({
   sky,
   weather,
   milkyWayNeb,
-  projection,
   iconOnly = false,
 }: ViewfinderSceneSettingsControlProps) {
   const t = useT()
@@ -253,45 +242,6 @@ export function ViewfinderSceneSettingsControl({
               </button>
             )
           })}
-          {projection ? (
-            <>
-              <div
-                className="vf-proj-control__menu-sep"
-                role="separator"
-                aria-hidden="true"
-              />
-              <p className="vf-proj-control__menu-label">
-                {t('viewfinder.scene.projection')}
-              </p>
-              {STAGE_PROJECTIONS.map((mode) => {
-                const selected = projection.value === mode.id
-                const meta = stageProjectionMeta(mode.id)
-                return (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    className={
-                      selected
-                        ? 'vf-proj-control__option is-active'
-                        : 'vf-proj-control__option'
-                    }
-                    title={meta.title}
-                    onClick={() => {
-                      projection.onChange(mode.id)
-                      setMenuOpen(false)
-                    }}
-                  >
-                    <span className="vf-proj-control__option-copy">
-                      <b>{meta.label}</b>
-                      <small>{meta.title}</small>
-                    </span>
-                  </button>
-                )
-              })}
-            </>
-          ) : null}
         </div>
       ) : null}
 

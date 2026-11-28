@@ -746,7 +746,7 @@ export const en = {
       az: 'Azimuth grid',
     },
     searchCelestial: 'Search for a celestial object',
-    toolCapsuleAria: 'Scene settings and projection',
+    toolCapsuleAria: 'Scene settings',
     framings: 'Framings',
     exit: 'Exit tripod view',
     hint: {
@@ -933,8 +933,6 @@ export const en = {
       milkyWayNebHint: 'Exposure, brightness, saturation',
       weather: 'Weather',
       weatherHint: 'Clouds and coverage',
-      projection: 'Projection',
-      projectionHint: 'Stereographic, equirectangular, rectilinear',
     },
     milkyWayNeb: {
       title: 'Milky Way',

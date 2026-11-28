@@ -753,7 +753,7 @@ export const fr = {
       az: 'Grille azimutale',
     },
     searchCelestial: 'Rechercher un objet céleste',
-    toolCapsuleAria: 'Réglages de scène et projection',
+    toolCapsuleAria: 'Réglages de scène',
     framings: 'Cadrages',
     exit: 'Quitter la vue trépied',
     hint: {
@@ -942,8 +942,6 @@ export const fr = {
       milkyWayNebHint: 'Exposition, luminosité, saturation',
       weather: 'Météo',
       weatherHint: 'Nuages et couverture',
-      projection: 'Projection',
-      projectionHint: 'Stéréographique, équirectangulaire, rectiligne',
     },
     milkyWayNeb: {
       title: 'Voie lactée',

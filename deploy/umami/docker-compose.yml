@@ -1,0 +1,50 @@
+# Umami (first-party analytics) for Sadr3D Sphere — run on the OVH VPS.
+# Docs: docs/UMAMI.md
+#
+# Bind to loopback only — Caddy terminates TLS on analytics.sadr3d.com.
+# Port 3100 avoids Horizon NestJS on :3000.
+#
+# Setup (once):
+#   mkdir -p ~/umami && cd ~/umami
+#   cp /path/to/astro-landscape/deploy/umami/{docker-compose.yml,.env.example} .
+#   mv .env.example .env   # then edit passwords + APP_SECRET
+#   docker compose up -d
+
+services:
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    ports:
+      - '127.0.0.1:3100:3000'
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      APP_SECRET: ${APP_SECRET}
+      # Optional: rename tracker path to dodge some ad-blockers (update VITE_UMAMI_SCRIPT_URL).
+      # TRACKER_SCRIPT_NAME: script
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3000/api/heartbeat || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - umami-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  umami-db-data:

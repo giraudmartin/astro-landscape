@@ -7,8 +7,9 @@
 # DNS (registrar):
 #   sadr3d.com          A     51.75.124.117   # apex → VPS (leave parking IP and redirect breaks)
 #   www.sadr3d.com      A     51.75.124.117   # optional; same redirect block
-#   horizon.sadr3d.com  A     51.75.124.117
-#   sphere.sadr3d.com   A     51.75.124.117
+#   horizon.sadr3d.com     A     51.75.124.117
+#   sphere.sadr3d.com      A     51.75.124.117
+#   analytics.sadr3d.com   A     51.75.124.117   # Umami (docs/UMAMI.md)
 #   (optional) AAAA → 2001:41d0:305:2100::1:9b44
 #
 # Horizon API: production web build should set VITE_API_URL to the public API
@@ -55,13 +56,28 @@ horizon.sadr3d.com {
 	}
 }
 
+# Umami dashboard + collect API (loopback Docker → :3100). See docs/UMAMI.md.
+analytics.sadr3d.com {
+	encode gzip zstd
+
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+
+	reverse_proxy 127.0.0.1:3100
+}
+
 sphere.sadr3d.com {
 	encode gzip zstd
 
 	# App security headers (Sphere SPA + MapLibre/Three/WebGL/COG workers).
 	# connect-src / img-src stay on https: — tile / weather / geocode hosts vary.
+	# script-src allows first-party Umami on analytics.sadr3d.com (docs/UMAMI.md).
 	header {
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: blob:; worker-src 'self' blob:; child-src 'self' blob:; media-src 'self' blob:"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval' https://analytics.sadr3d.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: blob:; worker-src 'self' blob:; child-src 'self' blob:; media-src 'self' blob:"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"

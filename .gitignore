@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Vite env (keep .env.example). Prod Umami id lives in .env.production on the VPS.
+.env
+.env.*
+!.env.example
+
 # Local QA / debug screenshots (not source)
 tmp-*.png
 pano-*.png

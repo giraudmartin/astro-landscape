@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { track } from './analytics/umami'
 import {
   BUG_REPORT_MAX_DESCRIPTION_CHARS,
   BUG_REPORT_MAX_IMAGE_BYTES,
@@ -136,6 +137,7 @@ export function BugReportCard({ open, onClose, onSubmit }: BugReportCardProps) {
       } else {
         await submitBugReport(payload)
       }
+      track('bug_report')
       setSent(true)
       window.setTimeout(() => onClose(), 900)
     } catch (err) {

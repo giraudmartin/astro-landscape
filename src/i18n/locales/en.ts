@@ -98,7 +98,7 @@ export const en = {
       maplibre: 'MapLibre GL JS',
     },
     privacy: {
-      hint: 'Summary of what the app reads, stores and sends. No account, no analytics.',
+      hint: 'Summary of what the app reads, stores and sends. No account. Minimal first-party analytics.',
       local: {
         title: 'Local data',
         body: 'Spots, framings, settings and panel positions are stored in your browser (localStorage / IndexedDB). Nothing is sent to a Sadr3D Sphere account. There is none.',
@@ -116,8 +116,8 @@ export const en = {
         body: 'The “Report a bug” form sends a title, a description and an optional image screenshot (max 10 MB) via FormSubmit to bugs@sadr3d.com. App version, locale, URL and user-agent are included for diagnosis.',
       },
       tracking: {
-        title: 'No tracking',
-        body: 'No advertising cookies, no third-party analytics, no user account. You can erase the app’s data through your browser storage.',
+        title: 'Audience measurement',
+        body: 'No advertising cookies and no ad network. In production, first-party analytics (Umami on our servers) records page views and a few product events (e.g. open immersive, save a spot). No user account, no data sold. You can erase the app’s data through your browser storage.',
       },
     },
     bug: {

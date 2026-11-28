@@ -81,6 +81,7 @@ sudo systemctl reload caddy
 | `www` | A | `51.75.124.117` |
 | `horizon` | A | `51.75.124.117` |
 | `sphere` | A | `51.75.124.117` |
+| `analytics` | A | `51.75.124.117` | # Umami dashboard — see [`UMAMI.md`](./UMAMI.md) |
 | (optional) | AAAA | `2001:41d0:305:2100::1:9b44` |
 
 Wait for propagation; Caddy issues HTTPS certificates automatically.
@@ -165,6 +166,13 @@ Expect `HTTP/2 206` (or `HTTP/1.1 206 Partial Content`).
 npm run dev
 # COG at public/light-pollution/viirs-vnl-2024-500m.cog.tif (gitignored)
 ```
+
+## Analytics (Umami)
+
+First-party Umami on `analytics.sadr3d.com` (Docker on loopback `:3100`, Caddy
+TLS). Full steps: [`UMAMI.md`](./UMAMI.md). After creating the website in Umami,
+put `VITE_UMAMI_WEBSITE_ID` (and optional `VITE_UMAMI_SCRIPT_URL`) in
+`~/sadr3d-sphere/astro-landscape/.env.production` so `npm run build` embeds them.
 
 ## Notes
 

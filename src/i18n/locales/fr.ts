@@ -100,7 +100,7 @@ export const fr = {
       maplibre: 'MapLibre GL JS',
     },
     privacy: {
-      hint: 'Résumé de ce que l’app lit, stocke et envoie. Pas de compte ni d’analytics.',
+      hint: 'Résumé de ce que l’app lit, stocke et envoie. Pas de compte. Mesure d’audience minimale sur nos serveurs.',
       local: {
         title: 'Données locales',
         body: 'Spots, cadrages, réglages et positions de panneaux sont stockés dans le navigateur (localStorage / IndexedDB). Rien n’est envoyé à un compte Sadr3D Sphere. Il n’y en a pas.',
@@ -118,8 +118,8 @@ export const fr = {
         body: 'Le formulaire « Signaler un bug » envoie un titre, une description et une capture image optionnelle (max 10 Mo) via FormSubmit vers bugs@sadr3d.com. Version de l’app, langue, URL et user-agent sont joints pour le diagnostic.',
       },
       tracking: {
-        title: 'Pas de tracking',
-        body: 'Pas de cookies publicitaires, pas d’analytics tiers, pas de compte utilisateur. Vous pouvez effacer les données de l’app via le stockage du navigateur.',
+        title: 'Mesure d’audience',
+        body: 'Pas de cookies publicitaires ni de réseau pub. En production, une mesure d’audience hébergée sur nos serveurs (Umami) enregistre des pages vues et quelques événements produit (ex. ouvrir l’immersive, enregistrer un spot). Pas de compte utilisateur, pas de revente. Vous pouvez effacer les données de l’app via le stockage du navigateur.',
       },
     },
     bug: {

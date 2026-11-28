@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { track } from './analytics/umami'
 import { type CelestialObject } from './celestialObjects'
 import {
   ImmersiveView,
@@ -654,6 +655,7 @@ export default function App() {
     markOnboardingTourSeen()
     // One guide: skipping the map half abandons the whole walkthrough.
     if (reason === 'skip') markImmersiveTourSeen()
+    track('onboarding_tour_done', { reason, half: 'map' })
     setTourOpen(false)
     setTourStepId(null)
     setMarkerMenuOpen(false)
@@ -680,10 +682,11 @@ export default function App() {
     [],
   )
 
-  const onImmersiveTourClose = useCallback((_reason: 'skip' | 'finish') => {
+  const onImmersiveTourClose = useCallback((reason: 'skip' | 'finish') => {
     // End of the single guide (map already marked when immersive opened).
     markOnboardingTourSeen()
     markImmersiveTourSeen()
+    track('onboarding_tour_done', { reason, half: 'immersive' })
     setImmersiveTourOpen(false)
     setImmersiveTourPending(false)
     openImmersiveScenePanel(null)
@@ -1061,6 +1064,7 @@ export default function App() {
       pitchDeg: pendingSave.pitchDeg,
     })
     setPersonalSpots((prev) => upsertPersonalSpot(prev, saved))
+    track('spot_save')
     setPendingSave(null)
     setPendingSaveName('')
     setMySpotsOpen(true)
@@ -1475,6 +1479,11 @@ export default function App() {
   }, [mode, spot?.lat, spot?.lon])
 
   const immersive = mode === 'ground' && spot != null
+  const wasImmersiveRef = useRef(false)
+  useEffect(() => {
+    if (immersive && !wasImmersiveRef.current) track('immersive_enter')
+    wasImmersiveRef.current = immersive
+  }, [immersive])
 
   // Map ↔ Three.js: always dismiss the right rail (Mes spots / Cadrages).
   // Leaving it open carried an empty FramingsPanel into immersive, and

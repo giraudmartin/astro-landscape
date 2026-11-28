@@ -2,7 +2,8 @@
 
 Keep in sync with `src/privacy.ts` (Settings → Confidentialité).
 
-Sadr3D Sphere is a client-side planning app. There is **no user account** and **no first-party analytics**.
+Sadr3D Sphere is a client-side planning app. There is **no user account**.
+Audience measurement uses **first-party Umami** on our VPS (see below) — not an ad network.
 
 ## What stays on your device
 
@@ -33,6 +34,13 @@ Those services see your IP and the tile/query parameters required for the reques
 ## Bug reports
 
 The in-app bug form sends a title, a description and an optional image screenshot (max 10 MB) via [FormSubmit](https://formsubmit.co/) to `bugs@sadr3d.com`. App version, locale, page URL and user-agent are included.
+
+## Analytics (first-party)
+
+When enabled in production, the app loads a small tracker from our Umami instance
+(`analytics.sadr3d.com` on the same OVH VPS). It records aggregated page views and
+a few product events (e.g. open immersive, save a spot, bug report). No advertising
+cookies, no user account, no data sold to third parties. Setup: [`UMAMI.md`](./UMAMI.md).
 
 ## Contact
 
